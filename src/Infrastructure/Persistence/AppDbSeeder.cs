@@ -21,7 +21,27 @@ public static class AppDbSeeder
         await SeedRolesAsync(roleManager, logger);
         await SeedAdminUserAsync(userManager, logger);
         await SeedSampleTodosAsync(context, logger);
+        await SeedSampleContainersAsync(context, logger);   // Update
     }
+
+
+    private static async Task SeedSampleContainersAsync(AppDbContext context, ILogger logger)
+    {
+        if (await context.Containers.AnyAsync())
+            return;
+
+        var containers = new List<Container>
+    {
+        new("MSKU1234567", "40HC"),
+        new("TCLU7654321", "20GP"),
+        new("CMAU1112223", "40RF")
+    };
+
+        context.Containers.AddRange(containers);
+        await context.SaveChangesAsync();
+        logger.LogInformation("Seeded {Count} sample containers", containers.Count);
+    }
+
 
     private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager, ILogger logger)
     {
