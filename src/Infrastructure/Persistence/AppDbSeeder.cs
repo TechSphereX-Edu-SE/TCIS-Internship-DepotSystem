@@ -1,5 +1,6 @@
 
 using TechSpherex.CleanArchitecture.Domain.Entities;
+using TechSpherex.CleanArchitecture.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,25 +22,50 @@ public static class AppDbSeeder
         await SeedRolesAsync(roleManager, logger);
         await SeedAdminUserAsync(userManager, logger);
         await SeedSampleTodosAsync(context, logger);
-        await SeedSampleContainersAsync(context, logger);   // Update
+        await SeedDepotMasterDataAsync(context, logger);
     }
 
-
-    private static async Task SeedSampleContainersAsync(AppDbContext context, ILogger logger)
+    /// <summary>Dữ liệu mẫu Depot: hãng khai thác, khách hàng, block bãi, container.</summary>
+    private static async Task SeedDepotMasterDataAsync(AppDbContext context, ILogger logger)
     {
-        if (await context.Containers.AnyAsync())
-            return;
+        if (!await context.LineOperators.AnyAsync())
+        {
+            context.LineOperators.AddRange(
+                new LineOperator("MSC", "Mediterranean Shipping Company"),
+                new LineOperator("CMA", "CMA CGM"),
+                new LineOperator("HMM", "Hyundai Merchant Marine"));
+        }
 
-        var containers = new List<Container>
-    {
-        new("MSKU1234567", "40HC"),
-        new("TCLU7654321", "20GP"),
-        new("CMAU1112223", "40RF")
-    };
+        if (!await context.Customers.AnyAsync())
+        {
+            context.Customers.AddRange(
+                new Customer("0301234567", "Công ty TNHH Xuất nhập khẩu Minh An"),
+                new Customer("0309876543", "Công ty CP Logistics Phương Nam"));
+        }
 
-        context.Containers.AddRange(containers);
-        await context.SaveChangesAsync();
-        logger.LogInformation("Seeded {Count} sample containers", containers.Count);
+        if (!await context.Blocks.AnyAsync())
+        {
+            context.Blocks.AddRange(
+                Block.CreatePhysical("A", maxBays: 20, maxRows: 6, maxTiers: 5, "Khu container khô"),
+                Block.CreatePhysical("B", maxBays: 10, maxRows: 4, maxTiers: 4, "Khu container lạnh"),
+                Block.CreateVirtual("WAIT", "Khu chờ sửa chữa / giám định"));
+        }
+
+        if (!await context.Containers.AnyAsync())
+        {
+            // Số container có check digit hợp lệ theo ISO 6346
+            context.Containers.AddRange(
+                new Container("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, new DateOnly(2019, 5, 1), "MSC"),
+                new Container("MSCU5551234", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2250, new DateOnly(2020, 3, 1), "MSC"),
+                new Container("CMAU7654327", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3750, new DateOnly(2018, 8, 1), "CMA CGM"),
+                new Container("CMAU9001110", "45G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3900, new DateOnly(2021, 1, 1), "CMA CGM"),
+                new Container("HMMU2468109", "45R1", ContainerSize.Ft40, ContainerCategory.Reefer, 34000, 4800, new DateOnly(2022, 6, 1), "HMM"),
+                new Container("HMMU3007776", "22R1", ContainerSize.Ft20, ContainerCategory.Reefer, 30480, 3000, new DateOnly(2022, 9, 1), "HMM"));
+        }
+
+        var saved = await context.SaveChangesAsync();
+        if (saved > 0)
+            logger.LogInformation("Seeded {Count} depot master data rows", saved);
     }
 
 
