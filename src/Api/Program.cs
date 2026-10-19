@@ -115,6 +115,7 @@ try
     // Copyright (c) 2026 TechSpherex
     app.MapIdentityEndpoints();
     app.MapTodoEndpoints();
+    app.MapContainerEndpoints();
     app.MapAgentEndpoints();
 
     // Map gRPC services
