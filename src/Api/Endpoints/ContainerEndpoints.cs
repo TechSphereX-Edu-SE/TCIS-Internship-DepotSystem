@@ -4,9 +4,7 @@ using TechSpherex.CleanArchitecture.Application.Features.Containers.Create;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Delete;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Get;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.GetAll;
-using TechSpherex.CleanArchitecture.Application.Features.Containers.UpdateStatus;
 using TechSpherex.CleanArchitecture.Domain.Common;
-using TechSpherex.CleanArchitecture.Domain.Entities;
 namespace TechSpherex.CleanArchitecture.Api.Endpoints;
 
 public static class ContainerEndpoints
@@ -28,15 +26,11 @@ public static class ContainerEndpoints
         group.MapPost("/", Create)
             .AddEndpointFilter<ValidationFilter<CreateContainerCommand>>()
             .WithName("CreateContainer")
-            .WithSummary("Register a new container into the yard");
-
-        group.MapPatch("/{id:guid}/status", UpdateStatus)
-            .WithName("UpdateContainerStatus")
-            .WithSummary("Change container status (InYard, Loaded, Departed, Damaged)");
+            .WithSummary("Register container master data (number, ISO code, size, type, weights, owner)");
 
         group.MapDelete("/{id:guid}", Delete)
             .WithName("DeleteContainer")
-            .WithSummary("Delete a container");
+            .WithSummary("Delete a container that has no gate-in/out history");
     }
 
     private static async Task<IResult> GetAll(
@@ -70,17 +64,6 @@ public static class ContainerEndpoints
             : result.ToProblemDetails();
     }
 
-    private static async Task<IResult> UpdateStatus(
-        Guid id,
-        UpdateContainerStatusRequest request,
-        ICommandHandler<UpdateContainerStatusCommand, Result> handler,
-        CancellationToken cancellationToken)
-    {
-        var command = new UpdateContainerStatusCommand(id, request.Status);
-        var result = await handler.HandleAsync(command, cancellationToken);
-        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
-    }
-
     private static async Task<IResult> Delete(
         Guid id,
         ICommandHandler<DeleteContainerCommand, Result> handler,
@@ -90,5 +73,3 @@ public static class ContainerEndpoints
         return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
     }
 }
-
-public sealed record UpdateContainerStatusRequest(ContainerStatus Status);

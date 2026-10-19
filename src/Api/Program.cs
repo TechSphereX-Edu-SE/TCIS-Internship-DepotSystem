@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Scalar.AspNetCore;
 using Serilog;
 using TechSpherex.CleanArchitecture.Api.Endpoints;
@@ -81,6 +82,10 @@ try
 
     // ProblemDetails
     builder.Services.AddProblemDetails();
+
+    // JSON: nhận và trả enum dạng chữ ("Dry", "Ft40"...), vẫn chấp nhận số
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
     var app = builder.Build();
 
