@@ -6,6 +6,13 @@ namespace TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 public interface IAppDbContext
 {
     DbSet<TodoItem> Todos { get; }
-    DbSet<Container> Containers { get; }   // Update container
+    DbSet<Container> Containers { get; }
+
+    // Depot
+    DbSet<LineOperator> LineOperators { get; }
+    DbSet<Customer> Customers { get; }
+    DbSet<Block> Blocks { get; }
+    DbSet<ContainerVisit> ContainerVisits { get; }
+    DbSet<DeliveryOrder> DeliveryOrders { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,3 @@
-
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Tenancy;
 using TechSpherex.CleanArchitecture.Domain.Common;
@@ -14,6 +13,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
 {
     public DbSet<TodoItem> Todos => Set<TodoItem>();
     public DbSet<Container> Containers => Set<Container>();   // Update Container
+
+    // Depot
+    public DbSet<LineOperator> LineOperators => Set<LineOperator>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Block> Blocks => Set<Block>();
+    public DbSet<ContainerVisit> ContainerVisits => Set<ContainerVisit>();
+    public DbSet<DeliveryOrder> DeliveryOrders => Set<DeliveryOrder>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
