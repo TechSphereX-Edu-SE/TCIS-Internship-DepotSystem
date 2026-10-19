@@ -8,12 +8,28 @@ public sealed record GetContainerQuery(Guid Id) : IQuery<Result<ContainerRespons
 public sealed record ContainerResponse(
     Guid Id,
     string ContainerNumber,
-    string ContainerType,
-    string Status,
-    DateTimeOffset? DepartedAt,
+    string IsoCode,
+    string Size,
+    string Category,
+    int MaxGrossWeightKg,
+    int TareWeightKg,
+    DateOnly? ManufactureDate,
+    string OwnerName,
+    string Condition,
+    string? ConditionNote,
     DateTimeOffset CreatedAt)
 {
     public static ContainerResponse From(Container c) => new(
-        c.Id, c.ContainerNumber, c.ContainerType,
-        c.Status.ToString(), c.DepartedAt, c.CreatedAt);
+        c.Id,
+        c.ContainerNumber,
+        c.IsoCode,
+        c.Size.ToString(),
+        c.Category.ToString(),
+        c.MaxGrossWeightKg,
+        c.TareWeightKg,
+        c.ManufactureDate,
+        c.OwnerName,
+        c.Condition.ToString(),
+        c.ConditionNote,
+        c.CreatedAt);
 }

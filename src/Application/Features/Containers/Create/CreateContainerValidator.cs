@@ -1,20 +1,34 @@
 using FluentValidation;
+using TechSpherex.CleanArchitecture.Domain.Services;
 namespace TechSpherex.CleanArchitecture.Application.Features.Containers.Create;
 
 public sealed class CreateContainerValidator : AbstractValidator<CreateContainerCommand>
 {
-    private static readonly string[] AllowedTypes = ["20GP", "40GP", "40HC", "20RF", "40RF"];
-
     public CreateContainerValidator()
     {
         RuleFor(x => x.ContainerNumber)
             .NotEmpty()
-            .Matches("^[A-Za-z]{4}[0-9]{7}$")
-            .WithMessage("Container number must be 4 letters + 7 digits (e.g. MSKU1234567).");
+            .Must(ContainerNumberRules.IsValid)
+            .WithMessage("Container number must follow ISO 6346: 4 letters + 7 digits with a valid check digit (e.g. CSQU3054383).");
 
-        RuleFor(x => x.ContainerType)
+        RuleFor(x => x.IsoCode)
             .NotEmpty()
-            .Must(t => AllowedTypes.Contains(t.Trim().ToUpperInvariant()))
-            .WithMessage($"Container type must be one of: {string.Join(", ", AllowedTypes)}.");
+            .Matches("^[A-Za-z0-9]{4}$")
+            .WithMessage("ISO code must be 4 letters/digits (e.g. 22G1, 45R1).");
+
+        RuleFor(x => x.Size).IsInEnum();
+        RuleFor(x => x.Category).IsInEnum();
+
+        RuleFor(x => x.TareWeightKg).GreaterThan(0);
+        RuleFor(x => x.MaxGrossWeightKg)
+            .GreaterThan(x => x.TareWeightKg)
+            .WithMessage("Max gross weight must be greater than tare weight.");
+
+        RuleFor(x => x.ManufactureDate)
+            .LessThanOrEqualTo(DateOnly.FromDateTime(DateTime.UtcNow))
+            .When(x => x.ManufactureDate.HasValue)
+            .WithMessage("Manufacture date cannot be in the future.");
+
+        RuleFor(x => x.OwnerName).NotEmpty().MaximumLength(100);
     }
 }
