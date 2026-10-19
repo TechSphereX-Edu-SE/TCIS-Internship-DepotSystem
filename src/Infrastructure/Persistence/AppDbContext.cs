@@ -13,6 +13,7 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence;
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<ApplicationUser>(options), IAppDbContext
 {
     public DbSet<TodoItem> Todos => Set<TodoItem>();
+    public DbSet<Container> Containers => Set<Container>();   // Update Container
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
