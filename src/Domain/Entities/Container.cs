@@ -1,44 +1,73 @@
 using TechSpherex.CleanArchitecture.Domain.Common;
+using TechSpherex.CleanArchitecture.Domain.Enums;
+using TechSpherex.CleanArchitecture.Domain.Services;
 
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
-public enum ContainerStatus
-{
-    InYard = 0,
-    Loaded = 1,
-    Departed = 2,
-    Damaged = 3
-}
-
+/// <summary>
+/// Thông tin cố định của một container (mục 2 tài liệu Depot).
+/// Việc container đang ở trong bãi hay không được ghi ở <see cref="ContainerVisit"/>.
+/// </summary>
 public sealed class Container : AuditableEntity
 {
     public string ContainerNumber { get; private set; } = default!;
-    public string ContainerType { get; private set; } = default!;
-    public ContainerStatus Status { get; private set; } = ContainerStatus.InYard;
-    public DateTimeOffset? DepartedAt { get; private set; }
+    public string IsoCode { get; private set; } = default!;
+    public ContainerSize Size { get; private set; }
+    public ContainerCategory Category { get; private set; }
+    public int MaxGrossWeightKg { get; private set; }
+    public int TareWeightKg { get; private set; }
+    public DateOnly? ManufactureDate { get; private set; }
+    public string OwnerName { get; private set; } = default!;
+    public ContainerCondition Condition { get; private set; } = ContainerCondition.Normal;
+    public string? ConditionNote { get; private set; }
 
     private Container() { } // EF Core dùng khi đọc từ DB
 
-    public Container(string containerNumber, string containerType)
+    public Container(
+        string containerNumber,
+        string isoCode,
+        ContainerSize size,
+        ContainerCategory category,
+        int maxGrossWeightKg,
+        int tareWeightKg,
+        DateOnly? manufactureDate,
+        string ownerName)
     {
-        ContainerNumber = containerNumber.Trim().ToUpperInvariant();
-        ContainerType = containerType.Trim().ToUpperInvariant();
+        ContainerNumber = ContainerNumberRules.Normalize(containerNumber);
+        SetDetails(isoCode, size, category, maxGrossWeightKg, tareWeightKg, manufactureDate, ownerName);
     }
 
-    public void MarkAsLoaded() => Status = ContainerStatus.Loaded;
+    public void UpdateDetails(
+        string isoCode,
+        ContainerSize size,
+        ContainerCategory category,
+        int maxGrossWeightKg,
+        int tareWeightKg,
+        DateOnly? manufactureDate,
+        string ownerName) =>
+        SetDetails(isoCode, size, category, maxGrossWeightKg, tareWeightKg, manufactureDate, ownerName);
 
-    public void MarkAsDamaged() => Status = ContainerStatus.Damaged;
-
-    public void MarkAsDeparted()
+    public void UpdateCondition(ContainerCondition condition, string? note)
     {
-        if (Status == ContainerStatus.Departed) return;
-        Status = ContainerStatus.Departed;
-        DepartedAt = DateTimeOffset.UtcNow;
+        Condition = condition;
+        ConditionNote = condition == ContainerCondition.Normal ? null : note?.Trim();
     }
 
-    public void ReturnToYard()
+    private void SetDetails(
+        string isoCode,
+        ContainerSize size,
+        ContainerCategory category,
+        int maxGrossWeightKg,
+        int tareWeightKg,
+        DateOnly? manufactureDate,
+        string ownerName)
     {
-        Status = ContainerStatus.InYard;
-        DepartedAt = null;
+        IsoCode = isoCode.Trim().ToUpperInvariant();
+        Size = size;
+        Category = category;
+        MaxGrossWeightKg = maxGrossWeightKg;
+        TareWeightKg = tareWeightKg;
+        ManufactureDate = manufactureDate;
+        OwnerName = ownerName.Trim();
     }
 }
