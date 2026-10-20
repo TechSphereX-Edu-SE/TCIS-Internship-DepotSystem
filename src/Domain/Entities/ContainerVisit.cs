@@ -4,8 +4,8 @@ using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
 /// <summary>
-/// Một vòng đời của container tại depot: từ lúc vào bãi (gate-in) đến lúc ra bãi (gate-out).
-/// Một container có thể có nhiều vòng đời, nhưng tại một thời điểm chỉ có tối đa một vòng đời đang mở.
+/// One lifecycle of a container at the depot: from gate-in to gate-out.
+/// A container can have many visits, but at most one open visit at any time.
 /// </summary>
 public sealed class ContainerVisit : AuditableEntity
 {
@@ -14,7 +14,7 @@ public sealed class ContainerVisit : AuditableEntity
     public Guid LineOperatorId { get; private set; }
     public LineOperator LineOperator { get; private set; } = default!;
 
-    // Vị trí hiện tại trong bãi (Bay/Row/Tier để trống nếu block ảo)
+    // Current yard position (Bay/Row/Tier are null for a virtual block)
     public Guid BlockId { get; private set; }
     public Block Block { get; private set; } = default!;
     public int? Bay { get; private set; }
@@ -25,11 +25,11 @@ public sealed class ContainerVisit : AuditableEntity
     public ContainerCondition ConditionIn { get; private set; }
     public string? ConditionNoteIn { get; private set; }
 
-    // Vào bãi
+    // Gate-in
     public DateTimeOffset GateInAt { get; private set; }
     public string GateInVehicleNo { get; private set; } = default!;
 
-    // Ra bãi
+    // Gate-out
     public DateTimeOffset? GateOutAt { get; private set; }
     public string? GateOutVehicleNo { get; private set; }
     public Guid? DeliveryOrderId { get; private set; }
@@ -39,7 +39,7 @@ public sealed class ContainerVisit : AuditableEntity
 
     private ContainerVisit() { }
 
-    /// <summary>Ghi nhận container vào bãi.</summary>
+    /// <summary>Records a container entering the yard.</summary>
     public static Result<ContainerVisit> GateIn(
         Container container,
         Guid lineOperatorId,
@@ -77,7 +77,7 @@ public sealed class ContainerVisit : AuditableEntity
         return Result.Success(visit);
     }
 
-    /// <summary>Đảo chuyển container sang vị trí khác trong bãi.</summary>
+    /// <summary>Moves the container to another position in the yard.</summary>
     public Result MoveTo(Block block, int? bay, int? row, int? tier, ContainerSize size)
     {
         if (!IsInYard)
@@ -94,8 +94,8 @@ public sealed class ContainerVisit : AuditableEntity
         return Result.Success();
     }
 
-    /// <summary>Giao container ra khỏi bãi theo lệnh giao của hãng.</summary>
-    public Result GateOut(DeliveryOrder order, ContainerSize size, ContainerCategory category, string vehicleNo, DateTimeOffset gateOutAt)
+    /// <summary>Releases the container under a delivery order of the same line operator.</summary>
+    public Result GateOut(DeliveryOrder order, ContainerCategory category, string vehicleNo, DateTimeOffset gateOutAt)
     {
         if (!IsInYard)
             return Result.Failure(Error.Conflict("ContainerVisit.AlreadyGatedOut", "Container has already left the depot."));
@@ -104,7 +104,7 @@ public sealed class ContainerVisit : AuditableEntity
             return Result.Failure(Error.Conflict("ContainerVisit.WrongLineOperator",
                 "The delivery order belongs to a different line operator."));
 
-        var release = order.Release(size, category, DateOnly.FromDateTime(gateOutAt.Date));
+        var release = order.Release(category, DateOnly.FromDateTime(gateOutAt.Date));
         if (release.IsFailure)
             return release;
 
@@ -114,6 +114,6 @@ public sealed class ContainerVisit : AuditableEntity
         return Result.Success();
     }
 
-    /// <summary>Số ngày tồn bãi tính đến thời điểm <paramref name="now"/>.</summary>
+    /// <summary>Number of days the container has stayed in the yard as of <paramref name="now"/>.</summary>
     public int DwellDays(DateTimeOffset now) => ((GateOutAt ?? now) - GateInAt).Days;
 }

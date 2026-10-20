@@ -4,8 +4,8 @@ using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
 /// <summary>
-/// Lệnh giao container rỗng của hãng khai thác (mục 3 tài liệu Depot).
-/// Depot chỉ được giao container ra khi có lệnh còn hạn và còn số lượng.
+/// Empty-container delivery order issued by a line operator (section 3 of the depot spec).
+/// The depot may only release a container when a valid, unexpired order with remaining quantity exists.
 /// </summary>
 public sealed class DeliveryOrder : AuditableEntity
 {
@@ -17,10 +17,10 @@ public sealed class DeliveryOrder : AuditableEntity
     public Guid CustomerId { get; private set; }
     public Customer Customer { get; private set; } = default!;
 
-    /// <summary>Hạn lệnh: ngày cuối cùng được phép giao container ra.</summary>
+    /// <summary>Last day on which containers may be released under this order.</summary>
     public DateOnly ExpiryDate { get; private set; }
 
-    /// <summary>Chuyến tàu xuất container khỏi Việt Nam.</summary>
+    /// <summary>Vessel/voyage carrying the containers out of Vietnam.</summary>
     public string VesselVoyage { get; private set; } = default!;
 
     public IReadOnlyCollection<DeliveryOrderLine> Lines => _lines.AsReadOnly();
@@ -36,33 +36,33 @@ public sealed class DeliveryOrder : AuditableEntity
         VesselVoyage = vesselVoyage.Trim().ToUpperInvariant();
     }
 
-    /// <summary>Thêm số lượng cho một loại container. Chỉ nên gọi khi tạo lệnh mới.</summary>
-    public Result AddLine(ContainerSize size, ContainerCategory category, int quantity)
+    /// <summary>Adds the quantity for one container category ("so luong container moi loai").</summary>
+    public Result AddLine(ContainerCategory category, int quantity)
     {
         if (quantity < 1)
             return Result.Failure(Error.Validation("DeliveryOrder.InvalidQuantity", "Quantity must be at least 1."));
 
-        if (_lines.Any(l => l.Size == size && l.Category == category))
+        if (_lines.Any(l => l.Category == category))
             return Result.Failure(Error.Conflict("DeliveryOrder.DuplicateLine",
-                $"Order already has a line for {size} {category}."));
+                $"Order already has a line for {category} containers."));
 
-        _lines.Add(new DeliveryOrderLine(Id, size, category, quantity));
+        _lines.Add(new DeliveryOrderLine(Id, category, quantity));
         return Result.Success();
     }
 
     public bool IsExpired(DateOnly today) => today > ExpiryDate;
 
-    /// <summary>Giữ một suất giao cho container có kích thước/loại tương ứng.</summary>
-    internal Result Release(ContainerSize size, ContainerCategory category, DateOnly today)
+    /// <summary>Consumes one unit of the order for a container of the given category.</summary>
+    internal Result Release(ContainerCategory category, DateOnly today)
     {
         if (IsExpired(today))
             return Result.Failure(Error.Conflict("DeliveryOrder.Expired",
                 $"Delivery order {OrderNumber} expired on {ExpiryDate:dd/MM/yyyy}."));
 
-        var line = _lines.FirstOrDefault(l => l.Size == size && l.Category == category);
+        var line = _lines.FirstOrDefault(l => l.Category == category);
         if (line is null)
             return Result.Failure(Error.Conflict("DeliveryOrder.TypeNotAllowed",
-                $"Delivery order {OrderNumber} does not include {size} {category} containers."));
+                $"Delivery order {OrderNumber} does not include {category} containers."));
 
         return line.Release();
     }
