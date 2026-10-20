@@ -1,10 +1,13 @@
+using FluentValidation;
 using TechSpherex.CleanArchitecture.Api.Extensions;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Create;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Delete;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Get;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.GetAll;
+using TechSpherex.CleanArchitecture.Application.Features.Containers.Update;
 using TechSpherex.CleanArchitecture.Domain.Common;
+using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Api.Endpoints;
 
 public static class ContainerEndpoints
@@ -27,6 +30,10 @@ public static class ContainerEndpoints
             .AddEndpointFilter<ValidationFilter<CreateContainerCommand>>()
             .WithName("CreateContainer")
             .WithSummary("Register container master data (number, ISO code, size, type, weights, owner)");
+
+        group.MapPut("/{id:guid}", Update)
+            .WithName("UpdateContainer")
+            .WithSummary("Update container master data (the container number cannot change)");
 
         group.MapDelete("/{id:guid}", Delete)
             .WithName("DeleteContainer")
@@ -64,6 +71,24 @@ public static class ContainerEndpoints
             : result.ToProblemDetails();
     }
 
+    private static async Task<IResult> Update(
+        Guid id,
+        UpdateContainerRequest request,
+        IValidator<UpdateContainerCommand> validator,
+        ICommandHandler<UpdateContainerCommand, Result> handler,
+        CancellationToken cancellationToken)
+    {
+        // Validate the command (id from the route + body), not the raw request
+        var command = new UpdateContainerCommand(id, request.IsoCode, request.Size, request.Category,
+            request.MaxGrossWeightKg, request.TareWeightKg, request.ManufactureDate, request.OwnerName);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
+    }
+
     private static async Task<IResult> Delete(
         Guid id,
         ICommandHandler<DeleteContainerCommand, Result> handler,
@@ -73,3 +98,12 @@ public static class ContainerEndpoints
         return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
     }
 }
+
+public sealed record UpdateContainerRequest(
+    string IsoCode,
+    ContainerSize Size,
+    ContainerCategory Category,
+    int MaxGrossWeightKg,
+    int TareWeightKg,
+    DateOnly? ManufactureDate,
+    string OwnerName);
