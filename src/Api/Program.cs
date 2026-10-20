@@ -125,6 +125,7 @@ try
     // Depot Endpoint
     app.MapContainerEndpoints();
     app.MapLineOperatorEndpoints();
+    app.MapCustomerEndpoints();
 
     // Map gRPC services
     app.MapGrpcService<TodoGrpcService>();
