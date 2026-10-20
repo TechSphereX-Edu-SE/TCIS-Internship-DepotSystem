@@ -120,8 +120,11 @@ try
     // Copyright (c) 2026 TechSpherex
     app.MapIdentityEndpoints();
     app.MapTodoEndpoints();
-    app.MapContainerEndpoints();
     app.MapAgentEndpoints();
+
+    // Depot Endpoint
+    app.MapContainerEndpoints();
+    app.MapLineOperatorEndpoints();
 
     // Map gRPC services
     app.MapGrpcService<TodoGrpcService>();
