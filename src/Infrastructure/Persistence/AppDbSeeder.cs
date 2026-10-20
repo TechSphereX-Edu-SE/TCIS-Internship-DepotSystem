@@ -25,7 +25,7 @@ public static class AppDbSeeder
         await SeedDepotMasterDataAsync(context, logger);
     }
 
-    /// <summary>Dữ liệu mẫu Depot: hãng khai thác, khách hàng, block bãi, container.</summary>
+    // Dữ liệu mẫu Depot: hãng khai thác, khách hàng, block bãi, container.
     private static async Task SeedDepotMasterDataAsync(AppDbContext context, ILogger logger)
     {
         if (!await context.LineOperators.AnyAsync())
