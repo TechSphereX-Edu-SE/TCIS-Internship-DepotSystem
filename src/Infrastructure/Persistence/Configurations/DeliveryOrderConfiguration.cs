@@ -25,7 +25,7 @@ public sealed class DeliveryOrderConfiguration : IEntityTypeConfiguration<Delive
         builder.HasMany(o => o.Lines).WithOne()
             .HasForeignKey(l => l.DeliveryOrderId).OnDelete(DeleteBehavior.Cascade);
 
-        // EF đọc/ghi danh sách dòng qua field _lines (Lines chỉ cho đọc)
+        // EF reads/writes order lines through the _lines field (Lines is read-only)
         builder.Navigation(o => o.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

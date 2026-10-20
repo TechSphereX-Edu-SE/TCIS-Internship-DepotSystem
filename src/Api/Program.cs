@@ -83,7 +83,7 @@ try
     // ProblemDetails
     builder.Services.AddProblemDetails();
 
-    // JSON: nhận và trả enum dạng chữ ("Dry", "Ft40"...), vẫn chấp nhận số
+    // JSON: read and write enums as strings ("Dry", "Ft40"...); numbers are still accepted
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 

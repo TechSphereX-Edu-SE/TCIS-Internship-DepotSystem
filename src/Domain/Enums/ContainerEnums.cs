@@ -1,13 +1,13 @@
 namespace TechSpherex.CleanArchitecture.Domain.Enums;
 
-/// <summary>Kích thước container. Bay lẻ chứa 20ft, bay chẵn chứa 40ft.</summary>
+// Container size. Odd bays hold 20ft, even bays hold 40ft
 public enum ContainerSize
 {
     Ft20 = 20,
     Ft40 = 40
 }
 
-/// <summary>Loại container theo Phụ lục II tài liệu Depot.</summary>
+// Container type per Appendix II of the depot spec
 public enum ContainerCategory
 {
     Dry = 0,
@@ -19,14 +19,14 @@ public enum ContainerCategory
     Specialized = 6
 }
 
-/// <summary>Tình trạng vỏ container.</summary>
+// Physical condition of the container
 public enum ContainerCondition
 {
     Normal = 0,
     Damaged = 1
 }
 
-/// <summary>Phân loại container khi vào bãi.</summary>
+// Container grade assigned at gate-in
 public enum ContainerGrade
 {
     A = 0,

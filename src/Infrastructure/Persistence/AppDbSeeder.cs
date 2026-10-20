@@ -25,7 +25,7 @@ public static class AppDbSeeder
         await SeedDepotMasterDataAsync(context, logger);
     }
 
-    // Dữ liệu mẫu Depot: hãng khai thác, khách hàng, block bãi, container.
+    // Depot sample data: line operators, customers, yard blocks, containers
     private static async Task SeedDepotMasterDataAsync(AppDbContext context, ILogger logger)
     {
         if (!await context.LineOperators.AnyAsync())
@@ -53,7 +53,7 @@ public static class AppDbSeeder
 
         if (!await context.Containers.AnyAsync())
         {
-            // Số container có check digit hợp lệ theo ISO 6346
+            // Container numbers with valid check digits
             context.Containers.AddRange(
                 new Container("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, new DateOnly(2019, 5, 1), "MSC"),
                 new Container("MSCU5551234", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2250, new DateOnly(2020, 3, 1), "MSC"),

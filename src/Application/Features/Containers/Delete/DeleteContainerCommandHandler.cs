@@ -14,7 +14,7 @@ public sealed class DeleteContainerCommandHandler(IAppDbContext dbContext)
         if (container is null)
             return Result.Failure(Error.NotFound("Container.NotFound", $"Container with ID '{command.Id}' was not found."));
 
-        // Container đã từng vào bãi thì giữ lại để không mất lịch sử và số liệu thống kê
+        // Keep containers that have been in the yard so history and statistics are not lost
         var hasHistory = await dbContext.ContainerVisits
             .AnyAsync(v => v.ContainerId == command.Id, cancellationToken);
         if (hasHistory)

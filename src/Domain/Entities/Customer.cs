@@ -2,10 +2,10 @@ using TechSpherex.CleanArchitecture.Domain.Common;
 
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
-/// <summary>Khách hàng nhận container theo lệnh giao.</summary>
+// Customer receiving containers under a delivery order
 public sealed class Customer : AuditableEntity
 {
-    /// <summary>Mã số thuế (MST).</summary>
+    // Tax code (MST)
     public string TaxCode { get; private set; } = default!;
     public string Name { get; private set; } = default!;
 

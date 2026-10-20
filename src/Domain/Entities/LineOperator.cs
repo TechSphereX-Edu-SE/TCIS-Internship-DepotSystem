@@ -2,7 +2,7 @@ using TechSpherex.CleanArchitecture.Domain.Common;
 
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
-/// <summary>Hãng khai thác container (line operator), ví dụ MSC, CMA, HMM.</summary>
+// Container line operator, e.g. MSC, CMA, HMM
 public sealed class LineOperator : AuditableEntity
 {
     public string Code { get; private set; } = default!;

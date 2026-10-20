@@ -4,10 +4,8 @@ using TechSpherex.CleanArchitecture.Domain.Services;
 
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
-/// <summary>
-/// Thông tin cố định của một container (mục 2 tài liệu Depot).
-/// Việc container đang ở trong bãi hay không được ghi ở <see cref="ContainerVisit"/>.
-/// </summary>
+/* Container master data (section 2 of the depot spec).
+Whether the container is currently in the yard is recorded in ContainerVisit. */
 public sealed class Container : AuditableEntity
 {
     public string ContainerNumber { get; private set; } = default!;
@@ -21,7 +19,7 @@ public sealed class Container : AuditableEntity
     public ContainerCondition Condition { get; private set; } = ContainerCondition.Normal;
     public string? ConditionNote { get; private set; }
 
-    private Container() { } // EF Core dùng khi đọc từ DB
+    private Container() { } // Used by EF Core when loading from the database
 
     public Container(
         string containerNumber,
