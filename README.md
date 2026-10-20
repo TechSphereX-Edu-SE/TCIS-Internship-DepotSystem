@@ -738,6 +738,17 @@ This project is licensed under the [MIT License](LICENSE).
 Use it, modify it, ship it. Attribution appreciated but not required.
 
 ---
+## Acknowledgements & Credits
+
+This internship project is built upon the [TechSpherex Clean Architecture Template](https://github.com/KhaiTrang1995/TechSpherex.CleanArchitecture), developed by TechSpherex.
+
+The original template provides the .NET 10 Clean Architecture foundation, ASP.NET Core Identity, EF Core, PostgreSQL, Docker, and supporting infrastructure.
+
+The project is being extended and customized for the **TCIS Container Depot Management System**, including depot-specific data models, business rules, and operational workflows.
+
+**Original template:** [TechSpherex.CleanArchitecture](https://github.com/KhaiTrang1995/TechSpherex.CleanArchitecture)
+
+**License:** MIT — Copyright © 2026 TechSpherex.
 
 <p align="center">
   <sub>⭐ If you find this template useful, please give it a star — it helps others discover it!</sub>
