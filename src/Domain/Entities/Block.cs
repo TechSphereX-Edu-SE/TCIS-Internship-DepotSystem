@@ -3,10 +3,10 @@ using TechSpherex.CleanArchitecture.Domain.Enums;
 
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
-/// <summary>
-/// Khu bãi container (mục 1 tài liệu Depot).
-/// Block thật quản lý theo Bay - Row - Tier; block ảo không có vị trí chi tiết.
-/// </summary>
+/* 
+      Yard block (section 1 of the depot spec).
+      A physical block is managed by Bay - Row - Tier; a virtual block has no detailed position.
+*/
 public sealed class Block : AuditableEntity
 {
     public string Code { get; private set; } = default!;
@@ -37,10 +37,10 @@ public sealed class Block : AuditableEntity
             IsVirtual = true
         };
 
-    /// <summary>
-    /// Mở rộng hoặc thu hẹp block. Việc kiểm tra container đang nằm ngoài
-    /// kích thước mới thuộc về tầng Application (cần truy vấn dữ liệu).
-    /// </summary>
+    /* 
+        Expands or shrinks the block. Checking for containers outside the new size
+        belongs to the Application layer because it needs a database query.
+    */
     public Result Resize(int maxBays, int maxRows, int maxTiers)
     {
         if (IsVirtual)
@@ -55,10 +55,10 @@ public sealed class Block : AuditableEntity
         return Result.Success();
     }
 
-    /// <summary>
-    /// Kiểm tra một vị trí có hợp lệ với block và kích thước container không.
-    /// Bay lẻ chứa container 20ft, bay chẵn chứa container 40ft.
-    /// </summary>
+    /* 
+        Checks whether a position is valid for this block and container size.
+        Odd bays hold 20ft containers, even bays hold 40ft containers.
+    */
     public Result ValidateSlot(int? bay, int? row, int? tier, ContainerSize size)
     {
         if (IsVirtual)
