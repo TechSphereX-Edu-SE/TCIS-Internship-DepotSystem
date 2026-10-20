@@ -9,8 +9,8 @@ public sealed class CreateContainerValidator : AbstractValidator<CreateContainer
         RuleFor(x => x.ContainerNumber)
             .NotEmpty()
             .Must(ContainerNumberRules.IsValid)
-            .WithMessage("Container number must follow ISO 6346: 4 letters + 7 digits with a valid check digit (e.g. CSQU3054383).");
-
+            .WithMessage("Container number must be 4 letters + 6 digits + a valid check digit (0-9, " +
+                         "or X when the Modulo 11 remainder is 10), e.g. CSQU3054383, CMAU100000X.");
         RuleFor(x => x.IsoCode)
             .NotEmpty()
             .Matches("^[A-Za-z0-9]{4}$")
