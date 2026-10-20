@@ -8,7 +8,23 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
 {
     public void Configure(EntityTypeBuilder<ContainerVisit> builder)
     {
-        builder.ToTable("ContainerVisits");
+        builder.ToTable("ContainerVisits", t =>
+        {
+            // Bay/Row/Tier are either all empty (virtual block) or all at least 1
+            t.HasCheckConstraint("CK_ContainerVisits_Position",
+                "(\"Bay\" IS NULL AND \"Row\" IS NULL AND \"Tier\" IS NULL) OR " +
+                "(\"Bay\" >= 1 AND \"Row\" >= 1 AND \"Tier\" >= 1)");
+
+            // Gate-out cannot happen before gate-in
+            t.HasCheckConstraint("CK_ContainerVisits_GateOutAfterGateIn",
+                "\"GateOutAt\" IS NULL OR \"GateOutAt\" >= \"GateInAt\"");
+
+            // Gate-out time, vehicle and delivery order are set together
+            t.HasCheckConstraint("CK_ContainerVisits_GateOutFields",
+                "(\"GateOutAt\" IS NULL AND \"GateOutVehicleNo\" IS NULL AND \"DeliveryOrderId\" IS NULL) OR " +
+                "(\"GateOutAt\" IS NOT NULL AND \"GateOutVehicleNo\" IS NOT NULL AND \"DeliveryOrderId\" IS NOT NULL)");
+        });
+
         builder.HasKey(v => v.Id);
         builder.Ignore(v => v.IsInYard);
 
@@ -30,17 +46,17 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
         builder.Property(v => v.GateInVehicleNo).IsRequired().HasMaxLength(20);
         builder.Property(v => v.GateOutVehicleNo).HasMaxLength(20);
 
-        // Mỗi container chỉ có tối đa 1 vòng đời đang mở (chưa gate-out)
+        // At most one open visit (not gated out) per container
         builder.HasIndex(v => v.ContainerId)
             .IsUnique()
             .HasFilter("\"GateOutAt\" IS NULL");
 
-        // Mỗi vị trí Block-Bay-Row-Tier chỉ chứa 1 container đang trong bãi
+        // Each Block-Bay-Row-Tier slot holds at most one container in the yard
         builder.HasIndex(v => new { v.BlockId, v.Bay, v.Row, v.Tier })
             .IsUnique()
             .HasFilter("\"GateOutAt\" IS NULL AND \"Bay\" IS NOT NULL");
 
-        // Phục vụ thống kê theo hãng và theo ngày
+        // Support statistics by line operator and by day
         builder.HasIndex(v => new { v.LineOperatorId, v.GateInAt });
         builder.HasIndex(v => new { v.LineOperatorId, v.GateOutAt });
     }

@@ -8,7 +8,13 @@ public sealed class DeliveryOrderLineConfiguration : IEntityTypeConfiguration<De
 {
     public void Configure(EntityTypeBuilder<DeliveryOrderLine> builder)
     {
-        builder.ToTable("DeliveryOrderLines");
+        builder.ToTable("DeliveryOrderLines", t =>
+        {
+            // Quantity is positive; released quantity never exceeds it
+            t.HasCheckConstraint("CK_DeliveryOrderLines_Quantity",
+                "\"Quantity\" > 0 AND \"ReleasedQuantity\" BETWEEN 0 AND \"Quantity\"");
+        });
+
         builder.HasKey(l => l.Id);
         builder.Ignore(l => l.RemainingQuantity);
 

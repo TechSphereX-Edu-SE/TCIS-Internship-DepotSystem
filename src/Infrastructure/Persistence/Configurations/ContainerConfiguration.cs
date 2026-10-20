@@ -8,7 +8,13 @@ public sealed class ContainerConfiguration : IEntityTypeConfiguration<Container>
 {
     public void Configure(EntityTypeBuilder<Container> builder)
     {
-        builder.ToTable("Containers");
+        builder.ToTable("Containers", t =>
+        {
+            // Tare weight is positive and below the maximum gross weight
+            t.HasCheckConstraint("CK_Containers_Weights",
+                "\"TareWeightKg\" > 0 AND \"MaxGrossWeightKg\" > \"TareWeightKg\"");
+        });
+
         builder.HasKey(c => c.Id);
 
         builder.Property(c => c.ContainerNumber).IsRequired().HasMaxLength(11);
