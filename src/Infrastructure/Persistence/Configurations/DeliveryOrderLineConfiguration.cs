@@ -12,9 +12,9 @@ public sealed class DeliveryOrderLineConfiguration : IEntityTypeConfiguration<De
         builder.HasKey(l => l.Id);
         builder.Ignore(l => l.RemainingQuantity);
 
-        builder.Property(l => l.Size).HasConversion<string>().HasMaxLength(10);
         builder.Property(l => l.Category).HasConversion<string>().HasMaxLength(20);
 
-        builder.HasIndex(l => new { l.DeliveryOrderId, l.Size, l.Category }).IsUnique();
+        // One line per container category within an order
+        builder.HasIndex(l => new { l.DeliveryOrderId, l.Category }).IsUnique();
     }
 }
