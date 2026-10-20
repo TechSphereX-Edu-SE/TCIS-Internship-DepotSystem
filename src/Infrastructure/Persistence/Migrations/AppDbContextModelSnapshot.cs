@@ -279,7 +279,10 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("Blocks", (string)null);
+                    b.ToTable("Blocks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Blocks_Dimensions", "(\"IsVirtual\" AND \"MaxBays\" IS NULL AND \"MaxRows\" IS NULL AND \"MaxTiers\" IS NULL) OR (NOT \"IsVirtual\" AND \"MaxBays\" >= 1 AND \"MaxRows\" >= 1 AND \"MaxTiers\" >= 1)");
+                        });
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.Container", b =>
@@ -348,7 +351,10 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.HasIndex("ContainerNumber")
                         .IsUnique();
 
-                    b.ToTable("Containers", (string)null);
+                    b.ToTable("Containers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Containers_Weights", "\"TareWeightKg\" > 0 AND \"MaxGrossWeightKg\" > \"TareWeightKg\"");
+                        });
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", b =>
@@ -435,7 +441,14 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"GateOutAt\" IS NULL AND \"Bay\" IS NOT NULL");
 
-                    b.ToTable("ContainerVisits", (string)null);
+                    b.ToTable("ContainerVisits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ContainerVisits_GateOutAfterGateIn", "\"GateOutAt\" IS NULL OR \"GateOutAt\" >= \"GateInAt\"");
+
+                            t.HasCheckConstraint("CK_ContainerVisits_GateOutFields", "(\"GateOutAt\" IS NULL AND \"GateOutVehicleNo\" IS NULL AND \"DeliveryOrderId\" IS NULL) OR (\"GateOutAt\" IS NOT NULL AND \"GateOutVehicleNo\" IS NOT NULL AND \"DeliveryOrderId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_ContainerVisits_Position", "(\"Bay\" IS NULL AND \"Row\" IS NULL AND \"Tier\" IS NULL) OR (\"Bay\" >= 1 AND \"Row\" >= 1 AND \"Tier\" >= 1)");
+                        });
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.Customer", b =>
@@ -543,17 +556,15 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<int>("ReleasedQuantity")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Size")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("DeliveryOrderId", "Size", "Category")
+                    b.HasIndex("DeliveryOrderId", "Category")
                         .IsUnique();
 
-                    b.ToTable("DeliveryOrderLines", (string)null);
+                    b.ToTable("DeliveryOrderLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DeliveryOrderLines_Quantity", "\"Quantity\" > 0 AND \"ReleasedQuantity\" BETWEEN 0 AND \"Quantity\"");
+                        });
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.LineOperator", b =>
