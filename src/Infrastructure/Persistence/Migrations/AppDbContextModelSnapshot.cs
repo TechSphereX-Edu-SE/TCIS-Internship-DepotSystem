@@ -281,7 +281,7 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
 
                     b.ToTable("Blocks", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Blocks_Dimensions", "(\"IsVirtual\" AND \"MaxBays\" IS NULL AND \"MaxRows\" IS NULL AND \"MaxTiers\" IS NULL) OR (NOT \"IsVirtual\" AND \"MaxBays\" >= 1 AND \"MaxRows\" >= 1 AND \"MaxTiers\" >= 1)");
+                            t.HasCheckConstraint("CK_Blocks_Dimensions", "(\"IsVirtual\" AND \"MaxBays\" IS NULL AND \"MaxRows\" IS NULL AND \"MaxTiers\" IS NULL) OR (NOT \"IsVirtual\" AND \"MaxBays\" >= 1 AND \"MaxRows\" >= 1 AND \"MaxTiers\" >= 2)");
                         });
                 });
 
