@@ -5,6 +5,8 @@ using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.Agents;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
 namespace TechSpherex.CleanArchitecture.Application;
 
 public static class DependencyInjection
@@ -16,6 +18,9 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(assembly);
         services.AddHandlersFromAssembly(assembly);
         services.AddSkillAgents(assembly);
+
+        // Clock for gate-in/gate-out times; injected so tests can use a fixed time
+        services.TryAddSingleton(TimeProvider.System);
 
         return services;
     }
