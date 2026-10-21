@@ -3,6 +3,7 @@ using TechSpherex.CleanArchitecture.Application.Features.Containers.Update;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
 using TechSpherex.CleanArchitecture.Domain.Enums;
+using TechSpherex.CleanArchitecture.Infrastructure.Persistence;
 namespace TechSpherex.CleanArchitecture.Application.UnitTests.Features.Depot;
 
 public sealed class UpdateContainerCommandHandlerTests
@@ -10,24 +11,45 @@ public sealed class UpdateContainerCommandHandlerTests
     private static Container NewContainer() =>
         new("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "MSC");
 
-    private static UpdateContainerCommand Command(Guid id, ContainerSize size = ContainerSize.Ft20) =>
-        new(id, "22R1", size, ContainerCategory.Reefer, 30480, 3000, new DateOnly(2021, 1, 1), "MSC Line");
+    private static UpdateContainerCommand Command(
+        Guid id, ContainerSize size = ContainerSize.Ft20, ContainerCategory category = ContainerCategory.Dry) =>
+        new(id, "22G0", size, category, 30480, 2300, new DateOnly(2021, 1, 1), "MSC Line");
+
+    private static async Task<Container> SeedContainerAsync(AppDbContext dbContext)
+    {
+        var container = NewContainer();
+        dbContext.Containers.Add(container);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return container;
+    }
 
     [Fact]
     public async Task HandleAsync_Should_Update_Details()
     {
         await using var dbContext = TestDbContextFactory.Create();
-        var container = NewContainer();
-        dbContext.Containers.Add(container);
-        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var container = await SeedContainerAsync(dbContext);
 
         var result = await new UpdateContainerCommandHandler(dbContext)
             .HandleAsync(Command(container.Id), TestContext.Current.CancellationToken);
 
         result.IsSuccess.Should().BeTrue();
-        container.IsoCode.Should().Be("22R1");
-        container.Category.Should().Be(ContainerCategory.Reefer);
+        container.IsoCode.Should().Be("22G0");
+        container.TareWeightKg.Should().Be(2300);
         container.ContainerNumber.Should().Be("MSCU1234566");
+    }
+
+    [Fact]
+    public async Task HandleAsync_Should_Reject_Type_Not_Matching_Type_Code()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var container = await SeedContainerAsync(dbContext);
+
+        // MSCU... has type code U (Dry), so it cannot become Reefer
+        var result = await new UpdateContainerCommandHandler(dbContext)
+            .HandleAsync(Command(container.Id, category: ContainerCategory.Reefer), TestContext.Current.CancellationToken);
+
+        result.Error!.Code.Should().Be("Container.TypeCodeMismatch");
+        container.Category.Should().Be(ContainerCategory.Dry);
     }
 
     [Fact]

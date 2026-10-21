@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Domain.Common;
+using TechSpherex.CleanArchitecture.Domain.Services;
 namespace TechSpherex.CleanArchitecture.Application.Features.Containers.Update;
 
 public sealed class UpdateContainerCommandHandler(IAppDbContext dbContext) : ICommandHandler<UpdateContainerCommand>
@@ -11,6 +12,12 @@ public sealed class UpdateContainerCommandHandler(IAppDbContext dbContext) : ICo
         var container = await dbContext.Containers.FindAsync([command.Id], cancellationToken);
         if (container is null)
             return Result.Failure(Error.NotFound("Container.NotFound", $"Container with ID '{command.Id}' was not found."));
+
+        // The number does not change, so the new type must still match its 4th letter (type code)
+        if (!ContainerNumberRules.MatchesCategory(container.ContainerNumber, command.Category))
+            return Result.Failure(Error.Validation("Container.TypeCodeMismatch",
+                $"Container '{container.ContainerNumber}' has type code '{container.ContainerNumber[3]}', " +
+                $"which does not match type {command.Category}."));
 
         // The yard position (odd/even bay) depends on size, so size cannot change while in the yard
         if (command.Size != container.Size)
