@@ -1,42 +1,31 @@
-using TechSpherex.CleanArchitecture.Domain.Enums;
-
 namespace TechSpherex.CleanArchitecture.Domain.Services;
 
 /*
-    Container number rules per Appendix I of the "Depot Management System" spec:
-    3-letter owner code + 1-letter type code + 6-digit serial + 1 check character.
-    - Type code: the 4th letter identifies the container type (see TypeCodes).
-    - Serial: issued from 000001, so 000000 is not valid.
-    - Check character uses Modulo 11: remainder 0 -> '0'; 1-9 -> the remainder; 10 -> 'X'.
-    Valid examples: CSQU3054383, CMAU1234564, CMAU100000X, HMMR2468107.
+    Container number (identification number) rules.
+    Format follows ISO 6346: 3-letter owner code + equipment category identifier + 6-digit serial
+    + 1 check character.
+    - Equipment category: 'U' = freight container (every container type: dry, reefer, flat rack...).
+      ISO also has 'J' (detachable equipment) and 'Z' (trailer/chassis), which are not containers,
+      so the depot only accepts 'U'. The container type is carried by the ISO code (IsoCodeRules).
+    - Serial: issued from 000001, so 000000 is not valid (Appendix I; ISO does not conflict).
+    - Check character: Modulo 11 as in ISO 6346, but remainder 10 -> 'X' as Appendix I says
+      (ISO would use '0'). Project decision to keep the spec's check digit.
+    Valid examples: CSQU3054383, CMAU1234564, CMAU100000X, HMMU2468109.
 */
 public static class ContainerNumberRules
 {
     public const int Length = 11;
 
-    /*
-        Type code letter per container type.
-        U, R, S, F come from Appendix I. B, V, P are project choices for the
-        three types the spec does not list (Specialized uses P because S is Open Top).
-    */
-    public static readonly IReadOnlyDictionary<ContainerCategory, char> TypeCodes =
-        new Dictionary<ContainerCategory, char>
-        {
-            [ContainerCategory.Dry] = 'U',
-            [ContainerCategory.Reefer] = 'R',
-            [ContainerCategory.OpenTop] = 'S',
-            [ContainerCategory.FlatRack] = 'F',
-            [ContainerCategory.Bunker] = 'B',
-            [ContainerCategory.Ventilated] = 'V',
-            [ContainerCategory.Specialized] = 'P'
-        };
+    // ISO 6346 equipment category identifier for freight containers
+    public const char FreightContainerCategory = 'U';
 
     public static string Normalize(string? value) =>
         (value ?? string.Empty).Trim().ToUpperInvariant();
 
     public static bool HasValidFormat(string value) =>
         value.Length == Length
-        && value[..4].All(char.IsAsciiLetterUpper)
+        && value[..3].All(char.IsAsciiLetterUpper)
+        && value[3] == FreightContainerCategory
         && value[4..10].All(char.IsAsciiDigit)
         && value[4..10] != "000000"
         && (char.IsAsciiDigit(value[10]) || value[10] == 'X');
@@ -68,15 +57,6 @@ public static class ContainerNumberRules
             return false;
 
         return CalculateCheckDigit(number) == number[10];
-    }
-
-    // True when the 4th letter of the number matches the container type
-    public static bool MatchesCategory(string? value, ContainerCategory category)
-    {
-        var number = Normalize(value);
-        return number.Length >= 4
-            && TypeCodes.TryGetValue(category, out var code)
-            && number[3] == code;
     }
 
     private static int LetterValue(char letter)
