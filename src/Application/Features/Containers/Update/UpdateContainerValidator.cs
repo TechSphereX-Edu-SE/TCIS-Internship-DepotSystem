@@ -1,4 +1,6 @@
 using FluentValidation;
+using TechSpherex.CleanArchitecture.Domain.Services;
+
 namespace TechSpherex.CleanArchitecture.Application.Features.Containers.Update;
 
 // Same field rules as CreateContainerValidator, without the container number
@@ -8,10 +10,12 @@ public sealed class UpdateContainerValidator : AbstractValidator<UpdateContainer
     {
         RuleFor(x => x.Id).NotEmpty();
 
+        // ISO 6346 size-type code must fit the size and the container type (rules in IsoCodeRules)
         RuleFor(x => x.IsoCode)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty()
-            .Matches("^[A-Za-z0-9]{4}$")
-            .WithMessage("ISO code must be 4 letters/digits (e.g. 22G1, 45R1).");
+            .Must((x, isoCode) => IsoCodeRules.IsValid(isoCode, x.Size, x.Category))
+            .WithMessage(x => IsoCodeRules.Validate(x.IsoCode, x.Size, x.Category)!);
 
         RuleFor(x => x.Size).IsInEnum();
         RuleFor(x => x.Category).IsInEnum();
