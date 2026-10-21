@@ -40,4 +40,14 @@ public sealed class CreateContainerCommandHandlerTests
 
         result.IsValid.Should().BeFalse();
     }
+
+    [Fact]
+    public void Validator_Should_Reject_Type_Not_Matching_Type_Code()
+    {
+        // CSQU... has type code U (Dry)
+        var result = new CreateContainerValidator().Validate(Command() with { Category = ContainerCategory.Reefer });
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Category");
+    }
 }
