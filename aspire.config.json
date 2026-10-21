@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "src/AppHost/TechSpherex.CleanArchitecture.AppHost.csproj"
+  }
+}
