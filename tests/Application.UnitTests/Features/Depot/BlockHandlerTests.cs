@@ -58,6 +58,7 @@ public sealed class BlockHandlerTests
         validator.Validate(new CreateBlockCommand("A", null, false, 10, 4, 4)).IsValid.Should().BeTrue();
         validator.Validate(new CreateBlockCommand("A", null, false, 10, null, 4)).IsValid.Should().BeFalse(); // physical, missing rows
         validator.Validate(new CreateBlockCommand("A", null, false, 0, 4, 4)).IsValid.Should().BeFalse();     // physical, 0 bays
+        validator.Validate(new CreateBlockCommand("A", null, false, 10, 4, 1)).IsValid.Should().BeFalse();    // physical, 1 tier
         validator.Validate(new CreateBlockCommand("V", null, true, null, null, null)).IsValid.Should().BeTrue();
         validator.Validate(new CreateBlockCommand("V", null, true, 10, null, null)).IsValid.Should().BeFalse(); // virtual with bays
     }
@@ -114,5 +115,26 @@ public sealed class BlockHandlerTests
             .HandleAsync(new ResizeBlockCommand(block.Id, 10, 4, 4), TestContext.Current.CancellationToken);
 
         result.Error!.Code.Should().Be("Block.VirtualCannotResize");
+    }
+
+    [Fact]
+    public async Task Resize_Should_Reject_Shrink_That_Cuts_A_40ft_Footprint()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var lineOperator = new LineOperator("CMA", "CMA");
+        var block = Block.CreatePhysical("B", maxBays: 10, maxRows: 4, maxTiers: 3);
+        var container = new Container("CMAU7654327", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3750, null, "CMA");
+        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, 6, 1, 1, ContainerGrade.A,
+            ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
+        dbContext.AddRange(lineOperator, block, container, visit);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var handler = new ResizeBlockCommandHandler(dbContext);
+
+        // 40ft in bay 6 covers bays 5 and 7, so 6 bays is too small but 7 is enough
+        var tooSmall = await handler.HandleAsync(new ResizeBlockCommand(block.Id, 6, 4, 3), TestContext.Current.CancellationToken);
+        var enough = await handler.HandleAsync(new ResizeBlockCommand(block.Id, 7, 4, 3), TestContext.Current.CancellationToken);
+
+        tooSmall.Error!.Code.Should().Be("Block.ContainersOutsideNewSize");
+        enough.IsSuccess.Should().BeTrue();
     }
 }

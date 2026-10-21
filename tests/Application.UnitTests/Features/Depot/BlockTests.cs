@@ -40,4 +40,21 @@ public sealed class BlockTests
         virtualBlock.ValidateSlot(null, null, null, ContainerSize.Ft40).IsSuccess.Should().BeTrue();
         virtualBlock.ValidateSlot(1, 1, 1, ContainerSize.Ft20).IsFailure.Should().BeTrue();
     }
+
+    [Fact]
+    public void ValidateSlot_Should_Reject_40ft_In_Last_Even_Bay()
+    {
+        // Block has 10 bays: a 40ft container in bay 10 would also cover bay 11
+        _block.ValidateSlot(10, 1, 1, ContainerSize.Ft40).Error!.Code.Should().Be("Block.BayOutOfRange");
+        _block.ValidateSlot(8, 1, 1, ContainerSize.Ft40).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Resize_Should_Require_At_Least_Two_Tiers()
+    {
+        var block = Block.CreatePhysical("Z", 10, 4, 3);
+
+        block.Resize(10, 4, 1).Error!.Code.Should().Be("Block.InvalidSize");
+        block.Resize(10, 4, 2).IsSuccess.Should().BeTrue();
+    }
 }

@@ -1,4 +1,5 @@
 using FluentValidation;
+using TechSpherex.CleanArchitecture.Domain.Entities;
 namespace TechSpherex.CleanArchitecture.Application.Features.Blocks.Resize;
 
 public sealed class ResizeBlockValidator : AbstractValidator<ResizeBlockCommand>
@@ -8,6 +9,6 @@ public sealed class ResizeBlockValidator : AbstractValidator<ResizeBlockCommand>
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.MaxBays).GreaterThanOrEqualTo(1);
         RuleFor(x => x.MaxRows).GreaterThanOrEqualTo(1);
-        RuleFor(x => x.MaxTiers).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.MaxTiers).GreaterThanOrEqualTo(Block.MinTiers);
     }
 }

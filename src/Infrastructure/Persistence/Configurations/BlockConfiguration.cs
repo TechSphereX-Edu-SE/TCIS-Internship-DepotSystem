@@ -10,10 +10,10 @@ public sealed class BlockConfiguration : IEntityTypeConfiguration<Block>
     {
         builder.ToTable("Blocks", t =>
         {
-            // Virtual block: no bay/row/tier. Physical block: all dimensions at least 1
+            // Virtual block: no bay/row/tier. Physical block: bays and rows >= 1, tiers >= 2
             t.HasCheckConstraint("CK_Blocks_Dimensions",
                 "(\"IsVirtual\" AND \"MaxBays\" IS NULL AND \"MaxRows\" IS NULL AND \"MaxTiers\" IS NULL) OR " +
-                "(NOT \"IsVirtual\" AND \"MaxBays\" >= 1 AND \"MaxRows\" >= 1 AND \"MaxTiers\" >= 1)");
+                "(NOT \"IsVirtual\" AND \"MaxBays\" >= 1 AND \"MaxRows\" >= 1 AND \"MaxTiers\" >= 2)");
         });
 
         builder.HasKey(b => b.Id);

@@ -16,6 +16,9 @@ public sealed class Block : AuditableEntity
     public int? MaxRows { get; private set; }
     public int? MaxTiers { get; private set; }
 
+    // Spec section 1: a row can stack "from 2 to many tiers"
+    public const int MinTiers = 2;
+
     private Block() { }
 
     public static Block CreatePhysical(string code, int maxBays, int maxRows, int maxTiers, string? description = null) =>
@@ -46,8 +49,10 @@ public sealed class Block : AuditableEntity
         if (IsVirtual)
             return Result.Failure(Error.Validation("Block.VirtualCannotResize", "A virtual block has no bay/row/tier."));
 
-        if (maxBays < 1 || maxRows < 1 || maxTiers < 1)
-            return Result.Failure(Error.Validation("Block.InvalidSize", "Bays, rows and tiers must be at least 1."));
+        // Spec section 1: bays hold one or more rows; tiers stack "from 2 to many"
+        if (maxBays < 1 || maxRows < 1 || maxTiers < MinTiers)
+            return Result.Failure(Error.Validation("Block.InvalidSize",
+                $"Bays and rows must be at least 1 and tiers at least {MinTiers}."));
 
         MaxBays = maxBays;
         MaxRows = maxRows;
@@ -83,6 +88,11 @@ public sealed class Block : AuditableEntity
 
         if (size == ContainerSize.Ft40 && isOddBay)
             return Result.Failure(Error.Validation("Block.BayParity", "A 40ft container must be placed in an even bay."));
+
+        // "2 odd bays = 1 even bay": a 40ft container in even bay b covers odd bays b-1 and b+1
+        if (size == ContainerSize.Ft40 && bay + 1 > MaxBays)
+            return Result.Failure(Error.Validation("Block.BayOutOfRange",
+                $"A 40ft container in bay {bay} also covers bay {bay + 1}, which is outside block {Code} ({MaxBays} bays)."));
 
         return Result.Success();
     }
