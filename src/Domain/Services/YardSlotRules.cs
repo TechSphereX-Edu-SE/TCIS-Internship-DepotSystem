@@ -35,6 +35,14 @@ public static class YardSlotRules
             .Any(p => Footprint(p.Bay, p.Size).Intersect(footprint).Any());
     }
 
+    /*
+    True when a container in the tier just above shares a bay of the footprint, i.e. it rests
+    on this container. Such a container cannot be moved or gated out first, or the one above
+    would be left without support.
+    */
+    public static bool HasContainerAbove(int bay, int tier, ContainerSize size, IEnumerable<PlacedContainer> sameRow) =>
+        Overlaps(bay, tier + 1, size, sameRow);
+
     // True when the position is on the ground or every bay of the footprint is covered just below
     public static bool IsSupported(int bay, int tier, ContainerSize size, IEnumerable<PlacedContainer> sameRow)
     {

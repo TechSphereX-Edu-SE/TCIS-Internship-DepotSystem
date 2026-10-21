@@ -1,6 +1,8 @@
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Enums;
+
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 
 /*
@@ -22,7 +24,7 @@ public sealed record GateInCommand(
     ContainerCondition Condition,
     string? ConditionNote,
     string VehicleNo)
-    : ICommand<Result<GateInResponse>>;
+    : ICommand<Result<GateInResponse>>, IYardPosition;
 
 public sealed record GateInResponse(
     Guid VisitId,

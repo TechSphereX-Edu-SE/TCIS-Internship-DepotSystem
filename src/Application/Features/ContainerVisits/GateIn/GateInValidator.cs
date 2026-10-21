@@ -1,4 +1,5 @@
 using FluentValidation;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 
 /*
@@ -11,19 +12,9 @@ public sealed class GateInValidator : AbstractValidator<GateInCommand>
     {
         RuleFor(x => x.ContainerId).NotEmpty();
         RuleFor(x => x.LineOperatorId).NotEmpty();
-        RuleFor(x => x.BlockId).NotEmpty();
 
-        // Positions start at 1 (same as CK_ContainerVisits_Position)
-        RuleFor(x => x.Bay).GreaterThanOrEqualTo(1).When(x => x.Bay is not null);
-        RuleFor(x => x.Row).GreaterThanOrEqualTo(1).When(x => x.Row is not null);
-        RuleFor(x => x.Tier).GreaterThanOrEqualTo(1).When(x => x.Tier is not null);
-
-        // Bay/Row/Tier are all given (physical block) or all omitted (virtual block)
-        RuleFor(x => x)
-            .Must(x => (x.Bay, x.Row, x.Tier) is (null, null, null) ||
-                       (x.Bay is not null && x.Row is not null && x.Tier is not null))
-            .WithName("Position")
-            .WithMessage("Bay, row and tier must be all given or all omitted.");
+        // Block and Bay/Row/Tier rules are shared with move
+        Include(new YardPositionValidator());
 
         RuleFor(x => x.Grade).IsInEnum();
         RuleFor(x => x.Condition).IsInEnum();
