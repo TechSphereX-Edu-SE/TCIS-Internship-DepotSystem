@@ -49,6 +49,19 @@ public sealed class ContainerVisitTests
     }
 
     [Fact]
+    public void GateOut_Should_Compare_Expiry_With_Vietnam_Date()
+    {
+        var visit = GateIn(new DateTimeOffset(2026, 10, 1, 8, 0, 0, Vn));
+        var order = Order(new DateOnly(2026, 10, 31));
+
+        // 31/10 18:00 UTC is already 01/11 01:00 in Vietnam, after the expiry date
+        var result = visit.GateOut(order, _container.Category, "51C-99999",
+            new DateTimeOffset(2026, 10, 31, 18, 0, 0, TimeSpan.Zero));
+
+        result.Error!.Code.Should().Be("DeliveryOrder.Expired");
+    }
+
+    [Fact]
     public void GateOut_Should_Fail_When_Order_Expired()
     {
         var visit = GateIn(new DateTimeOffset(2026, 10, 1, 8, 0, 0, Vn));
