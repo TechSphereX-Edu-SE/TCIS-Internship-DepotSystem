@@ -1,13 +1,14 @@
 using TechSpherex.CleanArchitecture.Api.Extensions;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOut;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetPosition;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Move;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 namespace TechSpherex.CleanArchitecture.Api.Endpoints;
 
-// Container lifecycle in the yard (spec section 3): gate-in, move, current position; gate-out comes next
+// Container lifecycle in the yard (spec section 3): gate-in, move, current position, gate-out
 public static class ContainerVisitEndpoints
 {
     public static void MapContainerVisitEndpoints(this IEndpointRouteBuilder app)
@@ -25,6 +26,11 @@ public static class ContainerVisitEndpoints
             .AddEndpointFilter<ValidationFilter<MoveContainerCommand>>()
             .WithName("MoveContainer")
             .WithSummary("Move a container in the yard to another free position or block");
+
+        group.MapPost("/gate-out", GateOut)
+            .AddEndpointFilter<ValidationFilter<GateOutCommand>>()
+            .WithName("GateOutContainer")
+            .WithSummary("Release a container under a delivery order of its line operator");
 
         group.MapGet("/position", GetPosition)
             .WithName("GetContainerPosition")
@@ -46,6 +52,15 @@ public static class ContainerVisitEndpoints
         MoveContainerCommand command,
         ICommandHandler<MoveContainerCommand, Result<ContainerPositionResponse>> handler,
         CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> GateOut(
+    GateOutCommand command,
+    ICommandHandler<GateOutCommand, Result<GateOutResponse>> handler,
+    CancellationToken cancellationToken)
     {
         var result = await handler.HandleAsync(command, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();

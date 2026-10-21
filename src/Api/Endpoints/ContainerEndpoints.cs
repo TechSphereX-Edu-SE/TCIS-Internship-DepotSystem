@@ -6,6 +6,7 @@ using TechSpherex.CleanArchitecture.Application.Features.Containers.Delete;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Get;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.GetAll;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Update;
+using TechSpherex.CleanArchitecture.Application.Features.Containers.UpdateCondition;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Api.Endpoints;
@@ -34,6 +35,10 @@ public static class ContainerEndpoints
         group.MapPut("/{id:guid}", Update)
             .WithName("UpdateContainer")
             .WithSummary("Update container master data (the container number cannot change)");
+
+        group.MapPut("/{id:guid}/condition", UpdateCondition)
+            .WithName("UpdateContainerCondition")
+            .WithSummary("Record the container condition (e.g. back to Normal after repair)");
 
         group.MapDelete("/{id:guid}", Delete)
             .WithName("DeleteContainer")
@@ -89,6 +94,23 @@ public static class ContainerEndpoints
         return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
     }
 
+    private static async Task<IResult> UpdateCondition(
+    Guid id,
+    UpdateContainerConditionRequest request,
+    IValidator<UpdateContainerConditionCommand> validator,
+    ICommandHandler<UpdateContainerConditionCommand, Result> handler,
+    CancellationToken cancellationToken)
+    {
+        // Validate the command (id from the route + body), not the raw request
+        var command = new UpdateContainerConditionCommand(id, request.Condition, request.ConditionNote);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
+    }
+
     private static async Task<IResult> Delete(
         Guid id,
         ICommandHandler<DeleteContainerCommand, Result> handler,
@@ -107,3 +129,8 @@ public sealed record UpdateContainerRequest(
     int TareWeightKg,
     DateOnly? ManufactureDate,
     string OwnerName);
+
+
+public sealed record UpdateContainerConditionRequest(
+    ContainerCondition Condition,
+    string? ConditionNote);
