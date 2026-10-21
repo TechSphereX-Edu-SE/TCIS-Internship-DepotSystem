@@ -11,11 +11,6 @@ public sealed class GateInCommandHandlerTests
     // Fixed clock so the recorded gate-in time can be asserted
     private static readonly DateTimeOffset Now = new(2026, 10, 21, 9, 0, 0, TimeSpan.FromHours(7));
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now.ToUniversalTime();
-    }
-
     private sealed record Seed(LineOperator LineOperator, Block Physical, Block Virtual, Container Ft20, Container Ft40);
 
     // One line operator, a physical block (10 bays, 4 rows, 3 tiers), a virtual block, a 20ft and a 40ft container
