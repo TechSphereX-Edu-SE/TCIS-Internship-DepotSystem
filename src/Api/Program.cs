@@ -127,6 +127,7 @@ try
     app.MapLineOperatorEndpoints();
     app.MapCustomerEndpoints();
     app.MapBlockEndpoints();
+    app.MapContainerVisitEndpoints();
 
     // Map gRPC services
     app.MapGrpcService<TodoGrpcService>();
