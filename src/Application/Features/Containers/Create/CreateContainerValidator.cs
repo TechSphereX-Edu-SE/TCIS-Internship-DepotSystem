@@ -9,22 +9,18 @@ public sealed class CreateContainerValidator : AbstractValidator<CreateContainer
         RuleFor(x => x.ContainerNumber)
             .NotEmpty()
             .Must(ContainerNumberRules.IsValid)
-            .WithMessage("Container number must be 4 letters + 6-digit serial (not 000000) + a valid check digit " +
-                         "(0-9, or X when the Modulo 11 remainder is 10), e.g. CSQU3054383, CMAU100000X.");
+            .WithMessage("Container number must be ISO 6346: 3-letter owner code + U + 6-digit serial (not 000000) " +
+                "+ a valid check digit (0-9, or X when the Modulo 11 remainder is 10), e.g. CSQU3054383, CMAU100000X.");
+
+        // ISO 6346 size-type code must fit the size and the container type (rules in IsoCodeRules)
         RuleFor(x => x.IsoCode)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty()
-            .Matches("^[A-Za-z0-9]{4}$")
-            .WithMessage("ISO code must be 4 letters/digits (e.g. 22G1, 45R1).");
+            .Must((x, isoCode) => IsoCodeRules.IsValid(isoCode, x.Size, x.Category))
+            .WithMessage(x => IsoCodeRules.Validate(x.IsoCode, x.Size, x.Category)!);
 
         RuleFor(x => x.Size).IsInEnum();
         RuleFor(x => x.Category).IsInEnum();
-
-        // The 4th letter of the number is the type code and must match the container type
-        RuleFor(x => x)
-            .Must(x => ContainerNumberRules.MatchesCategory(x.ContainerNumber, x.Category))
-            .When(x => ContainerNumberRules.IsValid(x.ContainerNumber) && Enum.IsDefined(x.Category))
-            .OverridePropertyName(nameof(CreateContainerCommand.Category))
-            .WithMessage(x => $"Container type {x.Category} requires type code '{ContainerNumberRules.TypeCodes[x.Category]}' as the 4th letter of the container number.");
 
         RuleFor(x => x.TareWeightKg).GreaterThan(0);
         RuleFor(x => x.MaxGrossWeightKg)
