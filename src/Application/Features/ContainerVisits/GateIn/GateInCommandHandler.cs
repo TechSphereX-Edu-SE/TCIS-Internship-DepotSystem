@@ -3,6 +3,8 @@ using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
+using TechSpherex.CleanArchitecture.Domain.Enums;
+using TechSpherex.CleanArchitecture.Domain.Services;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 
 /*
@@ -12,8 +14,8 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Gat
       2. The container is not already in the yard (409) - one open visit per container.
       3. The position fits the block and the container size (400) - done by the domain
          (ContainerVisit.GateIn -> Block.ValidateSlot), so the rule lives in one place.
-      4. The exact Block-Bay-Row-Tier slot is free (409).
-    40ft/20ft overlap and "a container needs one below it" are Phase 3 step 2, not here.
+      4. The position is free and supported (409) - YardSlotRules: no overlap with
+         20ft/40ft footprints in the same row and tier, and something underneath above tier 1.
 */
 public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider timeProvider)
     : ICommandHandler<GateInCommand, Result<GateInResponse>>
@@ -52,10 +54,13 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
             return Result.Failure<GateInResponse>(gateIn.Error!);
 
         // A virtual block has no slots, so any number of containers can be in it
-        if (!block.IsVirtual &&
-            await IsSlotTakenAsync(block.Id, command.Bay, command.Row, command.Tier, cancellationToken))
-            return Result.Failure<GateInResponse>(Error.Conflict("ContainerVisit.SlotOccupied",
-                $"Position {command.Bay}-{command.Row}-{command.Tier} in block {block.Code} is already taken."));
+        if (!block.IsVirtual)
+        {
+            var placement = await CheckPlacementAsync(
+                block, command.Bay!.Value, command.Row!.Value, command.Tier!.Value, container.Size, cancellationToken);
+            if (placement.IsFailure)
+                return Result.Failure<GateInResponse>(placement.Error!);
+        }
 
         var visit = gateIn.Value!;
         dbContext.ContainerVisits.Add(visit);
@@ -73,13 +78,31 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
     private Task<bool> IsInYardAsync(Guid containerId, CancellationToken cancellationToken) =>
         dbContext.ContainerVisits.AnyAsync(v => v.ContainerId == containerId && v.GateOutAt == null, cancellationToken);
 
-    // Same rule as the unique index on ContainerVisits (BlockId, Bay, Row, Tier) for open visits
-    private Task<bool> IsSlotTakenAsync(Guid blockId, int? bay, int? row, int? tier, CancellationToken cancellationToken) =>
-        dbContext.ContainerVisits.AnyAsync(v =>
-            v.BlockId == blockId &&
-            v.Bay == bay &&
-            v.Row == row &&
-            v.Tier == tier &&
-            v.GateOutAt == null,
-            cancellationToken);
+    /*
+        Loads the containers in the yard that can affect this position - same block and row,
+        at this tier (overlap) or the tier below (support) - then applies YardSlotRules.
+        Only two tiers of one row are read, so the query stays small.
+    */
+    private async Task<Result> CheckPlacementAsync(
+        Block block, int bay, int row, int tier, ContainerSize size, CancellationToken cancellationToken)
+    {
+        var sameRow = await dbContext.ContainerVisits
+            .Where(v => v.BlockId == block.Id &&
+                        v.GateOutAt == null &&
+                        v.Row == row &&
+                        (v.Tier == tier || v.Tier == tier - 1))
+            .Select(v => new YardSlotRules.PlacedContainer(v.Bay!.Value, v.Tier!.Value, v.Container.Size))
+            .ToListAsync(cancellationToken);
+
+        if (YardSlotRules.Overlaps(bay, tier, size, sameRow))
+            return Result.Failure(Error.Conflict("ContainerVisit.SlotOccupied",
+                $"Position {bay}-{row}-{tier} in block {block.Code} overlaps a container already there " +
+                "(a 40ft in an even bay also takes the odd bays on each side)."));
+
+        if (!YardSlotRules.IsSupported(bay, tier, size, sameRow))
+            return Result.Failure(Error.Conflict("ContainerVisit.NoSupportBelow",
+                $"Position {bay}-{row}-{tier} in block {block.Code} has no container underneath at tier {tier - 1}."));
+
+        return Result.Success();
+    }
 }
