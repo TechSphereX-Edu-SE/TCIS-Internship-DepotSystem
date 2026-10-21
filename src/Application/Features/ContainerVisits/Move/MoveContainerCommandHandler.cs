@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
@@ -22,12 +21,11 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
     public async Task<Result<ContainerPositionResponse>> HandleAsync(
         MoveContainerCommand command, CancellationToken cancellationToken = default)
     {
-        var visit = await dbContext.ContainerVisits
-            .Include(v => v.Container)
-            .Include(v => v.LineOperator)
-            .FirstOrDefaultAsync(v => v.ContainerId == command.ContainerId && v.GateOutAt == null, cancellationToken);
+        var visit = await dbContext.FindOpenVisitAsync(command.ContainerId, cancellationToken);
         if (visit is null)
-            return Result.Failure<ContainerPositionResponse>(await NotInYardErrorAsync(command.ContainerId, cancellationToken));
+            if (visit is null)
+                return Result.Failure<ContainerPositionResponse>(
+                    await dbContext.NotInYardErrorAsync(command.ContainerId, cancellationToken));
 
         var target = await dbContext.Blocks.FindAsync([command.BlockId], cancellationToken);
         if (target is null)
@@ -70,12 +68,4 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
             visit.Bay, visit.Row, visit.Tier, visit.GateInAt));
     }
 
-    // Tells apart "no such container" and "container exists but is not in the yard"
-    private async Task<Error> NotInYardErrorAsync(Guid containerId, CancellationToken cancellationToken)
-    {
-        var containerExists = await dbContext.Containers.AnyAsync(c => c.Id == containerId, cancellationToken);
-        return containerExists
-            ? Error.NotFound("ContainerVisit.NotInYard", $"Container with ID '{containerId}' is not in the yard.")
-            : Error.NotFound("Container.NotFound", $"Container with ID '{containerId}' was not found.");
-    }
 }
