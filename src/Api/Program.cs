@@ -128,6 +128,7 @@ try
     app.MapCustomerEndpoints();
     app.MapBlockEndpoints();
     app.MapContainerVisitEndpoints();
+    app.MapDeliveryOrderEndpoints();
 
     // Map gRPC services
     app.MapGrpcService<TodoGrpcService>();
