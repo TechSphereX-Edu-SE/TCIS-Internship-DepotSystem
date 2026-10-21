@@ -1,5 +1,6 @@
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Enums;
+using TechSpherex.CleanArchitecture.Domain.Services;
 
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
@@ -104,7 +105,9 @@ public sealed class ContainerVisit : AuditableEntity
             return Result.Failure(Error.Conflict("ContainerVisit.WrongLineOperator",
                 "The delivery order belongs to a different line operator."));
 
-        var release = order.Release(category, DateOnly.FromDateTime(gateOutAt.Date));
+        // The expiry date is a Vietnam date, so compare it with the Vietnam date of the gate-out
+        // (gateOutAt.Date would depend on the offset the instant carries, e.g. UTC)
+        var release = order.Release(category, DepotTime.DateOf(gateOutAt));
         if (release.IsFailure)
             return release;
 
