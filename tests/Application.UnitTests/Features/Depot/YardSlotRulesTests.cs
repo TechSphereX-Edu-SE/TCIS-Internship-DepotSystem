@@ -48,6 +48,16 @@ public sealed class YardSlotRulesTests
     }
 
     [Fact]
+    public void HasContainerAbove_Should_Check_The_Tier_Just_Above()
+    {
+        YardSlotRules.HasContainerAbove(5, 1, ContainerSize.Ft20, [Ft20(5, tier: 2)]).Should().BeTrue();
+        YardSlotRules.HasContainerAbove(5, 1, ContainerSize.Ft20, [Ft40(4, tier: 2)]).Should().BeTrue();  // 40ft covers bay 5
+        YardSlotRules.HasContainerAbove(4, 1, ContainerSize.Ft40, [Ft20(3, tier: 2)]).Should().BeTrue();  // 20ft on one end
+        YardSlotRules.HasContainerAbove(5, 1, ContainerSize.Ft20, [Ft20(7, tier: 2)]).Should().BeFalse(); // other bay
+        YardSlotRules.HasContainerAbove(5, 1, ContainerSize.Ft20, [Ft20(5, tier: 3)]).Should().BeFalse(); // not just above
+    }
+
+    [Fact]
     public void Tier_One_Should_Always_Be_Supported()
     {
         YardSlotRules.IsSupported(5, 1, ContainerSize.Ft20, []).Should().BeTrue();
