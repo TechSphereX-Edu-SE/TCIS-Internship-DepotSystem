@@ -116,6 +116,75 @@ public sealed class GateInCommandHandlerTests
         dbContext.ContainerVisits.Should().BeEmpty();
     }
 
+    // Adds an extra 20ft Dry container so a test can fill more than one slot
+    private static async Task<Container> AddFt20Async(AppDbContext dbContext, string number)
+    {
+        var container = new Container(number, "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "HMM");
+        dbContext.Containers.Add(container);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return container;
+    }
+
+    [Fact]
+    public async Task Should_Return_Conflict_When_Ft40_Overlaps_Ft20_Next_To_It()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var handler = Handler(dbContext);
+        await handler.HandleAsync(Command(seed.Ft20, seed, seed.Physical, 5, 1, 1), TestContext.Current.CancellationToken);
+
+        // 40ft in bay 4 covers bays 3 and 5
+        var result = await handler.HandleAsync(Command(seed.Ft40, seed, seed.Physical, 4, 1, 1), TestContext.Current.CancellationToken);
+
+        result.Error!.Code.Should().Be("ContainerVisit.SlotOccupied");
+    }
+
+    [Fact]
+    public async Task Should_Return_Conflict_When_Nothing_Underneath()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+
+        var result = await Handler(dbContext).HandleAsync(
+            Command(seed.Ft20, seed, seed.Physical, 5, 1, 2), TestContext.Current.CancellationToken);
+
+        result.Error!.Type.Should().Be(ErrorType.Conflict);
+        result.Error.Code.Should().Be("ContainerVisit.NoSupportBelow");
+    }
+
+    [Fact]
+    public async Task Should_Stack_Ft40_On_Two_Ft20_But_Not_On_One()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var handler = Handler(dbContext);
+        var second20 = await AddFt20Async(dbContext, "HMMU0000016");
+        await handler.HandleAsync(Command(seed.Ft20, seed, seed.Physical, 3, 1, 1), TestContext.Current.CancellationToken);
+
+        // Only bay 3 is covered below; bay 5 is empty
+        var onOne = await handler.HandleAsync(Command(seed.Ft40, seed, seed.Physical, 4, 1, 2), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(Command(second20, seed, seed.Physical, 5, 1, 1), TestContext.Current.CancellationToken);
+        var onTwo = await handler.HandleAsync(Command(seed.Ft40, seed, seed.Physical, 4, 1, 2), TestContext.Current.CancellationToken);
+
+        onOne.Error!.Code.Should().Be("ContainerVisit.NoSupportBelow");
+        onTwo.IsSuccess.Should().BeTrue();
+        dbContext.ContainerVisits.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task Should_Allow_Ft20_In_Other_Row_Next_To_Ft40()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var handler = Handler(dbContext);
+        await handler.HandleAsync(Command(seed.Ft40, seed, seed.Physical, 4, 1, 1), TestContext.Current.CancellationToken);
+
+        // Overlap only counts within the same row
+        var result = await handler.HandleAsync(Command(seed.Ft20, seed, seed.Physical, 5, 2, 1), TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+    }
+
     [Fact]
     public async Task Should_Return_NotFound_When_Block_Does_Not_Exist()
     {
