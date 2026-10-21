@@ -39,17 +39,14 @@ public sealed class UpdateContainerCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Should_Reject_Type_Not_Matching_Type_Code()
+    public void Validator_Should_Reject_Type_Not_Matching_Iso_Code()
     {
-        await using var dbContext = TestDbContextFactory.Create();
-        var container = await SeedContainerAsync(dbContext);
+        // The type is checked against the ISO code: 22G0 is group G (Dry), not Reefer
+        var command = Command(Guid.NewGuid(), category: ContainerCategory.Reefer);
 
-        // MSCU... has type code U (Dry), so it cannot become Reefer
-        var result = await new UpdateContainerCommandHandler(dbContext)
-            .HandleAsync(Command(container.Id, category: ContainerCategory.Reefer), TestContext.Current.CancellationToken);
+        var result = new UpdateContainerValidator().Validate(command);
 
-        result.Error!.Code.Should().Be("Container.TypeCodeMismatch");
-        container.Category.Should().Be(ContainerCategory.Dry);
+        result.Errors.Should().ContainSingle(e => e.PropertyName == "IsoCode");
     }
 
     [Fact]

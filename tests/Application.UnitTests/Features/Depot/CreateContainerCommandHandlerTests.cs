@@ -42,12 +42,20 @@ public sealed class CreateContainerCommandHandlerTests
     }
 
     [Fact]
-    public void Validator_Should_Reject_Type_Not_Matching_Type_Code()
+    public void Validator_Should_Reject_Type_Not_Matching_Iso_Code()
     {
-        // CSQU... has type code U (Dry)
+        // The type is checked against the ISO code: 22G1 is group G (Dry), not Reefer
         var result = new CreateContainerValidator().Validate(Command() with { Category = ContainerCategory.Reefer });
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "Category");
+        result.Errors.Should().ContainSingle(e => e.PropertyName == "IsoCode");
+    }
+
+    [Fact]
+    public void Validator_Should_Accept_Reefer_With_U_And_Reefer_Iso_Code()
+    {
+        // ISO 6346: every freight container uses U; the reefer type comes from the ISO code
+        var command = Command("HMMU2468109") with { IsoCode = "22R1", Category = ContainerCategory.Reefer };
+
+        new CreateContainerValidator().Validate(command).IsValid.Should().BeTrue();
     }
 }
