@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Code coverage scope for the depot project (used by scripts/coverage.ps1).
+  Measured: depot business logic in the Domain and Application layers.
+  Not measured:
+    - Template features that are not part of the depot (Todos, Agents, Identity, rule engine, tenancy)
+    - Infrastructure (EF Core configuration, migrations, seeding) and Api (endpoint wiring),
+      which are covered by the Scalar tests rather than unit tests
+-->
+<RunSettings>
+    <DataCollectionRunSettings>
+        <DataCollectors>
+            <DataCollector friendlyName="XPlat code coverage">
+                <Configuration>
+                    <Format>cobertura</Format>
+                    <Include>[TechSpherex.CleanArchitecture.Domain]*,[TechSpherex.CleanArchitecture.Application]*</Include>
+                    <Exclude>[TechSpherex.CleanArchitecture.Domain]TechSpherex.CleanArchitecture.Domain.Entities.TodoItem,[TechSpherex.CleanArchitecture.Domain]TechSpherex.CleanArchitecture.Domain.Entities.ApplicationUser,[TechSpherex.CleanArchitecture.Domain]TechSpherex.CleanArchitecture.Domain.Common.Rules.*,[TechSpherex.CleanArchitecture.Application]TechSpherex.CleanArchitecture.Application.Features.Todos.*,[TechSpherex.CleanArchitecture.Application]TechSpherex.CleanArchitecture.Application.Features.Agents.*,[TechSpherex.CleanArchitecture.Application]TechSpherex.CleanArchitecture.Application.Features.Identity.*,[TechSpherex.CleanArchitecture.Application]TechSpherex.CleanArchitecture.Application.Abstractions.*,[TechSpherex.CleanArchitecture.Application]TechSpherex.CleanArchitecture.Application.DependencyInjection</Exclude>
+                    <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+                    <!-- Auto-properties (e.g. record members) have no logic to test -->
+                    <SkipAutoProps>true</SkipAutoProps>
+                </Configuration>
+            </DataCollector>
+        </DataCollectors>
+    </DataCollectionRunSettings>
+</RunSettings>

@@ -14,5 +14,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="NSubstitute" />
+    <!-- Code coverage collector, used by scripts/coverage.ps1 -->
+    <PackageReference Include="coverlet.collector" />
   </ItemGroup>
 </Project>
