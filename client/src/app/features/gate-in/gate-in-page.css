@@ -1,0 +1,164 @@
+/* Form on the left, yard map on the right (stacked on narrow screens) */
+.layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.form {
+  gap: 20px;
+}
+
+.lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.hint {
+  font-size: 12px;
+}
+
+.group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+  .group legend {
+    padding: 0;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+.brt {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.grade-condition {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+/* Grade A/B/C as segmented buttons; the real radio input stays for keyboard and screen readers */
+.segmented {
+  display: flex;
+  gap: 8px;
+}
+
+.segment input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segment span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segment input:checked + span {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.segment input:focus-visible + span {
+  outline: 3px solid rgb(29 78 216 / 35%);
+  outline-offset: 2px;
+}
+
+.radios {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  height: 40px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+  .radio input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+  }
+
+.alert .detail {
+  margin-top: 4px;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.map-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+  .row-picker select {
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    font: inherit;
+  }
+
+.small {
+  font-size: 12px;
+}
+
+.table-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.empty {
+  padding: 16px 0;
+}
+
+/* Container numbers and plates are stored in upper case; show them the same way while typing */
+#containerNumber,
+#vehicleNo {
+  text-transform: uppercase;
+}

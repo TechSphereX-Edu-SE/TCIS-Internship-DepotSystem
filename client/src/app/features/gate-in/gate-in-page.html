@@ -1,0 +1,234 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Nghiệp vụ · Nhập/xuất container</p>
+      <h1>Nhập bãi (Gate-in)</h1>
+    </div>
+  </header>
+
+  @if (loadError(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  <div class="layout">
+    <!-- ================= Form ================= -->
+    <form class="card form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <h2>Thông tin vào bãi</h2>
+
+      <div class="field" [class.has-error]="numberError() || lookup().kind === 'notFound'">
+        <label for="containerNumber">Số container</label>
+        <input id="containerNumber" class="mono" formControlName="containerNumber" placeholder="VD: MSCU1234566" maxlength="11" autocomplete="off" />
+
+        @if (lookup().kind === 'checking') {
+        <span class="muted hint">Đang kiểm tra…</span>
+        }
+        @if (numberError(); as message) {
+        <span class="field-error">{{ message }}</span>
+        }
+        @if (lookup().kind === 'notFound') {
+        <span class="field-error">
+          Container chưa có trong danh mục. <a routerLink="/catalog/containers">Thêm ở Danh mục · Container</a>
+        </span>
+        }
+        @if (ready(); as state) {
+        <div class="lookup">
+          <span class="chip chip-green">Hợp lệ · check digit {{ state.checkDigit }}</span>
+          <span class="muted">
+            {{ state.container.isoCode }} · {{ sizeLabel[state.container.size] }} · {{ categoryLabel[state.container.category] }}
+            · Chủ sở hữu {{ state.container.ownerName }} · {{ conditionLabel[state.container.condition] }}
+          </span>
+        </div>
+        }
+      </div>
+
+      <div class="grid-2">
+        <div class="field" [class.has-error]="invalid('lineOperatorId')">
+          <label for="lineOperatorId">Hãng khai thác</label>
+          <select id="lineOperatorId" formControlName="lineOperatorId">
+            <option value="" disabled>Chọn hãng</option>
+            @for (operator of operators(); track operator.id) {
+            <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
+            }
+          </select>
+          @if (invalid('lineOperatorId')) {
+          <span class="field-error">Chọn hãng khai thác.</span>
+          }
+        </div>
+
+        <div class="field">
+          <label for="blockId">Block</label>
+          <select id="blockId" formControlName="blockId">
+            @for (block of blocks(); track block.id) {
+            <option [value]="block.id">
+              {{ block.code }} · {{ block.description ?? '' }}{{ block.isVirtual ? ' (block ảo)' : '' }}
+            </option>
+            }
+          </select>
+        </div>
+      </div>
+
+      @if (selectedBlock()?.isVirtual) {
+      <div class="alert alert-blue">Block ảo: không quản lý Bay/Row/Tier, container chỉ cần ghi nhận đang ở block này.</div>
+      } @else {
+      <fieldset class="group">
+        <legend>Vị trí (Bay – Row – Tier)</legend>
+        <div class="brt">
+          <div class="field" [class.has-error]="positionErrors().bay">
+            <label for="bay">Bay</label>
+            <input id="bay" type="number" min="1" formControlName="bay" />
+            @if (positionErrors().bay; as message) {
+            <span class="field-error">{{ message }}</span>
+            }
+          </div>
+          <div class="field" [class.has-error]="positionErrors().row">
+            <label for="row">Row</label>
+            <input id="row" type="number" min="1" formControlName="row" />
+            @if (positionErrors().row; as message) {
+            <span class="field-error">{{ message }}</span>
+            }
+          </div>
+          <div class="field" [class.has-error]="positionErrors().tier">
+            <label for="tier">Tier</label>
+            <input id="tier" type="number" min="1" formControlName="tier" />
+            @if (positionErrors().tier; as message) {
+            <span class="field-error">{{ message }}</span>
+            }
+          </div>
+        </div>
+        @if (slotWarning(); as warning) {
+        <span class="field-error">{{ warning }}</span>
+        }
+        <p class="hint muted">
+          20ft xếp bay lẻ, 40ft xếp bay chẵn (chiếm 2 bay lẻ hai bên). Tier &gt; 1 phải có container đỡ bên dưới.
+          Có thể bấm ô trống trên sơ đồ.
+        </p>
+      </fieldset>
+      }
+
+      <div class="grade-condition">
+        <fieldset class="group">
+          <legend>Phân loại</legend>
+          <div class="segmented">
+            @for (grade of grades; track grade) {
+            <label class="segment">
+              <input type="radio" formControlName="grade" [value]="grade" />
+              <span>{{ grade }}</span>
+            </label>
+            }
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Tình trạng</legend>
+          <div class="radios">
+            <label class="radio"><input type="radio" formControlName="condition" value="Normal" /> Bình thường</label>
+            <label class="radio"><input type="radio" formControlName="condition" value="Damaged" /> Hư hỏng</label>
+          </div>
+        </fieldset>
+      </div>
+
+      @if (form.controls.condition.value === 'Damaged') {
+      <div class="field" [class.has-error]="invalid('conditionNote')">
+        <label for="conditionNote">Ghi chú hư hỏng <span class="muted">(móp, méo, cong…)</span></label>
+        <textarea id="conditionNote" rows="2" formControlName="conditionNote" placeholder="VD: Dent on door"></textarea>
+        @if (invalid('conditionNote')) {
+        <span class="field-error">Tối đa 500 ký tự.</span>
+        }
+      </div>
+      }
+
+      <div class="field" [class.has-error]="invalid('vehicleNo')">
+        <label for="vehicleNo">Biển số xe vào</label>
+        <input id="vehicleNo" class="mono" formControlName="vehicleNo" placeholder="VD: 51C-12345" maxlength="20" />
+        @if (invalid('vehicleNo')) {
+        <span class="field-error">Nhập biển số xe (tối đa 20 ký tự).</span>
+        }
+      </div>
+
+      @if (apiError(); as error) {
+      <div class="alert alert-red" role="alert">
+        <strong>Không nhập được ({{ error.status }}):</strong> {{ error.message }}
+        @if (error.detail && error.detail !== error.message) {
+        <div class="detail">{{ error.detail }}</div>
+        }
+      </div>
+      }
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" [disabled]="submitting() || blocked()">
+          {{ submitting() ? 'Đang nhập…' : 'Nhập bãi' }}
+        </button>
+        <button class="btn btn-secondary" type="button" (click)="resetForNext()">Làm lại</button>
+      </div>
+    </form>
+
+    <!-- ================= Yard map ================= -->
+    <section class="card map-card" aria-labelledby="map-title">
+      @if (selectedBlock(); as block) {
+      <div class="map-header">
+        <h2 id="map-title">Sơ đồ Block {{ block.code }}{{ block.isVirtual ? '' : ' · Row ' + mapRow() }}</h2>
+        @if (!block.isVirtual) {
+        <div class="row-picker">
+          <label for="mapRow" class="muted">Row đang xem</label>
+          <select id="mapRow" [value]="mapRow()" (change)="selectMapRow($any($event.target).value)">
+            @for (row of rowOptions(); track row) {
+            <option [value]="row" [selected]="row === mapRow()">Row {{ row }}</option>
+            }
+          </select>
+        </div>
+        }
+      </div>
+
+      @if (block.isVirtual) {
+      <p class="muted">Block ảo không có sơ đồ. Hiện có {{ block.containersInYard }} container trong block này.</p>
+      } @else {
+      <p class="muted small">Nhìn ngang: bay (cột) × tier (tầng). {{ block.maxBays }} bay × {{ block.maxRows }} row × {{ block.maxTiers }} tier.</p>
+      <app-yard-map [block]="block" [containers]="mapContainers()" [selection]="mapSelection()" (pick)="pickOnMap($event)" />
+      }
+      } @else {
+      <p class="muted">Chọn block để xem sơ đồ.</p>
+      }
+    </section>
+  </div>
+
+  <!-- ================= Today ================= -->
+  <section class="card" aria-labelledby="today-title">
+    <div class="table-title">
+      <h2 id="today-title">Container vào bãi hôm nay</h2>
+      <span class="muted">{{ todayGateIns().length }} lượt</span>
+    </div>
+
+    @if (todayGateIns().length === 0) {
+    <p class="empty muted">Chưa có container nào vào bãi hôm nay.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Giờ vào</th>
+            <th>Số container</th>
+            <th>Loại</th>
+            <th>Hãng</th>
+            <th>Vị trí</th>
+            <th>Phân loại</th>
+            <th>Xe vào</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (visit of todayGateIns(); track visit.visitId) {
+          <tr>
+            <td>{{ visit.gateInAt | date: 'HH:mm' : '+0700' }}</td>
+            <td class="mono">{{ visit.containerNumber }}</td>
+            <td>{{ visit.isoCode }} · {{ sizeLabel[visit.size] }} {{ categoryLabel[visit.category] }}</td>
+            <td>{{ visit.lineOperatorCode }}</td>
+            <td class="mono">{{ formatPosition(visit.blockCode, visit.bay, visit.row, visit.tier) }}</td>
+            <td>{{ visit.grade }}</td>
+            <td class="mono">{{ visit.vehicleNo }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+  </section>
+</div>

@@ -1,0 +1,153 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.map {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-rows: 20px auto;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.bay-header,
+.grid {
+  display: grid;
+  gap: 4px;
+}
+
+  .bay-header span,
+  .tier-labels span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .bay-header span {
+    text-align: center;
+  }
+
+.tier-labels {
+  display: grid;
+  gap: 4px;
+}
+
+  .tier-labels span {
+    display: flex;
+    align-items: center;
+  }
+
+.cell {
+  min-width: 0;
+  border-radius: 4px;
+}
+
+.empty {
+  border: 1px dashed #c3c9cf;
+  background: transparent;
+  cursor: pointer;
+}
+
+  .empty:hover {
+    border-color: var(--focus);
+    background: #eff4ff;
+  }
+
+/* Containers: 20ft blue-grey, 40ft orange, as in the mockups */
+.box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 1px solid #5b6b7e;
+  background: #e7ecf3;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+  .box.ft40 {
+    padding: 0 6px;
+    border-color: var(--primary);
+    background: #fde7d9;
+    font-size: 10px;
+  }
+
+  .box .sub {
+    color: var(--muted);
+  }
+
+  .box.ft40 .sub {
+    color: #9a3412;
+  }
+
+  .box.damaged {
+    border: 2px solid var(--danger);
+  }
+
+.selected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--focus);
+  background: rgb(239 244 255 / 85%);
+  color: var(--focus);
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+  .selected.conflict {
+    border-color: var(--danger);
+    background: rgb(254 226 226 / 85%);
+    color: var(--danger);
+  }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+  .legend span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+
+  .swatch.ft20 {
+    background: #e7ecf3;
+    border-color: #5b6b7e;
+  }
+
+  .swatch.ft40 {
+    background: #fde7d9;
+    border-color: var(--primary);
+  }
+
+  .swatch.selected {
+    background: #eff4ff;
+    border: 1px dashed var(--focus);
+  }
+
+  .swatch.damaged {
+    background: #fff;
+    border: 2px solid var(--danger);
+  }
+
+  .swatch.empty {
+    border: 1px dashed #c3c9cf;
+  }

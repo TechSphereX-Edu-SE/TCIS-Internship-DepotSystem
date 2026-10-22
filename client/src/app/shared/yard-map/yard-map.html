@@ -1,0 +1,48 @@
+<div class="map">
+  <span class="corner"></span>
+
+  <div class="bay-header" [style.grid-template-columns]="columns()">
+    @for (bay of bays(); track bay) {
+    <span>{{ pad(bay) }}</span>
+    }
+  </div>
+
+  <div class="tier-labels" [style.grid-template-rows]="'repeat(' + tiers().length + ', 40px)'">
+    @for (tier of tiers(); track tier) {
+    <span>T{{ tier }}</span>
+    }
+  </div>
+
+  <div class="grid"
+       [style.grid-template-columns]="columns()"
+       [style.grid-template-rows]="'repeat(' + tiers().length + ', 40px)'">
+    @for (cell of emptyCells(); track cell.key) {
+    <button type="button"
+            class="cell empty"
+            [style.grid-area]="cell.area"
+            [attr.aria-label]="'Chọn bay ' + pad(cell.bay) + ', tier ' + cell.tier"
+            (click)="pick.emit({ oddBay: cell.bay, tier: cell.tier })"></button>
+    }
+
+    @for (box of boxes(); track box.visitId) {
+    <div class="cell box" [class.ft40]="box.is40" [class.damaged]="box.damaged" [style.grid-area]="box.area" [title]="box.title">
+      <span class="label">{{ box.label }}</span>
+      <span class="sub">{{ box.sub }}</span>
+    </div>
+    }
+
+    @if (selected(); as selection) {
+    <div class="cell selected" [class.conflict]="selection.conflict" [style.grid-area]="selection.area">
+      {{ selection.conflict ? 'Không hợp lệ' : 'Đã chọn' }}
+    </div>
+    }
+  </div>
+</div>
+
+<div class="legend">
+  <span><i class="swatch ft20"></i>20ft (bay lẻ)</span>
+  <span><i class="swatch ft40"></i>40ft (bay chẵn, chiếm 2 bay lẻ)</span>
+  <span><i class="swatch selected"></i>Vị trí đang chọn</span>
+  <span><i class="swatch damaged"></i>Hư hỏng</span>
+  <span><i class="swatch empty"></i>Trống (bấm để chọn)</span>
+</div>
