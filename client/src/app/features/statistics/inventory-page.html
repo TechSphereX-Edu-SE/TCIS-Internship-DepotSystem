@@ -1,0 +1,109 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">
+        Thống kê{{ inventory() ? ' · Tính đến ' + formatDate(inventory()!.asOf) + ' (giờ Việt Nam)' : '' }}
+      </p>
+      <h1>Container tồn bãi theo hãng</h1>
+    </div>
+
+    <form class="filters" [formGroup]="filterForm" (ngSubmit)="load()" novalidate>
+      <div class="field" [class.has-error]="longStayDays.invalid && longStayDays.touched">
+        <label for="longStayDays">Mốc tồn lâu (ngày)</label>
+        <input id="longStayDays" class="days" type="number" min="1" max="365" step="1" formControlName="longStayDays" />
+      </div>
+      <button class="btn btn-dark" type="submit" [disabled]="loading()">{{ loading() ? 'Đang tải…' : 'Xem' }}</button>
+    </form>
+  </header>
+
+  @if (longStayDays.invalid && longStayDays.touched) {
+  <div class="alert alert-amber" role="status">Mốc tồn lâu là số ngày nguyên từ 1 đến 365.</div>
+  }
+  @if (error(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  @if (inventory(); as data) {
+  <div class="stat-tiles">
+    <div class="stat-tile">
+      <span class="label">Tổng container trong bãi</span>
+      <span class="value">{{ data.total }}</span>
+    </div>
+    <div class="stat-tile">
+      <span class="label">Tồn ngắn · {{ shortLabel() }}</span>
+      <span class="value blue">{{ data.totalShortStay }}</span>
+    </div>
+    <div class="stat-tile">
+      <span class="label">Tồn lâu · từ {{ data.longStayDays }} ngày</span>
+      <span class="value orange">{{ data.totalLongStay }}</span>
+    </div>
+  </div>
+
+  <!-- ================= Bars per line operator ================= -->
+  <section class="card" aria-labelledby="by-operator">
+    <div class="chart-head">
+      <h2 id="by-operator">Theo hãng khai thác</h2>
+      <div class="chart-legend">
+        <span><i class="chart-swatch blue"></i>Tồn ngắn</span>
+        <span><i class="chart-swatch orange"></i>Tồn lâu</span>
+      </div>
+    </div>
+
+    @if (data.lineOperators.length === 0) {
+    <p class="muted">Chưa có hãng khai thác nào trong danh mục.</p>
+    } @else {
+    <div class="bars">
+      @for (bar of bars(); track bar.lineOperatorId) {
+      <div class="bar-row">
+        <div class="operator">
+          <span class="mono code">{{ bar.code }}</span>
+          <span class="muted name">{{ bar.name }}</span>
+        </div>
+        <!-- Stacked bar: short stay then long stay; the numbers next to it carry the same data as text -->
+        <div class="track" role="img" [attr.aria-label]="bar.label">
+          <div class="bar blue" [style.width.%]="bar.shortWidth"></div>
+          <div class="bar orange" [style.width.%]="bar.longWidth"></div>
+        </div>
+        <span class="counts">{{ bar.shortStay }} ngắn · {{ bar.longStay }} lâu</span>
+      </div>
+      }
+    </div>
+    }
+  </section>
+
+  <!-- ================= Table ================= -->
+  <section class="card" aria-labelledby="table-title">
+    <h2 id="table-title">Bảng số liệu</h2>
+    <div class="table-wrap">
+      <table class="table inventory">
+        <thead>
+          <tr>
+            <th>Hãng</th>
+            <th class="num">{{ shortLabel() }}</th>
+            <th class="num">{{ longLabel() }}</th>
+            <th class="num">Tổng</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of data.lineOperators; track row.lineOperatorId) {
+          <tr>
+            <td>{{ row.code }} · {{ row.name }}</td>
+            <td class="num">{{ row.shortStay }}</td>
+            <td class="num">{{ row.longStay }}</td>
+            <td class="num strong">{{ row.total }}</td>
+          </tr>
+          }
+          <tr class="total">
+            <td>Tổng</td>
+            <td class="num">{{ data.totalShortStay }}</td>
+            <td class="num">{{ data.totalLongStay }}</td>
+            <td class="num">{{ data.total }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  } @else if (loading()) {
+  <p class="muted">Đang tải số liệu…</p>
+  }
+</div>

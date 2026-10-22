@@ -1,5 +1,9 @@
 import {
+  DailyThroughput,
   DeliveryOrder,
+  addDays,
+  dailyTotals,
+  daysInRange,
   dwellDays,
   formatDate,
   formatDateTime,
@@ -70,5 +74,32 @@ describe('delivery order status and summary', () => {
 
   it('summarises released / ordered per type', () => {
     expect(releasedSummary(order(false, [[2, 0], [1, 1]]))).toBe('Dry 0/2 · Reefer 1/1');
+  });
+  
+  it('adds days across month and year ends', () => {
+    expect(addDays('2026-10-31', 1)).toBe('2026-11-01');
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addDays('2026-10-22', -6)).toBe('2026-10-16');
+  });
+
+  it('counts the days of a range with both ends included', () => {
+    expect(daysInRange('2026-10-18', '2026-10-22')).toBe(5);
+    expect(daysInRange('2026-10-22', '2026-10-22')).toBe(1);
+    expect(daysInRange('2026-10-23', '2026-10-22')).toBe(0);
+    expect(daysInRange('2026-01-01', '2026-12-31')).toBe(365);
+  });
+
+  it('totals every date of the range, with zeros for quiet days', () => {
+    const rows = [
+      { date: '2026-10-18', lineOperatorCode: 'CMA', gateIn: 1, gateOut: 0 },
+      { date: '2026-10-18', lineOperatorCode: 'MSC', gateIn: 2, gateOut: 1 },
+      { date: '2026-10-20', lineOperatorCode: 'MSC', gateIn: 0, gateOut: 3 },
+    ] as DailyThroughput[];
+
+    expect(dailyTotals('2026-10-18', '2026-10-20', rows)).toEqual([
+      { date: '2026-10-18', gateIn: 3, gateOut: 1 },
+      { date: '2026-10-19', gateIn: 0, gateOut: 0 },
+      { date: '2026-10-20', gateIn: 0, gateOut: 3 },
+    ]);
   });
 });

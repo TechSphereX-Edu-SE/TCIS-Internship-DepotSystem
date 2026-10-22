@@ -1,0 +1,70 @@
+.days {
+  width: 120px;
+}
+
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Operator | bar | counts, as in mockup 06; the bar column shrinks first on narrow screens */
+.bar-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 140px;
+  gap: 16px;
+  align-items: center;
+}
+
+@media (max-width: 700px) {
+  .bar-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+.operator {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.code {
+  font-weight: 600;
+}
+
+.name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  display: flex;
+  height: 24px;
+  border-radius: 4px;
+  background: var(--row-border);
+  overflow: hidden;
+}
+
+.counts {
+  font-size: 14px;
+  color: #3f4a54;
+}
+
+.inventory {
+  min-width: 600px;
+}
+
+.strong {
+  font-weight: 600;
+}

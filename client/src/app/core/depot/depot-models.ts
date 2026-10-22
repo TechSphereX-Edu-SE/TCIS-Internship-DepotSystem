@@ -225,6 +225,45 @@ export interface UpdateConditionRequest {
   condition: ContainerCondition;
   conditionNote: string | null;
 }
+// GET /api/statistics/yard-inventory: shortStay = fewer than longStayDays days, longStay = that many or more
+export interface LineOperatorInventory {
+  lineOperatorId: string;
+  code: string;
+  name: string;
+  shortStay: number;
+  longStay: number;
+  total: number;
+}
+
+export interface YardInventory {
+  // Vietnam date the dwell days were counted on
+  asOf: string;
+  longStayDays: number;
+  lineOperators: LineOperatorInventory[];
+  totalShortStay: number;
+  totalLongStay: number;
+  total: number;
+}
+
+// GET /api/statistics/throughput: one row per Vietnam date and line operator with at least one move
+export interface DailyThroughput {
+  date: string;
+  lineOperatorId: string;
+  lineOperatorCode: string;
+  gateIn: number;
+  gateOut: number;
+}
+
+export interface Throughput {
+  from: string;
+  to: string;
+  days: DailyThroughput[];
+  totalGateIn: number;
+  totalGateOut: number;
+}
+
+// Same limit as GetThroughputQuery.MaxDays (both dates included)
+export const THROUGHPUT_MAX_DAYS = 366;
 
 // ---------- display helpers ----------
 
@@ -278,6 +317,32 @@ export function formatDate(isoDate: string): string {
 export function formatDateTime(iso: string): string {
   const vietnam = new Date(new Date(iso).getTime() + VIETNAM_OFFSET_MS).toISOString();
   return `${formatDate(vietnam.slice(0, 10))} ${vietnam.slice(11, 16)}`;
+}
+
+// "2026-10-22" + 3 -> "2026-10-25"; plain calendar arithmetic on a date without time (UTC avoids DST shifts)
+export function addDays(isoDate: string, days: number): string {
+  return new Date(Date.parse(`${isoDate}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+// Number of days from `from` to `to`, both included ("2026-10-18".."2026-10-22" -> 5); 0 when to is before from
+export function daysInRange(from: string, to: string): number {
+  return Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS) + 1);
+}
+
+/*
+  Gate-in / gate-out totals per date for the chart, every date of the range included (a quiet day is a 0 bar,
+  not a missing one). The API only returns dates that had a move, one row per line operator.
+*/
+export function dailyTotals(from: string, to: string, rows: readonly DailyThroughput[]): { date: string; gateIn: number; gateOut: number }[] {
+  return Array.from({ length: daysInRange(from, to) }, (_, i) => {
+    const date = addDays(from, i);
+    const day = rows.filter((r) => r.date === date);
+    return {
+      date,
+      gateIn: day.reduce((sum, r) => sum + r.gateIn, 0),
+      gateOut: day.reduce((sum, r) => sum + r.gateOut, 0),
+    };
+  });
 }
 
 /*

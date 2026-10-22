@@ -46,8 +46,16 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/delivery-orders/delivery-orders-page').then((m) => m.DeliveryOrdersPage),
       },
-      soon('statistics/inventory', 'Container tồn bãi theo hãng', 'Thống kê'),
-      soon('statistics/throughput', 'Sản lượng nhập/xuất', 'Thống kê'),
+      {
+        path: 'statistics/inventory',
+        title: 'Tồn bãi · Depot',
+        loadComponent: () => import('./features/statistics/inventory-page').then((m) => m.InventoryPage),
+      },
+      {
+        path: 'statistics/throughput',
+        title: 'Sản lượng nhập/xuất · Depot',
+        loadComponent: () => import('./features/statistics/throughput-page').then((m) => m.ThroughputPage),
+      },
       soon('catalog/containers', 'Container', 'Danh mục'),
       soon('catalog/line-operators', 'Hãng khai thác', 'Danh mục'),
       soon('catalog/customers', 'Khách hàng', 'Danh mục'),

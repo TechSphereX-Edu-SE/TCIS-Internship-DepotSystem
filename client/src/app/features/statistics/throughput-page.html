@@ -1,0 +1,122 @@
+<div class="page">
+  <header class="header">
+    <div>
+      <p class="eyebrow">Thống kê · Ngày theo giờ Việt Nam</p>
+      <h1>Sản lượng nhập/xuất theo hãng, theo ngày</h1>
+    </div>
+
+    <form class="filters" [formGroup]="form" (ngSubmit)="load()" novalidate>
+      <div class="field">
+        <label for="from">Từ ngày</label>
+        <input id="from" type="date" formControlName="from" />
+      </div>
+      <div class="field">
+        <label for="to">Đến ngày</label>
+        <input id="to" type="date" formControlName="to" />
+      </div>
+      <div class="field">
+        <label for="lineOperatorId">Hãng</label>
+        <select id="lineOperatorId" formControlName="lineOperatorId">
+          <option value="">Tất cả hãng</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }}</option>
+          }
+        </select>
+      </div>
+      <button class="btn btn-dark" type="submit" [disabled]="loading() || !!rangeError()">{{ loading() ? 'Đang tải…' : 'Xem' }}</button>
+      <span class="muted limit">Tối đa {{ maxDays }} ngày</span>
+    </form>
+  </header>
+
+  @if (rangeError(); as message) {
+  <div class="alert alert-amber" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  @if (result(); as data) {
+  <div class="stat-tiles">
+    <div class="stat-tile">
+      <span class="label">Tổng lượt vào bãi</span>
+      <span class="value blue">{{ data.totalGateIn }}</span>
+    </div>
+    <div class="stat-tile">
+      <span class="label">Tổng lượt ra bãi</span>
+      <span class="value orange">{{ data.totalGateOut }}</span>
+    </div>
+  </div>
+
+  <!-- ================= Chart: daily totals ================= -->
+  <section class="card" aria-labelledby="chart-title">
+    <div class="chart-head">
+      <h2 id="chart-title">
+        Theo ngày ({{ shownOperator() ?? 'tất cả hãng' }}) · {{ formatDate(data.from) }} – {{ formatDate(data.to) }}
+      </h2>
+      <div class="chart-legend">
+        <span><i class="chart-swatch blue"></i>Vào bãi</span>
+        <span><i class="chart-swatch orange"></i>Ra bãi</span>
+      </div>
+    </div>
+
+    <!-- Long ranges scroll sideways instead of squeezing the bars; the table below has the same numbers -->
+    <div class="chart-scroll">
+      <div class="chart" [style.grid-template-columns]="'repeat(' + chart().length + ', minmax(44px, 1fr))'">
+        @for (day of chart(); track day.date) {
+        <div class="day" role="img" [attr.aria-label]="day.aria">
+          <div class="pair">
+            <div class="column">
+              <span class="amount">{{ day.gateIn }}</span>
+              <div class="bar blue" [style.height.px]="day.inHeight"></div>
+            </div>
+            <div class="column">
+              <span class="amount">{{ day.gateOut }}</span>
+              <div class="bar orange" [style.height.px]="day.outHeight"></div>
+            </div>
+          </div>
+          <span class="day-label">{{ day.label }}</span>
+        </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Table: date x line operator ================= -->
+  <section class="card" aria-labelledby="detail-title">
+    <h2 id="detail-title">Chi tiết theo ngày và hãng</h2>
+    @if (data.days.length === 0) {
+    <p class="muted">Không có lượt vào hoặc ra bãi nào trong khoảng thời gian này.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table detail">
+        <thead>
+          <tr>
+            <th>Ngày</th>
+            <th>Hãng</th>
+            <th class="num">Vào bãi</th>
+            <th class="num">Ra bãi</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of data.days; track row.date + row.lineOperatorId) {
+          <tr>
+            <td>{{ formatDate(row.date) }}</td>
+            <td class="mono">{{ row.lineOperatorCode }}</td>
+            <td class="num">{{ row.gateIn }}</td>
+            <td class="num">{{ row.gateOut }}</td>
+          </tr>
+          }
+          <tr class="total">
+            <td colspan="2">Tổng</td>
+            <td class="num">{{ data.totalGateIn }}</td>
+            <td class="num">{{ data.totalGateOut }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    }
+  </section>
+  } @else if (loading()) {
+  <p class="muted">Đang tải số liệu…</p>
+  }
+</div>

@@ -347,6 +347,93 @@ a {
     text-align: right;
   }
 
+/* ---------- statistics (inventory, throughput) ---------- */
+/* Series colours of the mockups: blue = short stay / gate-in, orange = long stay / gate-out */
+:root {
+  --series-blue: #3b5bdb;
+  --series-orange: #c2410c;
+}
+
+/* Big number tiles above the charts */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+  .stat-tile .label {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .stat-tile .value {
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+    .stat-tile .value.blue {
+      color: #1e40af;
+    }
+
+    .stat-tile .value.orange {
+      color: var(--series-orange);
+    }
+
+/* Legend next to a chart title: a coloured square + the series name
+   (named chart-* so it does not mix with the yard map's own .legend/.swatch) */
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+  .chart-legend span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+.chart-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+  .chart-swatch.blue,
+  .bar.blue {
+    background: var(--series-blue);
+  }
+
+  .chart-swatch.orange,
+  .bar.orange {
+    background: var(--series-orange);
+  }
+
+/* Filter bar at the top of a statistics page */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+/* Total row at the bottom of a statistics table */
+.table tr.total td {
+  font-weight: 600;
+  border-bottom: 0;
+}
 /* ---------- accessibility ---------- */
 /* Text kept for screen readers only (e.g. a label when the field has a visible placeholder) */
 .visually-hidden {
