@@ -56,6 +56,14 @@
   gap: 24px;
 }
 
+/* Phones: grade and condition on two rows, so "Hư hỏng" is not cut at the edge */
+@media (max-width: 600px) {
+  .grade-condition {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
 /* Grade A/B/C as segmented buttons; the real radio input stays for keyboard and screen readers */
 .segmented {
   display: flex;

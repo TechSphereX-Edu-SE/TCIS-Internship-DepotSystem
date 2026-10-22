@@ -1,19 +1,48 @@
-<div class="shell">
-  <nav class="sidebar" aria-label="Điều hướng chính">
+<div class="shell" [class.menu-open]="menuOpen()">
+  <!-- Narrow screens only: top bar with the menu button (hidden by CSS on wide screens) -->
+  <header class="topbar">
+    <button #menuButton
+            class="menu-button"
+            type="button"
+            aria-controls="main-menu"
+            [attr.aria-expanded]="menuOpen()"
+            aria-label="Mở menu"
+            (click)="openMenu()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M4 6h16M4 12h16M4 18h16"></path>
+      </svg>
+    </button>
+    <span class="brand-text">DEPOT · TCIS</span>
+  </header>
+
+  <nav id="main-menu" class="sidebar" aria-label="Điều hướng chính">
     <div class="brand">
       <svg width="28" height="28" viewBox="0 0 36 36" fill="none" stroke="#F08A4B" stroke-width="2" aria-hidden="true">
         <rect x="3" y="9" width="30" height="18" rx="2"></rect>
         <path d="M9 9v18M15 9v18M21 9v18M27 9v18"></path>
       </svg>
       <span>DEPOT · TCIS</span>
+      <!-- Close button of the drawer (hidden by CSS on wide screens) -->
+      <button class="close-button" type="button" aria-label="Đóng menu" (click)="closeMenu()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </button>
     </div>
 
-    @for (section of menu; track section.title) {
+    @for (section of menu; track section.title; let s = $index) {
     <p class="section-title">{{ section.title }}</p>
-    @for (item of section.items; track item.path) {
+    @for (item of section.items; track item.path; let i = $index) {
+    @if (s === 0 && i === 0) {
+    <!-- First link: receives focus when the drawer opens -->
+    <a #firstLink class="nav-link" [routerLink]="item.path" routerLinkActive="active" ariaCurrentWhenActive="page">
+      {{ item.label }}
+    </a>
+    } @else {
     <a class="nav-link" [routerLink]="item.path" routerLinkActive="active" ariaCurrentWhenActive="page">
       {{ item.label }}
     </a>
+    }
     }
     }
 
@@ -21,6 +50,9 @@
     <p class="user">{{ auth.email() }}</p>
     <button class="nav-link logout" type="button" (click)="auth.logout()">Đăng xuất</button>
   </nav>
+
+  <!-- Dims the page behind the open drawer; a click on it closes the drawer -->
+  <div class="backdrop" aria-hidden="true" (click)="closeMenu()"></div>
 
   <main class="content">
     <router-outlet />

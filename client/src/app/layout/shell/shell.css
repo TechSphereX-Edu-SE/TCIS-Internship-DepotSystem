@@ -99,3 +99,121 @@
   min-width: 0;
   padding: 32px 32px 48px;
 }
+
+/* ---------- top bar, drawer and backdrop: only used on narrow screens ---------- */
+.topbar,
+.close-button,
+.backdrop {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  /* One column: top bar, then the page; the sidebar leaves the grid and becomes a drawer */
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 56px;
+    padding: 0 8px;
+    background: var(--sidebar);
+    color: #fff;
+  }
+
+  .brand-text {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .menu-button,
+  .close-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+    .menu-button:hover,
+    .close-button:hover {
+      background: var(--sidebar-hover);
+    }
+
+    .menu-button:focus-visible,
+    .close-button:focus-visible {
+      outline: 3px solid rgb(240 138 75 / 60%);
+      outline-offset: 2px;
+    }
+
+  /* Close button sits at the right end of the brand row */
+  .close-button {
+    margin-left: auto;
+    color: var(--sidebar-text);
+  }
+
+  .brand {
+    padding-right: 0;
+  }
+
+  /* Drawer: off-screen and hidden from keyboard / screen readers until opened */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    width: min(280px, 85vw);
+    height: auto;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+  }
+
+  .menu-open .sidebar {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.2s ease;
+    box-shadow: 0 0 32px rgb(0 0 0 / 35%);
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    background: rgb(23 33 43 / 45%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .menu-open .backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Less padding so the page uses the small screen */
+  .content {
+    padding: 20px 16px 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .backdrop {
+    transition: none !important;
+  }
+}

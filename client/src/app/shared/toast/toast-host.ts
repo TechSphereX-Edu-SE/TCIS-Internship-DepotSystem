@@ -58,6 +58,17 @@ import { ToastService } from './toast-service';
       font-size: 18px;
       cursor: pointer;
     }
+        /* Narrow screens: full width with a 16px margin, below the 56px top bar of the shell */
+    @media (max-width: 899.98px) {
+      .toasts {
+        top: 64px;
+        left: 16px;
+        right: 16px;
+      }
+      .toast {
+        max-width: none;
+      }
+    }
   `,
 })
 export class ToastHost {

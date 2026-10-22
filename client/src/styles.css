@@ -318,6 +318,9 @@ a {
 
 /* ---------- tables ---------- */
 .table-wrap {
+  /* relative: absolutely positioned bits inside (e.g. .visually-hidden headers) stay inside the scroll box
+     instead of widening the whole page on small screens */
+  position: relative;
   overflow-x: auto;
 }
 
