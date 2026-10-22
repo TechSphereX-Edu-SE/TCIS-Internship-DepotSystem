@@ -23,7 +23,7 @@ import {
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { YardApi } from '../../core/depot/yard-api';
-import { bayForClick, findOverlap, isSupported } from '../../core/depot/yard-rules';
+import { SlotErrors, bayForClick, hasSlotErrors, placementWarning, toPlaced, validateSlot } from '../../core/depot/yard-rules';
 import { ToastService } from '../../shared/toast/toast-service';
 import { YardMap } from '../../shared/yard-map/yard-map';
 
@@ -36,12 +36,6 @@ type Lookup =
   | { kind: 'inYard'; container: Container; position: ContainerPosition }
   | { kind: 'ready'; container: Container; checkDigit: string }
   | { kind: 'error'; message: string };
-
-interface PositionErrors {
-  bay?: string;
-  row?: string;
-  tier?: string;
-}
 
 @Component({
   selector: 'app-gate-in-page',
@@ -145,43 +139,18 @@ export class GateInPage {
     size: this.container()?.size ?? 'Ft20',
   }));
 
-  // Same checks as Block.ValidateSlot (range, odd/even bay), shown next to the fields
-  protected readonly positionErrors = computed<PositionErrors>(() => {
+  // Same checks as Block.ValidateSlot (range, odd/even bay), shown next to the fields (shared with move)
+  protected readonly positionErrors = computed<SlotErrors>(() => {
     const block = this.selectedBlock();
-    if (!block || block.isVirtual) return {};
-
-    const { bay, row, tier } = this.value();
-    const size = this.container()?.size;
-    const required = this.submitted() ? 'Bắt buộc' : undefined;
-    const errors: PositionErrors = {};
-
-    if (bay === null) errors.bay = required;
-    else if (bay < 1 || bay > block.maxBays!) errors.bay = `Bay từ 1 đến ${block.maxBays}`;
-    else if (size === 'Ft20' && bay % 2 === 0) errors.bay = '20ft xếp bay lẻ';
-    else if (size === 'Ft40' && bay % 2 === 1) errors.bay = '40ft xếp bay chẵn';
-    else if (size === 'Ft40' && bay + 1 > block.maxBays!) errors.bay = `Bay ${bay + 1} vượt kích thước block`;
-
-    if (row === null) errors.row = required;
-    else if (row < 1 || row > block.maxRows!) errors.row = `Row từ 1 đến ${block.maxRows}`;
-
-    if (tier === null) errors.tier = required;
-    else if (tier < 1 || tier > block.maxTiers!) errors.tier = `Tier từ 1 đến ${block.maxTiers}`;
-
-    return errors;
+    return block ? validateSlot(block, this.value(), this.container()?.size, this.submitted()) : {};
   });
 
   // Overlap / support warning computed from the map data (same rules as YardSlotRules)
   protected readonly slotWarning = computed(() => {
     const { bay, tier } = this.value();
     const size = this.container()?.size;
-    const errors = this.positionErrors();
-    if (!size || bay === null || tier === null || errors.bay || errors.tier || errors.row) return null;
-
-    const placed = this.mapContainers().map((c) => ({ bay: c.bay!, tier: c.tier!, size: c.size, number: c.containerNumber }));
-    const overlap = findOverlap(bay, tier, size, placed);
-    if (overlap) return `Vị trí này trùng với container ${overlap.number}.`;
-    if (!isSupported(bay, tier, size, placed)) return `Không có container đỡ bên dưới ở tier ${tier - 1}.`;
-    return null;
+    if (!size || bay === null || tier === null || hasSlotErrors(this.positionErrors())) return null;
+    return placementWarning(bay, tier, size, toPlaced(this.mapContainers()));
   });
 
   constructor() {
@@ -232,7 +201,7 @@ export class GateInPage {
     const state = this.lookup();
     const block = this.selectedBlock();
     const errors = this.positionErrors();
-    if (state.kind !== 'ready' || !block || this.form.invalid || errors.bay || errors.row || errors.tier) {
+    if (state.kind !== 'ready' || !block || this.form.invalid || hasSlotErrors(errors)) {
       return;
     }
 
