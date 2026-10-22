@@ -4,10 +4,10 @@ using TechSpherex.CleanArchitecture.Domain.Services;
 
 namespace TechSpherex.CleanArchitecture.Domain.Entities;
 
-/// <summary>
-/// One lifecycle of a container at the depot: from gate-in to gate-out.
-/// A container can have many visits, but at most one open visit at any time.
-/// </summary>
+/* 
+    One lifecycle of a container at the depot: from gate-in to gate-out
+    A container can have many visits, but at most one open visit at any time
+*/
 public sealed class ContainerVisit : AuditableEntity
 {
     public Guid ContainerId { get; private set; }
@@ -40,7 +40,7 @@ public sealed class ContainerVisit : AuditableEntity
 
     private ContainerVisit() { }
 
-    /// <summary>Records a container entering the yard.</summary>
+    // Records a container entering the yard
     public static Result<ContainerVisit> GateIn(
         Container container,
         Guid lineOperatorId,
@@ -78,7 +78,7 @@ public sealed class ContainerVisit : AuditableEntity
         return Result.Success(visit);
     }
 
-    /// <summary>Moves the container to another position in the yard.</summary>
+    // Moves the container to another position in the yard
     public Result MoveTo(Block block, int? bay, int? row, int? tier, ContainerSize size)
     {
         if (!IsInYard)
@@ -95,7 +95,7 @@ public sealed class ContainerVisit : AuditableEntity
         return Result.Success();
     }
 
-    /// <summary>Releases the container under a delivery order of the same line operator.</summary>
+    // Releases the container under a delivery order of the same line operator
     public Result GateOut(DeliveryOrder order, ContainerCategory category, string vehicleNo, DateTimeOffset gateOutAt)
     {
         if (!IsInYard)
@@ -117,6 +117,6 @@ public sealed class ContainerVisit : AuditableEntity
         return Result.Success();
     }
 
-    /// <summary>Number of days the container has stayed in the yard as of <paramref name="now"/>.</summary>
-    public int DwellDays(DateTimeOffset now) => ((GateOutAt ?? now) - GateInAt).Days;
+    // Vietnam calendar days in the yard as of <paramref name="now"/> (0 on the gate-in day)
+    public int DwellDays(DateTimeOffset now) => DepotTime.DwellDays(GateInAt, GateOutAt ?? now);
 }
