@@ -158,7 +158,7 @@ public sealed class StatisticsHandlerTests
         throughput.Validate(october).IsValid.Should().BeTrue();
         throughput.Validate(october with { To = new DateOnly(2026, 9, 30) }).IsValid.Should().BeFalse();   // To before From
         throughput.Validate(october with { To = new DateOnly(2027, 10, 1) }).IsValid.Should().BeTrue();    // 366 days, the limit
-        throughput.Validate(october with { To = new DateOnly(2027, 10, 2) }).IsValid.Should().BeFalse();   // 367 days  // more than 366 days
+        throughput.Validate(october with { To = new DateOnly(2027, 10, 2) }).IsValid.Should().BeFalse();   // 367 days
 
         var inventory = new GetYardInventoryValidator();
         inventory.Validate(new GetYardInventoryQuery(10)).IsValid.Should().BeTrue();

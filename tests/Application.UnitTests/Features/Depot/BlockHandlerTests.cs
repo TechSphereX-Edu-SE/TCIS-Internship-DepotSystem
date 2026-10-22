@@ -1,6 +1,7 @@
 using FluentAssertions;
 using TechSpherex.CleanArchitecture.Application.Features.Blocks.Create;
 using TechSpherex.CleanArchitecture.Application.Features.Blocks.Get;
+using TechSpherex.CleanArchitecture.Application.Features.Blocks.GetAll;
 using TechSpherex.CleanArchitecture.Application.Features.Blocks.Resize;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
@@ -136,5 +137,33 @@ public sealed class BlockHandlerTests
 
         tooSmall.Error!.Code.Should().Be("Block.ContainersOutsideNewSize");
         enough.IsSuccess.Should().BeTrue();
+    }
+
+
+    [Fact]
+    public async Task GetAll_Should_List_Blocks_By_Code_With_Containers_In_Yard()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        await SeedBlockWithContainerAsync(dbContext); // block A with one container
+        dbContext.Blocks.Add(Block.CreateVirtual("WAIT"));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new GetAllBlocksQueryHandler(dbContext)
+            .HandleAsync(new GetAllBlocksQuery(), TestContext.Current.CancellationToken);
+
+        result.Value!.Items.Select(b => b.Code).Should().Equal("A", "WAIT");
+        result.Value.Items[0].ContainersInYard.Should().Be(1);
+        result.Value.Items[1].ContainersInYard.Should().Be(0);
+    }
+
+    [Fact]
+    public void Resize_Validator_Should_Require_Positive_Size_And_Two_Tiers()
+    {
+        var validator = new ResizeBlockValidator();
+
+        validator.Validate(new ResizeBlockCommand(Guid.NewGuid(), 10, 4, 2)).IsValid.Should().BeTrue();
+        validator.Validate(new ResizeBlockCommand(Guid.NewGuid(), 10, 4, 1)).IsValid.Should().BeFalse(); // 1 tier
+        validator.Validate(new ResizeBlockCommand(Guid.NewGuid(), 0, 4, 3)).IsValid.Should().BeFalse();  // 0 bays
+        validator.Validate(new ResizeBlockCommand(Guid.Empty, 10, 4, 3)).IsValid.Should().BeFalse();
     }
 }

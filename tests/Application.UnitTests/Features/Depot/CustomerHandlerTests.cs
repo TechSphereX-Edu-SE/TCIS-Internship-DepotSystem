@@ -1,5 +1,6 @@
 using FluentAssertions;
 using TechSpherex.CleanArchitecture.Application.Features.Customers.Create;
+using TechSpherex.CleanArchitecture.Application.Features.Customers.Get;
 using TechSpherex.CleanArchitecture.Application.Features.Customers.GetAll;
 using TechSpherex.CleanArchitecture.Application.Features.Customers.Update;
 using TechSpherex.CleanArchitecture.Domain.Common;
@@ -60,5 +61,38 @@ public sealed class CustomerHandlerTests
             .HandleAsync(new UpdateCustomerCommand(Guid.NewGuid(), "X"), TestContext.Current.CancellationToken);
 
         result.Error!.Type.Should().Be(ErrorType.NotFound);
+    }
+
+
+    [Fact]
+    public async Task Get_And_Update_Should_Rename_Customer()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var created = await new CreateCustomerCommandHandler(dbContext)
+            .HandleAsync(new CreateCustomerCommand("0301234567", "Old Name"), TestContext.Current.CancellationToken);
+        var id = created.Value!.Id;
+
+        var update = await new UpdateCustomerCommandHandler(dbContext)
+            .HandleAsync(new UpdateCustomerCommand(id, " New Name "), TestContext.Current.CancellationToken);
+        var get = await new GetCustomerQueryHandler(dbContext)
+            .HandleAsync(new GetCustomerQuery(id), TestContext.Current.CancellationToken);
+        var missing = await new GetCustomerQueryHandler(dbContext)
+            .HandleAsync(new GetCustomerQuery(Guid.NewGuid()), TestContext.Current.CancellationToken);
+
+        update.IsSuccess.Should().BeTrue();
+        get.Value!.Name.Should().Be("New Name");
+        get.Value.TaxCode.Should().Be("0301234567"); // tax code never changes
+        missing.Error!.Type.Should().Be(ErrorType.NotFound);
+    }
+
+    [Fact]
+    public void Update_Validator_Should_Require_Name()
+    {
+        var validator = new UpdateCustomerValidator();
+
+        validator.Validate(new UpdateCustomerCommand(Guid.NewGuid(), "Customer A")).IsValid.Should().BeTrue();
+        validator.Validate(new UpdateCustomerCommand(Guid.NewGuid(), "")).IsValid.Should().BeFalse();
+        validator.Validate(new UpdateCustomerCommand(Guid.NewGuid(), new string('x', 201))).IsValid.Should().BeFalse();
+        validator.Validate(new UpdateCustomerCommand(Guid.Empty, "Customer A")).IsValid.Should().BeFalse();
     }
 }
