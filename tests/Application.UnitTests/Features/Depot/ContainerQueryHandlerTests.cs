@@ -65,6 +65,22 @@ public sealed class ContainerQueryHandlerTests
     }
 
     [Fact]
+    public async Task GetAll_Should_Search_By_Container_Number()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        await SeedContainerAsync(dbContext, "MSCU1234566");
+        await SeedContainerAsync(dbContext, "MSCU5551234");
+        await SeedContainerAsync(dbContext, "CMAU1234564");
+
+        // Lower case and spaces are normalized like the stored numbers
+        var result = await new GetAllContainersQueryHandler(dbContext)
+            .HandleAsync(new GetAllContainersQuery(Search: " mscu "), TestContext.Current.CancellationToken);
+
+        result.Value!.TotalCount.Should().Be(2);
+        result.Value.Items.Should().OnlyContain(c => c.ContainerNumber.StartsWith("MSCU"));
+    }
+
+    [Fact]
     public async Task Delete_Should_Remove_Container_Without_History()
     {
         await using var dbContext = TestDbContextFactory.Create();
