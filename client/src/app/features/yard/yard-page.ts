@@ -4,7 +4,7 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { ApiError, toApiError } from '../../core/api/api-error';
-import { checkContainerNumber, normalizeContainerNumber } from '../../core/depot/container-number';
+import { checkContainerNumber, containerNumberError, normalizeContainerNumber } from '../../core/depot/container-number';
 import {
   Block,
   CONDITION_LABEL,
@@ -200,11 +200,7 @@ export class YardPage {
     // Check the format locally first so a typo does not cost a request
     const check = checkContainerNumber(number);
     if (!check.valid) {
-      this.searchError.set(
-        check.reason === 'format'
-          ? 'Số container gồm 3 chữ cái + U + 6 số + 1 ký tự kiểm tra (VD: MSCU1234566).'
-          : `Sai check digit: với ${number.slice(0, 10)} ký tự cuối phải là ${check.expected}.`,
-      );
+      this.searchError.set(containerNumberError(check));
       return;
     }
 

@@ -46,3 +46,11 @@ function letterValue(letter: string): number {
   }
   return value;
 }
+
+// Vietnamese message for an invalid number, shared by every screen that looks a container up by number
+export function containerNumberError(check: ContainerNumberCheck): string | null {
+  if (check.valid) return null;
+  return check.reason === 'format'
+    ? 'Số container gồm 3 chữ cái + U + 6 số + 1 ký tự kiểm tra (VD: MSCU1234566).'
+    : `Sai check digit: với ${check.number.slice(0, 10)} ký tự cuối phải là ${check.expected}.`;
+}

@@ -203,18 +203,3 @@
   background: #eff4ff;
 }
 
-.btn-small {
-  height: 32px;
-  padding: 0 12px;
-  font-size: 13px;
-}
-
-/* Label kept for screen readers only (the field has a visible placeholder and a search role) */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}

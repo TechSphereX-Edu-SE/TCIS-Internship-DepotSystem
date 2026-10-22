@@ -5,7 +5,7 @@ import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angu
 import { RouterLink } from '@angular/router';
 import { Observable, catchError, concat, debounceTime, distinctUntilChanged, map, of, startWith, switchMap, throwError } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
-import { checkContainerNumber, normalizeContainerNumber } from '../../core/depot/container-number';
+import { checkContainerNumber, containerNumberError, normalizeContainerNumber } from '../../core/depot/container-number';
 import {
   Block,
   CATEGORY_LABEL,
@@ -263,13 +263,7 @@ export class GateInPage {
     if (number.length < 11) return of<Lookup>({ kind: 'idle' });
 
     const check = checkContainerNumber(number);
-    if (!check.valid) {
-      const message =
-        check.reason === 'format'
-          ? 'Số container gồm 3 chữ cái + U + 6 số + 1 ký tự kiểm tra (VD: MSCU1234566).'
-          : `Sai check digit: với ${number.slice(0, 10)} ký tự cuối phải là ${check.expected}.`;
-      return of<Lookup>({ kind: 'invalid', message });
-    }
+    if (!check.valid) return of<Lookup>({ kind: 'invalid', message: containerNumberError(check)! });
 
     const lookup$ = this.masterData.findContainer(number).pipe(
       switchMap((container): Observable<Lookup> => {

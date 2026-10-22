@@ -1,4 +1,4 @@
-import { calculateCheckDigit, checkContainerNumber } from './container-number';
+import { calculateCheckDigit, checkContainerNumber, containerNumberError } from './container-number';
 
 describe('container number rules', () => {
   it('accepts numbers with a correct check digit', () => {
@@ -25,4 +25,12 @@ describe('container number rules', () => {
     expect(checkContainerNumber('MSCU0000000')).toMatchObject({ valid: false, reason: 'format' });
     expect(checkContainerNumber('MSCU12')).toMatchObject({ valid: false, reason: 'format' });
   });
+});
+
+it('explains an invalid number in Vietnamese, nothing for a valid one', () => {
+  expect(containerNumberError(checkContainerNumber('MSCU1234566'))).toBeNull();
+  expect(containerNumberError(checkContainerNumber('MSCU12'))).toContain('3 chữ cái + U + 6 số');
+  expect(containerNumberError(checkContainerNumber('MSCU5551235'))).toBe(
+    'Sai check digit: với MSCU555123 ký tự cuối phải là 4.',
+  );
 });

@@ -241,6 +241,13 @@ a {
   width: 100%;
 }
 
+/* Smaller button inside table rows and pagers */
+.btn-small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -339,3 +346,14 @@ a {
   .table .num {
     text-align: right;
   }
+
+/* ---------- accessibility ---------- */
+/* Text kept for screen readers only (e.g. a label when the field has a visible placeholder) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
