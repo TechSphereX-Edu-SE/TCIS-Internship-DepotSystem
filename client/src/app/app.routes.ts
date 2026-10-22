@@ -35,8 +35,17 @@ export const routes: Routes = [
         title: 'Vị trí & đảo chuyển · Depot',
         loadComponent: () => import('./features/yard/yard-page').then((m) => m.YardPage),
       },
-      soon('gate-out', 'Xuất bãi (Gate-out)', 'Nghiệp vụ · Nhập/xuất container'),
-      soon('delivery-orders', 'Lệnh giao container rỗng', 'Nghiệp vụ · Lệnh của hãng khai thác'),
+      {
+        path: 'gate-out',
+        title: 'Xuất bãi · Depot',
+        loadComponent: () => import('./features/gate-out/gate-out-page').then((m) => m.GateOutPage),
+      },
+            {
+        path: 'delivery-orders',
+        title: 'Lệnh giao · Depot',
+        loadComponent: () =>
+          import('./features/delivery-orders/delivery-orders-page').then((m) => m.DeliveryOrdersPage),
+      },
       soon('statistics/inventory', 'Container tồn bãi theo hãng', 'Thống kê'),
       soon('statistics/throughput', 'Sản lượng nhập/xuất', 'Thống kê'),
       soon('catalog/containers', 'Container', 'Danh mục'),

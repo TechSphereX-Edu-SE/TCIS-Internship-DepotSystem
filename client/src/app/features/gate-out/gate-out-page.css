@@ -1,0 +1,154 @@
+/* Form on the left, checks on the right (stacked on narrow screens) */
+.layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.form {
+  gap: 18px;
+}
+
+.hint {
+  font-size: 13px;
+}
+
+.label-note {
+  font-weight: 400;
+}
+
+.alert .detail {
+  margin-top: 4px;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+/* ---------- checks panel: icon colour + label tell the state (not colour alone) ---------- */
+.checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+  .checks li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+    .checks li svg {
+      flex: none;
+    }
+
+    .checks li.ok svg {
+      color: #15803d;
+    }
+
+    .checks li.fail svg {
+      color: var(--danger);
+    }
+
+    .checks li.pending svg {
+      color: var(--subtle);
+    }
+
+.check-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.check-title {
+  font-weight: 500;
+}
+
+.checks li.fail .check-title {
+  color: var(--danger);
+}
+
+.check-detail {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- condition card: red edge when the container cannot leave ---------- */
+.condition.damaged {
+  border-color: #fca5a5;
+  background: #fffafa;
+}
+
+.condition-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+  .condition-head h2 {
+    font-size: 16px;
+  }
+
+  .condition-head p {
+    margin-top: 4px;
+  }
+
+.condition-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.radios {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  height: 44px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+  .radio input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+  }
+
+.note {
+  flex: 1 1 280px;
+}
+
+/* ---------- today table ---------- */
+.table-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.today {
+  min-width: 760px;
+}
+
+.empty {
+  padding: 16px 0;
+}
+
+/* Container numbers and plates are stored in upper case; show them the same way while typing */
+#containerNumber,
+#vehicleNo {
+  text-transform: uppercase;
+}

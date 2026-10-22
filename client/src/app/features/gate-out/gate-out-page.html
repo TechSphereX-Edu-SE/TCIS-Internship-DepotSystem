@@ -1,0 +1,209 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Nghiệp vụ · Nhập/xuất container</p>
+      <h1>Xuất bãi (Gate-out)</h1>
+    </div>
+  </header>
+
+  @if (loadError(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  <div class="layout">
+    <!-- ================= Form ================= -->
+    <form class="card form" [formGroup]="form" (ngSubmit)="submit()" novalidate aria-labelledby="form-title">
+      <h2 id="form-title">Giao container theo lệnh</h2>
+
+      <div class="field" [class.has-error]="numberError()">
+        <label for="containerNumber">Số container</label>
+        <input id="containerNumber" class="mono" formControlName="containerNumber" placeholder="VD: MSCU1234566" maxlength="11" autocomplete="off" />
+        @if (lookup().kind === 'checking') {
+        <span class="muted hint">Đang kiểm tra…</span>
+        }
+        @if (numberError(); as message) {
+        <span class="field-error">{{ message }}</span>
+        }
+        @if (ready(); as state) {
+        <span class="muted hint">
+          Đang ở {{ positionText(state.position) }} · {{ sizeLabel[state.container.size] }} {{ categoryLabel[state.container.category] }}
+          · Hãng {{ state.position.lineOperatorCode }} · {{ conditionLabel[state.container.condition] }}
+        </span>
+        }
+      </div>
+
+      <div class="field" [class.has-error]="invalid('deliveryOrderId')">
+        <label for="deliveryOrderId">
+          Lệnh giao
+          @if (ready(); as state) {
+          <span class="muted label-note">(chỉ lệnh của {{ state.position.lineOperatorCode }} còn hạn, còn loại {{ categoryLabel[state.container.category] }})</span>
+          }
+        </label>
+        <select id="deliveryOrderId" formControlName="deliveryOrderId">
+          <option value="" disabled>{{ ready() ? 'Chọn lệnh giao' : 'Nhập số container trước' }}</option>
+          @for (order of usableOrders(); track order.id) {
+          <option [value]="order.id">{{ orderOption(order) }}</option>
+          }
+        </select>
+        @if (ready(); as state) {
+        @if (usableOrders().length === 0) {
+        <span class="field-error">
+          Không có lệnh nào của {{ state.position.lineOperatorCode }} còn hạn và còn loại {{ categoryLabel[state.container.category] }}.
+          <a routerLink="/delivery-orders">Tạo lệnh giao</a>
+        </span>
+        }
+        } @else if (invalid('deliveryOrderId')) {
+        <span class="field-error">Chọn lệnh giao.</span>
+        }
+      </div>
+
+      <div class="field" [class.has-error]="invalid('vehicleNo')">
+        <label for="vehicleNo">Biển số xe ra</label>
+        <input id="vehicleNo" class="mono" formControlName="vehicleNo" placeholder="VD: 51C-99999" maxlength="20" />
+        @if (invalid('vehicleNo')) {
+        <span class="field-error">Nhập biển số xe (tối đa 20 ký tự).</span>
+        }
+      </div>
+
+      @if (apiError(); as error) {
+      <div class="alert alert-red" role="alert">
+        <strong>Không xuất được ({{ error.status }}):</strong> {{ error.message }}
+        @if (error.detail && error.detail !== error.message) {
+        <div class="detail">{{ error.detail }}</div>
+        }
+      </div>
+      }
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" [disabled]="submitting() || (!!ready() && !canGateOut())">
+          {{ submitting() ? 'Đang xuất…' : 'Xuất bãi' }}
+        </button>
+        <button class="btn btn-secondary" type="button" (click)="resetForNext()">Làm lại</button>
+      </div>
+    </form>
+
+    <!-- ================= Checks ================= -->
+    <section class="card" aria-labelledby="checks-title">
+      <h2 id="checks-title">Kiểm tra trước khi xuất</h2>
+      @if (checks().length === 0) {
+      <p class="muted">Nhập số container để kiểm tra các điều kiện xuất bãi.</p>
+      } @else {
+      <ul class="checks">
+        @for (check of checks(); track check.title) {
+        <li [class]="check.state">
+          @switch (check.state) {
+          @case ('ok') {
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="Đạt">
+            <circle cx="10" cy="10" r="8.5"></circle>
+            <path d="m6 10 3 3 5-6"></path>
+          </svg>
+          }
+          @case ('fail') {
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="Không đạt">
+            <circle cx="10" cy="10" r="8.5"></circle>
+            <path d="m7 7 6 6M13 7l-6 6"></path>
+          </svg>
+          }
+          @default {
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" role="img" aria-label="Chưa kiểm tra">
+            <circle cx="10" cy="10" r="8.5" stroke-dasharray="3 3"></circle>
+          </svg>
+          }
+          }
+          <span class="check-text">
+            <span class="check-title">{{ check.title }}</span>
+            <span class="check-detail">{{ check.detail }}</span>
+          </span>
+        </li>
+        }
+      </ul>
+      }
+    </section>
+  </div>
+
+  <!-- ================= Condition ================= -->
+  @if (ready(); as state) {
+  <form class="card condition" [class.damaged]="state.container.condition === 'Damaged'" [formGroup]="conditionForm"
+        (ngSubmit)="saveCondition()" novalidate aria-labelledby="condition-title">
+    <div class="condition-head">
+      <span class="chip" [class.chip-red]="state.container.condition === 'Damaged'" [class.chip-green]="state.container.condition === 'Normal'">
+        {{ conditionLabel[state.container.condition] }}
+      </span>
+      <div>
+        <h2 id="condition-title">
+          Tình trạng <span class="mono">{{ state.container.containerNumber }}</span>
+          @if (state.container.condition === 'Damaged') { · không thể xuất bãi }
+        </h2>
+        <p class="muted">
+          @if (state.container.condition === 'Damaged') {
+          Ghi chú: “{{ state.container.conditionNote ?? 'không có' }}”. Sửa xong, chọn Bình thường rồi lưu để giao container.
+          } @else {
+          Phát hiện hư hỏng khi kiểm tra trước khi giao? Ghi nhận Hư hỏng, container sẽ không được xuất cho đến khi sửa xong.
+          }
+        </p>
+      </div>
+    </div>
+
+    <div class="condition-fields">
+      <div class="radios" role="radiogroup" aria-label="Tình trạng mới">
+        <label class="radio"><input type="radio" formControlName="condition" value="Normal" /> Bình thường</label>
+        <label class="radio"><input type="radio" formControlName="condition" value="Damaged" /> Hư hỏng</label>
+      </div>
+      @if (conditionForm.controls.condition.value === 'Damaged') {
+      <div class="field note">
+        <label for="conditionNote">Ghi chú hư hỏng <span class="muted label-note">(móp, méo, cong…)</span></label>
+        <input id="conditionNote" formControlName="conditionNote" maxlength="500" placeholder="VD: Dent on door" />
+      </div>
+      }
+      <button class="btn btn-dark" type="submit" [disabled]="savingCondition()">
+        {{ savingCondition() ? 'Đang lưu…' : 'Cập nhật tình trạng' }}
+      </button>
+    </div>
+
+    @if (conditionError(); as error) {
+    <div class="alert alert-red" role="alert"><strong>Không cập nhật được ({{ error.status }}):</strong> {{ error.message }}</div>
+    }
+  </form>
+  }
+
+  <!-- ================= Today ================= -->
+  <section class="card" aria-labelledby="today-title">
+    <div class="table-title">
+      <h2 id="today-title">Container ra bãi hôm nay</h2>
+      <span class="muted">{{ todayGateOuts().length }} lượt</span>
+    </div>
+
+    @if (todayGateOuts().length === 0) {
+    <p class="empty muted">Chưa có container nào ra bãi hôm nay.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table today">
+        <thead>
+          <tr>
+            <th>Giờ ra</th>
+            <th>Số container</th>
+            <th>Loại</th>
+            <th>Hãng</th>
+            <th>Lệnh giao</th>
+            <th>Còn lại trên lệnh</th>
+            <th>Xe ra</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of todayGateOuts(); track row.visitId) {
+          <tr>
+            <td>{{ row.gateOutAt | date: 'HH:mm' : '+0700' }}</td>
+            <td class="mono">{{ row.containerNumber }}</td>
+            <td>{{ row.isoCode }} · {{ sizeLabel[row.size] }} {{ categoryLabel[row.category] }}</td>
+            <td>{{ row.lineOperatorCode }}</td>
+            <td class="mono">{{ row.deliveryOrderNumber ?? '—' }}</td>
+            <td>{{ remainingText(row) }}</td>
+            <td class="mono">{{ row.vehicleNo ?? '—' }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+  </section>
+</div>
