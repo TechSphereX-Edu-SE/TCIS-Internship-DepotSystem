@@ -52,13 +52,8 @@
       </table>
     </div>
 
-    @if (totalPages() > 1) {
-    <nav class="pager" aria-label="Phân trang danh sách lệnh">
-      <button class="btn btn-secondary btn-small" type="button" [disabled]="page() === 1" (click)="goToPage(page() - 1)">Trang trước</button>
-      <span class="muted">Trang {{ page() }} / {{ totalPages() }}</span>
-      <button class="btn btn-secondary btn-small" type="button" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)">Trang sau</button>
-    </nav>
-    }
+    <app-pager [page]="page()" [totalPages]="totalPages()" label="Phân trang danh sách lệnh" (pageChange)="goToPage($event)" />
+
     }
   </section>
 

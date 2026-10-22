@@ -265,8 +265,58 @@ export interface Throughput {
 // Same limit as GetThroughputQuery.MaxDays (both dates included)
 export const THROUGHPUT_MAX_DAYS = 366;
 
-// ---------- display helpers ----------
+// ---------- catalog requests (Danh mục) ----------
 
+// POST /api/line-operators; PUT /api/line-operators/{id} only renames ({ name }), the code never changes
+export interface CreateLineOperatorRequest {
+  code: string;
+  name: string;
+}
+
+// POST /api/customers; PUT /api/customers/{id} only renames ({ name }), the tax code never changes
+export interface CreateCustomerRequest {
+  taxCode: string;
+  name: string;
+}
+
+// POST /api/blocks: physical block = all three sizes, virtual block = none
+export interface CreateBlockRequest {
+  code: string;
+  description: string | null;
+  isVirtual: boolean;
+  maxBays: number | null;
+  maxRows: number | null;
+  maxTiers: number | null;
+}
+
+// PUT /api/blocks/{id}/size (physical blocks only; 409 when a container would be left outside)
+export interface ResizeBlockRequest {
+  maxBays: number;
+  maxRows: number;
+  maxTiers: number;
+}
+
+// PUT /api/containers/{id}: every field of the master data except the container number
+export interface UpdateContainerRequest {
+  isoCode: string;
+  size: ContainerSize;
+  category: ContainerCategory;
+  maxGrossWeightKg: number;
+  tareWeightKg: number;
+  // "yyyy-MM-dd" or null when unknown
+  manufactureDate: string | null;
+  ownerName: string;
+}
+
+// POST /api/containers
+export interface CreateContainerRequest extends UpdateContainerRequest {
+  containerNumber: string;
+}
+
+// The 7 container types of Appendix II, in the order of the API enum
+export const CATEGORIES: ContainerCategory[] = ['Dry', 'Reefer', 'OpenTop', 'FlatRack', 'Bunker', 'Ventilated', 'Specialized'];
+
+// ---------- display helpers ----------
 export const SIZE_LABEL: Record<ContainerSize, string> = { Ft20: '20ft', Ft40: '40ft' };
 
 // Container types of Appendix II, shown with their usual English names (as in the spec)
@@ -278,6 +328,16 @@ export const CATEGORY_LABEL: Record<ContainerCategory, string> = {
   Bunker: 'Bunker',
   Ventilated: 'Ventilated',
   Specialized: 'Specialized',
+};
+// Vietnamese hint next to each type, so staff who know the local name can find it
+export const CATEGORY_HINT: Record<ContainerCategory, string> = {
+  Dry: 'Container khô',
+  Reefer: 'Container lạnh',
+  OpenTop: 'Container mở nóc',
+  FlatRack: 'Container mặt bằng',
+  Bunker: 'Container bồn',
+  Ventilated: 'Container thông gió',
+  Specialized: 'Container chuyên dụng',
 };
 
 export const CONDITION_LABEL: Record<ContainerCondition, string> = { Normal: 'Bình thường', Damaged: 'Hư hỏng' };

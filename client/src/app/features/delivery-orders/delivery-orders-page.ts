@@ -5,6 +5,8 @@ import { map, startWith } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { DeliveryOrderApi } from '../../core/depot/delivery-order-api';
 import {
+  CATEGORIES,
+  CATEGORY_HINT,
   CATEGORY_LABEL,
   ContainerCategory,
   CreateDeliveryOrderRequest,
@@ -19,21 +21,9 @@ import {
   vietnamToday,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
+import { Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
 
-// The 7 container types of Appendix II, in the order of the enum (same order as the API sorts lines)
-const CATEGORIES: ContainerCategory[] = ['Dry', 'Reefer', 'OpenTop', 'FlatRack', 'Bunker', 'Ventilated', 'Specialized'];
-
-// Vietnamese hint next to each type, so staff who know the local name can find it
-const CATEGORY_HINT: Record<ContainerCategory, string> = {
-  Dry: 'Container khô',
-  Reefer: 'Container lạnh',
-  OpenTop: 'Container mở nóc',
-  FlatRack: 'Container mặt bằng',
-  Bunker: 'Container bồn',
-  Ventilated: 'Container thông gió',
-  Specialized: 'Container chuyên dụng',
-};
 
 // Chip colour per status (mockup 05): open green, done indigo, expired grey
 const STATUS_CHIP: Record<OrderStatus, string> = { open: 'chip-green', done: 'chip-indigo', expired: 'chip-grey' };
@@ -48,7 +38,7 @@ const PAGE_SIZE = 20;
 */
 @Component({
   selector: 'app-delivery-orders-page',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, Pager],
   templateUrl: './delivery-orders-page.html',
   styleUrl: './delivery-orders-page.css',
 })

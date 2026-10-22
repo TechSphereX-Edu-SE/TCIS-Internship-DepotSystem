@@ -434,6 +434,92 @@ a {
   font-weight: 600;
   border-bottom: 0;
 }
+
+/* ---------- catalog screens (Danh mục): list on the left, create / edit form on the right ---------- */
+.catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .catalog-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Title + count, then a search box above the table */
+.list-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.search-box {
+  display: flex;
+  gap: 8px;
+}
+
+  .search-box input {
+    width: 240px;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius);
+    font: inherit;
+  }
+
+/* Edit / delete buttons at the end of a row */
+.row-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+/* Bay / Row / Tier side by side */
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+  .checkbox input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+  }
+
+/* Codes are stored in upper case; show them the same way while typing */
+.upper {
+  text-transform: uppercase;
+}
+
+  /* ...but keep the hint text as written */
+  .upper::placeholder {
+    text-transform: none;
+  }
+
+.small {
+  font-size: 12px;
+}
+
+/* Row currently loaded in the edit form */
+.table tr.editing td {
+  background: #eff4ff;
+}
+
 /* ---------- accessibility ---------- */
 /* Text kept for screen readers only (e.g. a label when the field has a visible placeholder) */
 .visually-hidden {

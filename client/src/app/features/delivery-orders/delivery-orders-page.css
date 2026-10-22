@@ -13,14 +13,6 @@
   min-width: 880px;
 }
 
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  font-size: 13px;
-}
-
 .form {
   gap: 18px;
 }
