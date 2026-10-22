@@ -21,7 +21,7 @@ public static class ContainerEndpoints
 
         group.MapGet("/", GetAll)
             .WithName("GetAllContainers")
-            .WithSummary("Get all containers with pagination");
+            .WithSummary("Get containers with pagination, optionally searching by container number");
 
         group.MapGet("/{id:guid}", GetById)
             .WithName("GetContainerById")
@@ -48,10 +48,12 @@ public static class ContainerEndpoints
     private static async Task<IResult> GetAll(
         int? page,
         int? pageSize,
+        string? search,
         IQueryHandler<GetAllContainersQuery, Result<PagedResult<ContainerResponse>>> handler,
         CancellationToken cancellationToken)
     {
-        var query = new GetAllContainersQuery(page ?? 1, pageSize ?? 10);
+        // ?search= filters by part of the container number (gate-in lookup, container list search box)
+        var query = new GetAllContainersQuery(page ?? 1, pageSize ?? 10, search);
         var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }

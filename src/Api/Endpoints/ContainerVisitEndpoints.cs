@@ -5,7 +5,10 @@ using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOut
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetPosition;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Move;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetDaily;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetInYard;
 using TechSpherex.CleanArchitecture.Domain.Common;
+
 namespace TechSpherex.CleanArchitecture.Api.Endpoints;
 
 // Container lifecycle in the yard (spec section 3): gate-in, move, current position, gate-out
@@ -35,6 +38,14 @@ public static class ContainerVisitEndpoints
         group.MapGet("/position", GetPosition)
             .WithName("GetContainerPosition")
             .WithSummary("Get the current yard position of a container by its container number");
+
+        group.MapGet("/in-yard", GetInYard)
+            .WithName("GetContainersInYard")
+            .WithSummary("List containers in the yard, optionally by block and row (yard map)");
+
+        group.MapGet("/daily", GetDaily)
+            .WithName("GetDailyVisits")
+            .WithSummary("Gate-ins and gate-outs of one Vietnam calendar day (default: today)");
     }
 
     private static async Task<IResult> GateIn(
@@ -73,6 +84,27 @@ public static class ContainerVisitEndpoints
         CancellationToken cancellationToken)
     {
         var result = await handler.HandleAsync(new GetContainerPositionQuery(containerNumber), cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    // Both filters are optional: ?blockId=...&row=1 for one row of the yard map
+    private static async Task<IResult> GetInYard(
+        Guid? blockId,
+        int? row,
+        IQueryHandler<GetContainersInYardQuery, Result<IReadOnlyList<YardContainerResponse>>> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(new GetContainersInYardQuery(blockId, row), cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    // ?date=2026-10-22 (Vietnam date); without it the handler uses today in Vietnam
+    private static async Task<IResult> GetDaily(
+        DateOnly? date,
+        IQueryHandler<GetDailyVisitsQuery, Result<DailyVisitsResponse>> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(new GetDailyVisitsQuery(date), cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
 }
