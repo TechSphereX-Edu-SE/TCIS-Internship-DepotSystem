@@ -1,0 +1,30 @@
+<div class="shell">
+  <nav class="sidebar" aria-label="Điều hướng chính">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 36 36" fill="none" stroke="#F08A4B" stroke-width="2" aria-hidden="true">
+        <rect x="3" y="9" width="30" height="18" rx="2"></rect>
+        <path d="M9 9v18M15 9v18M21 9v18M27 9v18"></path>
+      </svg>
+      <span>DEPOT · TCIS</span>
+    </div>
+
+    @for (section of menu; track section.title) {
+    <p class="section-title">{{ section.title }}</p>
+    @for (item of section.items; track item.path) {
+    <a class="nav-link" [routerLink]="item.path" routerLinkActive="active" ariaCurrentWhenActive="page">
+      {{ item.label }}
+    </a>
+    }
+    }
+
+    <div class="spacer"></div>
+    <p class="user">{{ auth.email() }}</p>
+    <button class="nav-link logout" type="button" (click)="auth.logout()">Đăng xuất</button>
+  </nav>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+
+  <app-toast-host />
+</div>
