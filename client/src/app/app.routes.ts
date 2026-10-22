@@ -2,14 +2,6 @@ import { Routes } from '@angular/router';
 import { authGuard, guestGuard } from './core/auth/auth-guard';
 import { Shell } from './layout/shell/shell';
 
-// Placeholder route for screens not built yet; replaced one by one in the next steps
-const soon = (path: string, heading: string, group: string) => ({
-  path,
-  title: `${heading} · Depot`,
-  loadComponent: () => import('./features/coming-soon/coming-soon').then((m) => m.ComingSoon),
-  data: { heading, group },
-});
-
 export const routes: Routes = [
   {
     path: 'login',
@@ -56,10 +48,26 @@ export const routes: Routes = [
         title: 'Sản lượng nhập/xuất · Depot',
         loadComponent: () => import('./features/statistics/throughput-page').then((m) => m.ThroughputPage),
       },
-      soon('catalog/containers', 'Container', 'Danh mục'),
-      soon('catalog/line-operators', 'Hãng khai thác', 'Danh mục'),
-      soon('catalog/customers', 'Khách hàng', 'Danh mục'),
-      soon('catalog/blocks', 'Block', 'Danh mục'),
+      {
+        path: 'catalog/containers',
+        title: 'Container · Depot',
+        loadComponent: () => import('./features/catalog/containers-page').then((m) => m.ContainersPage),
+      },
+      {
+        path: 'catalog/line-operators',
+        title: 'Hãng khai thác · Depot',
+        loadComponent: () => import('./features/catalog/line-operators-page').then((m) => m.LineOperatorsPage),
+      },
+      {
+        path: 'catalog/customers',
+        title: 'Khách hàng · Depot',
+        loadComponent: () => import('./features/catalog/customers-page').then((m) => m.CustomersPage),
+      },
+      {
+        path: 'catalog/blocks',
+        title: 'Block · Depot',
+        loadComponent: () => import('./features/catalog/blocks-page').then((m) => m.BlocksPage),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

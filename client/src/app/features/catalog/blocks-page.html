@@ -1,0 +1,158 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Danh mục</p>
+      <h1>Block</h1>
+    </div>
+  </header>
+
+  @if (listError(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  <div class="catalog-layout">
+    <!-- ================= List ================= -->
+    <section class="card" aria-labelledby="list-title">
+      <div class="list-head">
+        <h2 id="list-title">Danh sách block</h2>
+        <span class="muted">{{ totalCount() }} block</span>
+      </div>
+
+      @if (items().length === 0) {
+      <p class="muted">Chưa có block nào. Thêm block ở form bên cạnh.</p>
+      } @else {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Mã</th>
+              <th>Loại</th>
+              <th>Mô tả</th>
+              <th>Kích thước</th>
+              <th class="num">Trong bãi</th>
+              <th><span class="visually-hidden">Thao tác</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (block of items(); track block.id) {
+            <tr [class.editing]="block.id === resizing()?.id">
+              <td class="mono">{{ block.code }}</td>
+              <td>
+                <span class="chip" [class.chip-grey]="!block.isVirtual" [class.chip-indigo]="block.isVirtual">
+                  {{ block.isVirtual ? 'Ảo' : 'Thật' }}
+                </span>
+              </td>
+              <td>{{ block.description ?? '—' }}</td>
+              <td>{{ sizeText(block) }}</td>
+              <td class="num">{{ block.containersInYard }}</td>
+              <td>
+                <div class="row-actions">
+                  @if (!block.isVirtual) {
+                  <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Đổi kích thước block ' + block.code" (click)="startResize(block)">
+                    Đổi kích thước
+                  </button>
+                  }
+                </div>
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <app-pager [page]="page()" [totalPages]="totalPages()" label="Phân trang danh sách block" (pageChange)="load($event)" />
+      }
+    </section>
+
+    <!-- ================= Resize ================= -->
+    @if (resizing(); as block) {
+    <form class="card" [formGroup]="resizeForm" (ngSubmit)="submit()" novalidate aria-labelledby="form-title">
+      <h2 id="form-title">Đổi kích thước block {{ block.code }}</h2>
+      <p class="muted small">Hiện tại: {{ sizeText(block) }} · {{ block.containersInYard }} container trong block.</p>
+
+      <div class="grid-3">
+        <div class="field" [class.has-error]="invalid('resize', 'maxBays')">
+          <label for="resizeBays">Bay</label>
+          <input id="resizeBays" type="number" min="1" step="1" formControlName="maxBays" />
+        </div>
+        <div class="field" [class.has-error]="invalid('resize', 'maxRows')">
+          <label for="resizeRows">Row</label>
+          <input id="resizeRows" type="number" min="1" step="1" formControlName="maxRows" />
+        </div>
+        <div class="field" [class.has-error]="invalid('resize', 'maxTiers')">
+          <label for="resizeTiers">Tier</label>
+          <input id="resizeTiers" type="number" [min]="minTiers" step="1" formControlName="maxTiers" />
+        </div>
+      </div>
+      @if (invalid('resize', 'maxBays') || invalid('resize', 'maxRows') || invalid('resize', 'maxTiers')) {
+      <span class="field-error">Bay và row ≥ 1, tier ≥ {{ minTiers }} (số nguyên).</span>
+      }
+      @if (shrinking()) {
+      <div class="alert alert-amber" role="status">
+        Đang thu nhỏ block có container. Nếu còn container nằm ngoài kích thước mới, hệ thống sẽ từ chối — đảo chuyển container đó trước.
+      </div>
+      }
+
+      @if (apiError(); as error) {
+      <div class="alert alert-red" role="alert"><strong>Không lưu được ({{ error.status }}):</strong> {{ error.message }}</div>
+      }
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" [disabled]="submitting()">{{ submitting() ? 'Đang lưu…' : 'Lưu kích thước' }}</button>
+        <button class="btn btn-secondary" type="button" (click)="cancel()">Huỷ</button>
+      </div>
+    </form>
+    } @else {
+    <!-- ================= Create ================= -->
+    <form class="card" [formGroup]="createForm" (ngSubmit)="submit()" novalidate aria-labelledby="form-title">
+      <h2 id="form-title">Thêm block</h2>
+
+      <div class="field" [class.has-error]="invalid('create', 'code')">
+        <label for="code">Mã block</label>
+        <input id="code" class="mono upper" formControlName="code" placeholder="VD: A, B1, WAIT" maxlength="10" autocomplete="off" />
+        @if (invalid('create', 'code')) {
+        <span class="field-error">1–10 chữ cái hoặc số (VD: A, B1, WAIT).</span>
+        }
+      </div>
+
+      <div class="field" [class.has-error]="invalid('create', 'description')">
+        <label for="description">Mô tả <span class="muted">(không bắt buộc)</span></label>
+        <input id="description" formControlName="description" placeholder="VD: Khu container khô" maxlength="200" />
+      </div>
+
+      <label class="checkbox">
+        <input type="checkbox" formControlName="isVirtual" />
+        Block ảo <span class="muted">(không quản lý bay/row/tier, VD: khu chờ sửa chữa)</span>
+      </label>
+
+      @if (!isVirtual()) {
+      <div class="grid-3">
+        <div class="field" [class.has-error]="invalid('create', 'maxBays')">
+          <label for="maxBays">Bay</label>
+          <input id="maxBays" type="number" min="1" step="1" formControlName="maxBays" />
+        </div>
+        <div class="field" [class.has-error]="invalid('create', 'maxRows')">
+          <label for="maxRows">Row</label>
+          <input id="maxRows" type="number" min="1" step="1" formControlName="maxRows" />
+        </div>
+        <div class="field" [class.has-error]="invalid('create', 'maxTiers')">
+          <label for="maxTiers">Tier</label>
+          <input id="maxTiers" type="number" [min]="minTiers" step="1" formControlName="maxTiers" />
+        </div>
+      </div>
+      @if (invalid('create', 'maxBays') || invalid('create', 'maxRows') || invalid('create', 'maxTiers')) {
+      <span class="field-error">Bay và row ≥ 1, tier ≥ {{ minTiers }} (số nguyên).</span>
+      }
+      <p class="muted small">Bay tính theo đơn vị 20ft: bay lẻ xếp 20ft, bay chẵn xếp 40ft (chiếm 2 bay lẻ hai bên).</p>
+      }
+
+      @if (apiError(); as error) {
+      <div class="alert alert-red" role="alert"><strong>Không lưu được ({{ error.status }}):</strong> {{ error.message }}</div>
+      }
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" [disabled]="submitting()">{{ submitting() ? 'Đang lưu…' : 'Thêm block' }}</button>
+      </div>
+    </form>
+    }
+  </div>
+</div>

@@ -1,0 +1,30 @@
+.form {
+  gap: 18px;
+}
+
+.label-note {
+  font-weight: 400;
+}
+
+/* ISO code field + "Dùng 22G1" suggestion button on one line */
+.iso-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+  .iso-row input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+/* Fits the list column at 1440px; scrolls inside its box on narrower screens */
+.containers {
+  min-width: 640px;
+}
+
+.alert .detail {
+  margin-top: 4px;
+  opacity: 0.8;
+  font-size: 12px;
+}
