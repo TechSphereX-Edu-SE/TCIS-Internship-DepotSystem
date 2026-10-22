@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ContainerPosition, DailyVisits, GateInRequest, GateInResult, YardContainer } from './depot-models';
+import { ContainerPosition, DailyVisits, GateInRequest, GateInResult, MoveRequest, YardContainer } from './depot-models';
 
 // Container lifecycle in the yard: /api/container-visits
 @Service()
@@ -11,6 +11,11 @@ export class YardApi {
 
   gateIn(request: GateInRequest): Observable<GateInResult> {
     return this.http.post<GateInResult>(`${this.baseUrl}/gate-in`, request);
+  }
+
+  // Returns the new position; 409 ContainerAbove / SlotOccupied / NoSupportBelow, 400 SamePosition
+  move(request: MoveRequest): Observable<ContainerPosition> {
+    return this.http.post<ContainerPosition>(`${this.baseUrl}/move`, request);
   }
 
   // 404 ContainerVisit.NotInYard when the container exists but is not in the yard

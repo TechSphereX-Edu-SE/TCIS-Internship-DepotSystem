@@ -25,10 +25,27 @@
     }
 
     @for (box of boxes(); track box.visitId) {
-    <div class="cell box" [class.ft40]="box.is40" [class.damaged]="box.damaged" [style.grid-area]="box.area" [title]="box.title">
+    @if (containersSelectable()) {
+    <!-- Move screen: a real button so the container can be picked with the keyboard too -->
+    <button type="button"
+            class="cell box selectable"
+            [class.ft40]="box.is40"
+            [class.damaged]="box.damaged"
+            [class.moving]="box.moving"
+            [style.grid-area]="box.area"
+            [title]="box.title"
+            [attr.aria-label]="'Chọn container ' + box.container.containerNumber"
+            [attr.aria-pressed]="box.moving"
+            (click)="pickContainer.emit(box.container)">
+      <span class="label">{{ box.label }}</span>
+      <span class="sub">{{ box.sub }}</span>
+    </button>
+    } @else {
+    <div class="cell box" [class.ft40]="box.is40" [class.damaged]="box.damaged" [class.moving]="box.moving" [style.grid-area]="box.area" [title]="box.title">
       <span class="label">{{ box.label }}</span>
       <span class="sub">{{ box.sub }}</span>
     </div>
+    }
     }
 
     @if (selected(); as selection) {
@@ -42,6 +59,11 @@
 <div class="legend">
   <span><i class="swatch ft20"></i>20ft (bay lẻ)</span>
   <span><i class="swatch ft40"></i>40ft (bay chẵn, chiếm 2 bay lẻ)</span>
+
+  @if (movingVisitId()) {
+  <span><i class="swatch moving"></i>Container đang đảo chuyển</span>
+  }
+
   <span><i class="swatch selected"></i>Vị trí đang chọn</span>
   <span><i class="swatch damaged"></i>Hư hỏng</span>
   <span><i class="swatch empty"></i>Trống (bấm để chọn)</span>

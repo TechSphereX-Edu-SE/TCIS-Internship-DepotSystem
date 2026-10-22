@@ -23,13 +23,18 @@ export const routes: Routes = [
     component: Shell,
     canActivate: [authGuard],
     children: [
+
       { path: '', pathMatch: 'full', redirectTo: 'gate-in' },
       {
         path: 'gate-in',
         title: 'Nhập bãi · Depot',
         loadComponent: () => import('./features/gate-in/gate-in-page').then((m) => m.GateInPage),
       },
-      soon('yard', 'Vị trí & đảo chuyển', 'Nghiệp vụ · Quản lý bãi'),
+      {
+        path: 'yard',
+        title: 'Vị trí & đảo chuyển · Depot',
+        loadComponent: () => import('./features/yard/yard-page').then((m) => m.YardPage),
+      },
       soon('gate-out', 'Xuất bãi (Gate-out)', 'Nghiệp vụ · Nhập/xuất container'),
       soon('delivery-orders', 'Lệnh giao container rỗng', 'Nghiệp vụ · Lệnh của hãng khai thác'),
       soon('statistics/inventory', 'Container tồn bãi theo hãng', 'Thống kê'),

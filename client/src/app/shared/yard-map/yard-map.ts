@@ -1,6 +1,6 @@
 import { Component, computed, input, output } from '@angular/core';
 import { Block, ContainerSize, YardContainer } from '../../core/depot/depot-models';
-import { findOverlap, footprint, isSupported } from '../../core/depot/yard-rules';
+import { findOverlap, footprint, isSupported, toPlaced } from '../../core/depot/yard-rules';
 
 // Position chosen in the form, drawn on the map (bay may be odd or even depending on the size)
 export interface MapSelection {
@@ -13,6 +13,7 @@ export interface MapSelection {
   Side view of one row of a physical block: columns = odd bays (20ft units), rows = tiers (top = highest).
   A 40ft container in even bay b is drawn over the columns of bays b-1 and b+1.
   Clicking an empty cell emits the odd bay and tier; the page turns it into a bay for the container size.
+  Used by gate-in (pick a free cell) and by move (also pick a container, and show the one being moved).
 */
 @Component({
   selector: 'app-yard-map',
@@ -24,7 +25,14 @@ export class YardMap {
   // Containers of the row shown (the page loads them for the selected block and row)
   readonly containers = input<YardContainer[]>([]);
   readonly selection = input<MapSelection>({ bay: null, tier: null, size: null });
+  // Container being moved: outlined, and left out of the conflict check of the selection,
+  // because its current place neither blocks nor supports its new place (same as the API)
+  readonly movingVisitId = input<string | null>(null);
+  // When true, containers are buttons that emit pickContainer (move screen); false keeps them plain boxes
+  readonly containersSelectable = input(false);
+
   readonly pick = output<{ oddBay: number; tier: number }>();
+  readonly pickContainer = output<YardContainer>();
 
   protected readonly bays = computed(() => {
     const result: number[] = [];
@@ -46,9 +54,11 @@ export class YardMap {
       .map((c) => {
         const is40 = c.size === 'Ft40';
         return {
+          container: c,
           visitId: c.visitId,
           is40,
           damaged: c.condition === 'Damaged',
+          moving: c.visitId === this.movingVisitId(),
           area: this.gridArea(footprint(c.bay!, c.size)[0], is40 ? 2 : 1, c.tier!),
           label: is40 ? c.containerNumber : `${c.containerNumber.slice(0, 4)}…${c.containerNumber.slice(-3)}`,
           sub: is40 ? `40' · bay ${pad(c.bay!)}` : "20'",
@@ -59,8 +69,9 @@ export class YardMap {
 
   // Every (odd bay, tier) not covered by a container is a clickable empty cell
   protected readonly emptyCells = computed(() => {
-    const placed = this.placed();
-    const taken = new Set(placed.flatMap((p) => footprint(p.bay, p.size).map((bay) => `${bay}-${p.tier}`)));
+    const taken = new Set(
+      toPlaced(this.containers()).flatMap((p) => footprint(p.bay, p.size).map((bay) => `${bay}-${p.tier}`)),
+    );
     return this.tiers().flatMap((tier) =>
       this.bays()
         .filter((bay) => !taken.has(`${bay}-${tier}`))
@@ -79,16 +90,11 @@ export class YardMap {
     if (covered[0] < 1 || covered[covered.length - 1] > maxBays || tier < 1 || tier > maxTiers) return null;
     if (covered.some((b) => b % 2 === 0)) return null;
 
-    const placed = this.placed();
-    const conflict = !!findOverlap(bay, tier, size, placed) || !isSupported(bay, tier, size, placed);
+    // The moving container is left out: only the other containers can block or support it
+    const others = toPlaced(this.containers(), this.movingVisitId());
+    const conflict = !!findOverlap(bay, tier, size, others) || !isSupported(bay, tier, size, others);
     return { area: this.gridArea(covered[0], covered.length, tier), conflict };
   });
-
-  private readonly placed = computed(() =>
-    this.containers()
-      .filter((c) => c.bay !== null && c.tier !== null)
-      .map((c) => ({ bay: c.bay!, tier: c.tier!, size: c.size })),
-  );
 
   protected pad(bay: number): string {
     return pad(bay);

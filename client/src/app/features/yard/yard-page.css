@@ -1,0 +1,220 @@
+/* ---------- block cards ---------- */
+.blocks-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.blocks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+/* Card look from the mockup, but a real button (it switches the block shown on the map) */
+.block-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+  .block-card:hover {
+    border-color: var(--input-border);
+  }
+
+  .block-card:focus-visible {
+    outline: 3px solid rgb(29 78 216 / 35%);
+    outline-offset: 2px;
+  }
+
+  .block-card.active {
+    border: 2px solid var(--focus);
+    padding: 17px 19px; /* keeps the size when the border gets thicker */
+  }
+
+.block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.block-code {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.count {
+  font-weight: 500;
+}
+
+/* ---------- lookup + move side by side (stacked on narrow screens) ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.search {
+  display: flex;
+  gap: 12px;
+}
+
+  .search input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    /* Container numbers are stored in upper case; show them the same way while typing */
+    text-transform: uppercase;
+  }
+
+    .search input:focus {
+      outline: none;
+      border: 2px solid var(--focus);
+    }
+
+/* Facts of the container found, on the light page background as in the mockup */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--page);
+}
+
+  .facts div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .facts dt {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .facts dd {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .facts .position {
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+.form {
+  gap: 18px;
+}
+
+.group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+  .group legend {
+    padding: 0;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+.brt {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.alert .detail {
+  margin-top: 4px;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.rules {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* ---------- map card ---------- */
+.map-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+  .row-picker select {
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    font: inherit;
+  }
+
+.small {
+  font-size: 12px;
+}
+
+.empty {
+  padding: 16px 0;
+}
+
+/* Virtual block list: highlight the container being moved */
+.current-row td {
+  background: #eff4ff;
+}
+
+.btn-small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* Label kept for screen readers only (the field has a visible placeholder and a search role) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

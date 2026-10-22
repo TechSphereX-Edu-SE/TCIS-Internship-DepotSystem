@@ -147,6 +147,15 @@ export interface GateInResult {
   gateInAt: string;
 }
 
+// POST /api/container-visits/move (MoveContainerCommand); the response is a ContainerPosition
+export interface MoveRequest {
+  containerId: string;
+  blockId: string;
+  bay: number | null;
+  row: number | null;
+  tier: number | null;
+}
+
 // ---------- display helpers ----------
 
 export const SIZE_LABEL: Record<ContainerSize, string> = { Ft20: '20ft', Ft40: '40ft' };
@@ -167,4 +176,15 @@ export const CONDITION_LABEL: Record<ContainerCondition, string> = { Normal: 'BÃ
 // "A 04-1-1" for a physical block, just "WAIT" for a virtual block (same style as the mockups)
 export function formatPosition(blockCode: string, bay: number | null, row: number | null, tier: number | null): string {
   return bay === null ? blockCode : `${blockCode} ${String(bay).padStart(2, '0')}-${row}-${tier}`;
+}
+
+// Vietnam is UTC+7 all year (no daylight saving), same offset as Domain/Services/DepotTime
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Days in the yard counted in Vietnam calendar days, gate-in day = 0 (same as DepotTime.DwellDays)
+export function dwellDays(gateInAt: string, now: Date = new Date()): number {
+  // Shift both instants to Vietnam time, then drop the time of day: whole days between the two dates
+  const vietnamDay = (ms: number) => Math.floor((ms + VIETNAM_OFFSET_MS) / DAY_MS);
+  return vietnamDay(now.getTime()) - vietnamDay(new Date(gateInAt).getTime());
 }

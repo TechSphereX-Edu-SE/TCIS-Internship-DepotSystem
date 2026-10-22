@@ -1,0 +1,240 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Nghiệp vụ · Quản lý bãi</p>
+      <h1>Vị trí &amp; đảo chuyển</h1>
+    </div>
+  </header>
+
+  @if (loadError(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  <!-- ================= Blocks ================= -->
+  <section class="blocks-section" aria-labelledby="blocks-title">
+    <h2 id="blocks-title">Các block trong bãi</h2>
+    <div class="blocks">
+      @for (block of blocks(); track block.id) {
+      <!-- A button: choosing a card shows that block on the map (and makes it the move target) -->
+      <button type="button"
+              class="block-card"
+              [class.active]="block.id === targetBlock()?.id"
+              [attr.aria-pressed]="block.id === targetBlock()?.id"
+              (click)="showBlock(block)">
+        <span class="block-head">
+          <span class="block-code mono">{{ block.code }}</span>
+          <span class="chip" [class.chip-grey]="!block.isVirtual" [class.chip-indigo]="block.isVirtual">
+            {{ block.isVirtual ? 'Ảo' : 'Thật' }}
+          </span>
+        </span>
+        <span class="muted">{{ block.description ?? '' }}</span>
+        <span class="muted small">{{ blockSize(block) }}</span>
+        <span class="count">{{ block.containersInYard }} container trong bãi</span>
+      </button>
+      }
+    </div>
+  </section>
+
+  <div class="layout">
+    <!-- ================= Lookup ================= -->
+    <section class="card" aria-labelledby="find-title">
+      <h2 id="find-title">Tra vị trí container</h2>
+
+      <form class="search" role="search" [formGroup]="searchForm" (ngSubmit)="search()" novalidate>
+        <label for="findNumber" class="visually-hidden">Số container</label>
+        <input id="findNumber" class="mono" formControlName="containerNumber" placeholder="VD: CMAU7654327" maxlength="11" autocomplete="off" />
+        <button class="btn btn-dark" type="submit" [disabled]="searching()">{{ searching() ? 'Đang tìm…' : 'Tra cứu' }}</button>
+      </form>
+
+      @if (searchError(); as message) {
+      <div class="alert alert-red" role="alert">{{ message }}</div>
+      }
+
+      @if (current(); as c) {
+      <dl class="facts">
+        <div>
+          <dt>Vị trí hiện tại</dt>
+          <dd class="position mono">{{ positionText(c) }}</dd>
+        </div>
+        <div>
+          <dt>Kích thước</dt>
+          <dd>{{ sizeText() }}</dd>
+        </div>
+        <div>
+          <dt>Hãng khai thác</dt>
+          <dd>{{ c.lineOperatorCode }}</dd>
+        </div>
+        <div>
+          <dt>Vào bãi lúc</dt>
+          <dd>{{ c.gateInAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }} · {{ currentDwellDays() }} ngày</dd>
+        </div>
+      </dl>
+      } @else {
+      <p class="muted small">Nhập số container, hoặc bấm vào một container trên sơ đồ bên dưới.</p>
+      }
+    </section>
+
+    <!-- ================= Move ================= -->
+    <form class="card form" [formGroup]="moveForm" (ngSubmit)="submit()" novalidate aria-labelledby="move-title">
+      @if (current(); as c) {
+      <h2 id="move-title">Đảo chuyển <span class="mono">{{ c.containerNumber }}</span></h2>
+
+      <div class="field">
+        <label for="targetBlock">Block đích</label>
+        <select id="targetBlock" formControlName="blockId">
+          @for (block of blocks(); track block.id) {
+          <option [value]="block.id">
+            {{ block.code }} · {{ block.description ?? '' }}{{ block.isVirtual ? ' (block ảo, không cần bay/row/tier)' : '' }}
+          </option>
+          }
+        </select>
+      </div>
+
+      @if (targetBlock()?.isVirtual) {
+      <div class="alert alert-blue">Block ảo: không quản lý Bay/Row/Tier, container chỉ cần ghi nhận đang ở block này.</div>
+      } @else {
+      <fieldset class="group">
+        <legend>Vị trí mới (Bay – Row – Tier)</legend>
+        <div class="brt">
+          <div class="field" [class.has-error]="positionErrors().bay">
+            <label for="bay">Bay</label>
+            <input id="bay" type="number" min="1" formControlName="bay" />
+            @if (positionErrors().bay; as message) {
+            <span class="field-error">{{ message }}</span>
+            }
+          </div>
+          <div class="field" [class.has-error]="positionErrors().row">
+            <label for="row">Row</label>
+            <input id="row" type="number" min="1" formControlName="row" />
+            @if (positionErrors().row; as message) {
+            <span class="field-error">{{ message }}</span>
+            }
+          </div>
+          <div class="field" [class.has-error]="positionErrors().tier">
+            <label for="tier">Tier</label>
+            <input id="tier" type="number" min="1" formControlName="tier" />
+            @if (positionErrors().tier; as message) {
+            <span class="field-error">{{ message }}</span>
+            }
+          </div>
+        </div>
+        @if (slotWarning(); as warning) {
+        <span class="field-error">{{ warning }}</span>
+        }
+      </fieldset>
+      }
+
+      @if (containerAbove(); as above) {
+      <div class="alert alert-red" role="alert">
+        <strong>Không thể đảo chuyển:</strong> {{ above.containerNumber }} đang xếp phía trên (tier {{ above.tier }}).
+        Chuyển container đó trước.
+      </div>
+      } @else if (samePosition()) {
+      <div class="alert alert-amber" role="status">
+        {{ targetBlock()?.isVirtual ? 'Container đang ở block này, chọn block đích khác.' : 'Vị trí mới trùng vị trí hiện tại.' }}
+      </div>
+      }
+
+      @if (apiError(); as error) {
+      <div class="alert alert-red" role="alert">
+        <strong>Không chuyển được ({{ error.status }}):</strong> {{ error.message }}
+        @if (error.detail && error.detail !== error.message) {
+        <div class="detail">{{ error.detail }}</div>
+        }
+      </div>
+      }
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" [disabled]="submitting() || blocked()">
+          {{ submitting() ? 'Đang chuyển…' : 'Đảo chuyển' }}
+        </button>
+        <button class="btn btn-secondary" type="button" (click)="clearTarget()">Huỷ</button>
+      </div>
+
+      <ul class="rules muted">
+        <li>Container phải không bị container khác đè lên.</li>
+        <li>Vị trí mới phải trống, đúng bay lẻ/chẵn và có container đỡ bên dưới.</li>
+        <li>Có thể chuyển sang block ảo (ví dụ WAIT cho container cần sửa).</li>
+      </ul>
+      } @else {
+      <h2 id="move-title">Đảo chuyển</h2>
+      <p class="muted">Chọn một container (tra cứu hoặc bấm trên sơ đồ) để đảo chuyển sang vị trí hoặc block khác.</p>
+      }
+    </form>
+  </div>
+
+  <!-- ================= Map / virtual block list ================= -->
+  <section class="card" aria-labelledby="map-title">
+    @if (targetBlock(); as block) {
+    <div class="map-header">
+      <h2 id="map-title">Sơ đồ Block {{ block.code }}{{ block.isVirtual ? '' : ' · Row ' + mapRow() }}</h2>
+      @if (!block.isVirtual) {
+      <div class="row-picker">
+        <label for="mapRow" class="muted">Row đang xem</label>
+        <select id="mapRow" [value]="mapRow()" (change)="selectMapRow($any($event.target).value)">
+          @for (row of rowOptions(); track row) {
+          <option [value]="row" [selected]="row === mapRow()">Row {{ row }}</option>
+          }
+        </select>
+      </div>
+      }
+    </div>
+
+    @if (block.isVirtual) {
+    <!-- A virtual block has no positions: list its containers instead of a map -->
+    @if (mapContainers().length === 0) {
+    <p class="empty muted">Block {{ block.code }} đang trống.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Số container</th>
+            <th>Kích thước</th>
+            <th>Hãng</th>
+            <th>Tình trạng</th>
+            <th>Vào bãi</th>
+            <th><span class="visually-hidden">Chọn</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of mapContainers(); track item.visitId) {
+          <tr [class.current-row]="item.visitId === current()?.visitId">
+            <td class="mono">{{ item.containerNumber }}</td>
+            <td>{{ sizeLabel[item.size] }}</td>
+            <td>{{ item.lineOperatorCode }}</td>
+            <td>
+              <span class="chip" [class.chip-red]="item.condition === 'Damaged'" [class.chip-green]="item.condition === 'Normal'">
+                {{ conditionLabel[item.condition] }}
+              </span>
+            </td>
+            <td>{{ item.gateInAt | date: 'dd/MM HH:mm' : '+0700' }}</td>
+            <td>
+              <button class="btn btn-secondary btn-small" type="button" (click)="pickContainer(item)"
+                      [attr.aria-label]="'Chọn ' + item.containerNumber">
+                Chọn
+              </button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+    } @else {
+    <p class="muted small">
+      Nhìn ngang: bay (cột) × tier (tầng). Bấm container để chọn{{ current() ? ', bấm ô trống để đặt vị trí mới' : '' }}.
+    </p>
+    <app-yard-map [block]="block"
+                  [containers]="mapContainers()"
+                  [selection]="mapSelection()"
+                  [movingVisitId]="current()?.visitId ?? null"
+                  [containersSelectable]="true"
+                  (pick)="pickOnMap($event)"
+                  (pickContainer)="pickContainer($event)" />
+    }
+    } @else {
+    <p class="muted">Chưa có block nào.</p>
+    }
+  </section>
+</div>

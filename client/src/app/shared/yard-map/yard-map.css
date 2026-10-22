@@ -89,6 +89,30 @@
     border: 2px solid var(--danger);
   }
 
+  /* Move screen: containers are buttons (reset the browser button look, keep the box look) */
+  .box.selectable {
+    align-items: flex-start;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+    .box.selectable:hover {
+      filter: brightness(0.95);
+    }
+
+    .box.selectable:focus-visible {
+      outline: 3px solid rgb(29 78 216 / 35%);
+      outline-offset: 1px;
+    }
+
+  /* Container being moved: thick blue outline so it stands out from the others */
+  .box.moving {
+    outline: 3px solid var(--focus);
+    outline-offset: -1px;
+    background: #dbe5ff;
+  }
+
 .selected {
   display: flex;
   align-items: center;
@@ -141,6 +165,11 @@
   .swatch.selected {
     background: #eff4ff;
     border: 1px dashed var(--focus);
+  }
+
+  .swatch.moving {
+    background: #dbe5ff;
+    border: 2px solid var(--focus);
   }
 
   .swatch.damaged {
