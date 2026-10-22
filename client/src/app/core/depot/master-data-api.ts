@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
-import { Block, Container, LineOperator, PagedResult } from './depot-models';
+import { Block, Container, Customer, LineOperator, PagedResult, UpdateConditionRequest } from './depot-models';
 
 // Master data used by the business screens (dropdowns, container lookup)
 @Service()
@@ -19,6 +19,18 @@ export class MasterDataApi {
     return this.http
       .get<PagedResult<Block>>('/api/blocks', { params: { pageSize: 100 } })
       .pipe(map((page) => [...page.items].sort((a, b) => a.code.localeCompare(b.code))));
+  }
+
+  // Customers for the delivery order form, sorted by name (a depot works with a limited list)
+  customers(): Observable<Customer[]> {
+    return this.http
+      .get<PagedResult<Customer>>('/api/customers', { params: { pageSize: 100 } })
+      .pipe(map((page) => [...page.items].sort((a, b) => a.name.localeCompare(b.name, 'vi'))));
+  }
+
+  // E.g. back to Normal after repair, so the container can be released at gate-out (204 No Content)
+  updateCondition(containerId: string, request: UpdateConditionRequest): Observable<void> {
+    return this.http.put<void>(`/api/containers/${containerId}/condition`, request);
   }
 
   // Exact match on a full container number, using the API's ?search= (part of the number)

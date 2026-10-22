@@ -1,0 +1,102 @@
+.table-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.empty {
+  padding: 16px 0;
+}
+
+/* Wide table: scrolls inside its box on narrow screens instead of squeezing the columns */
+.orders {
+  min-width: 880px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.form {
+  gap: 18px;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.label-note {
+  font-weight: 400;
+}
+
+/* ---------- order lines: type + quantity + remove ---------- */
+.lines {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+  .lines legend {
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 44px;
+  gap: 12px;
+  align-items: start;
+}
+
+/* Labels of each line are smaller and grey, the legend already names the group */
+.field .small-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Square remove button, aligned with the inputs (below the 12px label + 6px gap) */
+.icon-btn {
+  width: 44px;
+  padding: 0;
+  margin-top: 24px;
+}
+
+.add-line {
+  align-self: flex-start;
+  border: 1px dashed var(--input-border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+  .add-line:hover {
+    background: var(--page);
+  }
+
+.small {
+  font-size: 12px;
+}
+
+.alert .detail {
+  margin-top: 4px;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+/* Order numbers are usually written in upper case on the order papers */
+#orderNumber {
+  text-transform: uppercase;
+}

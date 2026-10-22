@@ -1,0 +1,173 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Nghiệp vụ · Lệnh của hãng khai thác</p>
+      <h1>Lệnh giao container rỗng</h1>
+    </div>
+  </header>
+
+  @if (listError(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  <!-- ================= List ================= -->
+  <section class="card" aria-labelledby="list-title">
+    <div class="table-title">
+      <h2 id="list-title">Danh sách lệnh</h2>
+      <span class="muted">{{ totalCount() }} lệnh</span>
+    </div>
+
+    @if (orders().length === 0) {
+    <p class="empty muted">Chưa có lệnh giao nào. Tạo lệnh ở form bên dưới.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table orders">
+        <thead>
+          <tr>
+            <th>Số lệnh</th>
+            <th>Hãng</th>
+            <th>Khách hàng (MST · tên)</th>
+            <th>Hạn lệnh</th>
+            <th>Chuyến tàu xuất</th>
+            <th>Đã giao / số lượng</th>
+            <th>Trạng thái</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of orders(); track order.id) {
+          <tr>
+            <td class="mono">{{ order.orderNumber }}</td>
+            <td>{{ order.lineOperatorCode }}</td>
+            <td><span class="mono muted">{{ order.customerTaxCode }}</span> · {{ order.customerName }}</td>
+            <td>{{ formatDate(order.expiryDate) }}</td>
+            <td>{{ order.vesselVoyage }}</td>
+            <td>{{ releasedSummary(order) }}</td>
+            <td>
+              @let status = orderStatus(order);
+              <span class="chip" [class]="statusChip[status]">{{ statusLabel[status] }}</span>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages() > 1) {
+    <nav class="pager" aria-label="Phân trang danh sách lệnh">
+      <button class="btn btn-secondary btn-small" type="button" [disabled]="page() === 1" (click)="goToPage(page() - 1)">Trang trước</button>
+      <span class="muted">Trang {{ page() }} / {{ totalPages() }}</span>
+      <button class="btn btn-secondary btn-small" type="button" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)">Trang sau</button>
+    </nav>
+    }
+    }
+  </section>
+
+  <!-- ================= Create ================= -->
+  <form class="card form" [formGroup]="form" (ngSubmit)="submit()" novalidate aria-labelledby="create-title">
+    <h2 id="create-title">Tạo lệnh giao</h2>
+
+    <div class="fields">
+      <div class="field" [class.has-error]="invalid('orderNumber')">
+        <label for="orderNumber">Số lệnh</label>
+        <input id="orderNumber" class="mono" formControlName="orderNumber" placeholder="VD: DO-003" maxlength="30" autocomplete="off" />
+        @if (invalid('orderNumber')) {
+        <span class="field-error">Nhập số lệnh: chữ, số và - / . (tối đa 30 ký tự).</span>
+        }
+      </div>
+
+      <div class="field" [class.has-error]="invalid('lineOperatorId')">
+        <label for="lineOperatorId">Hãng khai thác</label>
+        <select id="lineOperatorId" formControlName="lineOperatorId">
+          <option value="" disabled>Chọn hãng</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
+          }
+        </select>
+        @if (invalid('lineOperatorId')) {
+        <span class="field-error">Chọn hãng khai thác.</span>
+        }
+      </div>
+
+      <div class="field" [class.has-error]="invalid('customerId')">
+        <label for="customerId">Khách hàng</label>
+        <select id="customerId" formControlName="customerId">
+          <option value="" disabled>Chọn khách hàng</option>
+          @for (customer of customers(); track customer.id) {
+          <option [value]="customer.id">{{ customer.taxCode }} · {{ customer.name }}</option>
+          }
+        </select>
+        @if (invalid('customerId')) {
+        <span class="field-error">Chọn khách hàng.</span>
+        }
+      </div>
+
+      <div class="field" [class.has-error]="expiryInPast()">
+        <label for="expiryDate">Hạn lệnh <span class="muted label-note">(ngày cuối được giao)</span></label>
+        <input id="expiryDate" type="date" formControlName="expiryDate" [min]="today" />
+        @if (expiryInPast()) {
+        <span class="field-error">Hạn lệnh phải từ hôm nay ({{ formatDate(today) }}) trở đi.</span>
+        }
+      </div>
+
+      <div class="field" [class.has-error]="invalid('vesselVoyage')">
+        <label for="vesselVoyage">Chuyến tàu xuất</label>
+        <input id="vesselVoyage" formControlName="vesselVoyage" placeholder="VD: MSC ANNA 042W" maxlength="50" />
+        @if (invalid('vesselVoyage')) {
+        <span class="field-error">Nhập chuyến tàu (tối đa 50 ký tự).</span>
+        }
+      </div>
+    </div>
+
+    <fieldset class="lines" formArrayName="lines">
+      <legend>Số lượng container mỗi loại</legend>
+
+      @for (line of form.controls.lines.controls; track line; let i = $index) {
+      <div class="line" [formGroupName]="i">
+        <div class="field">
+          <label [for]="'lineType' + i" class="small-label">Loại container</label>
+          <select [id]="'lineType' + i" formControlName="category">
+            @for (category of lineOptions()[i]; track category) {
+            <option [value]="category">{{ categoryLabel[category] }} · {{ categoryHint[category] }}</option>
+            }
+          </select>
+        </div>
+        <div class="field" [class.has-error]="quantityInvalid(i)">
+          <label [for]="'lineQty' + i" class="small-label">Số lượng</label>
+          <input [id]="'lineQty' + i" type="number" min="1" step="1" formControlName="quantity" />
+          @if (quantityInvalid(i)) {
+          <span class="field-error">Số nguyên ≥ 1</span>
+          }
+        </div>
+        <button class="btn btn-secondary icon-btn"
+                type="button"
+                [disabled]="form.controls.lines.length === 1"
+                [attr.aria-label]="'Xoá dòng ' + categoryLabel[line.controls.category.value]"
+                (click)="removeLine(i)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5"></path>
+          </svg>
+        </button>
+      </div>
+      }
+
+      @if (canAddLine()) {
+      <button class="btn add-line" type="button" (click)="addLine()">+ Thêm loại container</button>
+      }
+      <p class="muted small">Mỗi loại chỉ một dòng, số lượng ≥ 1. 7 loại theo Phụ lục II: Dry, Reefer, Open Top, Flat Rack, Bunker, Ventilated, Specialized.</p>
+    </fieldset>
+
+    @if (apiError(); as error) {
+    <div class="alert alert-red" role="alert">
+      <strong>Không tạo được lệnh ({{ error.status }}):</strong> {{ error.message }}
+      @if (error.detail && error.detail !== error.message) {
+      <div class="detail">{{ error.detail }}</div>
+      }
+    </div>
+    }
+
+    <div class="actions">
+      <button class="btn btn-primary" type="submit" [disabled]="submitting()">{{ submitting() ? 'Đang tạo…' : 'Tạo lệnh' }}</button>
+      <button class="btn btn-secondary" type="button" (click)="resetForm()">Làm lại</button>
+    </div>
+  </form>
+</div>
