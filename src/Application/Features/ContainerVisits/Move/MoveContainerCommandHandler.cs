@@ -23,9 +23,8 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
     {
         var visit = await dbContext.FindOpenVisitAsync(command.ContainerId, cancellationToken);
         if (visit is null)
-            if (visit is null)
-                return Result.Failure<ContainerPositionResponse>(
-                    await dbContext.NotInYardErrorAsync(command.ContainerId, cancellationToken));
+            return Result.Failure<ContainerPositionResponse>(
+                await dbContext.NotInYardErrorAsync(command.ContainerId, cancellationToken));
 
         var target = await dbContext.Blocks.FindAsync([command.BlockId], cancellationToken);
         if (target is null)
@@ -67,5 +66,4 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
             visit.LineOperator.Code, target.Id, target.Code, target.IsVirtual,
             visit.Bay, visit.Row, visit.Tier, visit.GateInAt));
     }
-
 }
