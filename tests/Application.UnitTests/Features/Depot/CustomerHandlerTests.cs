@@ -53,6 +53,21 @@ public sealed class CustomerHandlerTests
     }
 
     [Fact]
+    public async Task GetAll_Should_Put_Exact_Tax_Code_First()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var create = new CreateCustomerCommandHandler(dbContext);
+        await create.HandleAsync(new CreateCustomerCommand("0301234567-001", "A Branch"), TestContext.Current.CancellationToken);
+        await create.HandleAsync(new CreateCustomerCommand("0301234567", "Z Head Office"), TestContext.Current.CancellationToken);
+
+        var result = await new GetAllCustomersQueryHandler(dbContext)
+            .HandleAsync(new GetAllCustomersQuery("0301234567"), TestContext.Current.CancellationToken);
+
+        // The exact tax code wins over the name order (A before Z)
+        result.Value!.Items.Select(c => c.TaxCode).Should().Equal("0301234567", "0301234567-001");
+    }
+
+    [Fact]
     public async Task Update_Should_Return_NotFound_When_Missing()
     {
         await using var dbContext = TestDbContextFactory.Create();

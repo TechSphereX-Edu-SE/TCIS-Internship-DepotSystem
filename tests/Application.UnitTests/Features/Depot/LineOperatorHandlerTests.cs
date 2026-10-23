@@ -91,6 +91,25 @@ public sealed class LineOperatorHandlerTests
     }
 
     [Fact]
+    public async Task GetAll_Should_Rank_Exact_Code_Then_Prefix_Then_Other_Matches()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var create = new CreateLineOperatorCommandHandler(dbContext);
+        await create.HandleAsync(new CreateLineOperatorCommand("XCMA", "Other line"), TestContext.Current.CancellationToken);
+        await create.HandleAsync(new CreateLineOperatorCommand("CMAX", "Other line"), TestContext.Current.CancellationToken);
+        await create.HandleAsync(new CreateLineOperatorCommand("ZIM", "Partner of CMA"), TestContext.Current.CancellationToken);
+        await create.HandleAsync(new CreateLineOperatorCommand("CMA", "CMA CGM"), TestContext.Current.CancellationToken);
+        await create.HandleAsync(new CreateLineOperatorCommand("MSC", "Mediterranean Shipping Company"), TestContext.Current.CancellationToken);
+
+        var result = await new GetAllLineOperatorsQueryHandler(dbContext)
+            .HandleAsync(new GetAllLineOperatorsQuery(Search: " cma "), TestContext.Current.CancellationToken);
+
+        // Exact code, then code prefix, then the rest by code (inside the code or in the name)
+        result.Value!.Items.Select(l => l.Code).Should().Equal("CMA", "CMAX", "XCMA", "ZIM");
+        result.Value.TotalCount.Should().Be(4);
+    }
+
+    [Fact]
     public void Update_Validator_Should_Require_Name()
     {
         var validator = new UpdateLineOperatorValidator();

@@ -58,8 +58,8 @@ public sealed class GetDailyVisitsQueryHandlerTests
         var result = await GetAsync(dbContext);
 
         result.Value!.Date.Should().Be(new DateOnly(2026, 10, 22));
-        // Sorted by time: 00:30 VN before 08:00 VN
-        result.Value.GateIns.Select(v => v.ContainerNumber).Should().Equal("CMAU1234564", "MSCU1234566");
+        // Newest first: 08:00 VN before 00:30 VN
+        result.Value.GateIns.Select(v => v.ContainerNumber).Should().Equal("MSCU1234566", "CMAU1234564");
 
         var gateOut = result.Value.GateOuts.Should().ContainSingle().Subject;
         gateOut.ContainerNumber.Should().Be("MSCU5551234");

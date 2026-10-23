@@ -81,6 +81,21 @@ public sealed class ContainerQueryHandlerTests
     }
 
     [Fact]
+    public async Task GetAll_Should_Find_Serial_Digits_And_Sort_By_Number()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        await SeedContainerAsync(dbContext, "MSCU1234566");
+        await SeedContainerAsync(dbContext, "CMAU1234564");
+        await SeedContainerAsync(dbContext, "CSQU3054383");
+
+        // Digits match inside the number (not a prefix), so both are in the "rest" group, by number
+        var result = await new GetAllContainersQueryHandler(dbContext)
+            .HandleAsync(new GetAllContainersQuery(Search: "1234"), TestContext.Current.CancellationToken);
+
+        result.Value!.Items.Select(c => c.ContainerNumber).Should().Equal("CMAU1234564", "MSCU1234566");
+    }
+
+    [Fact]
     public async Task Delete_Should_Remove_Container_Without_History()
     {
         await using var dbContext = TestDbContextFactory.Create();

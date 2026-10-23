@@ -1,7 +1,11 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Named data volume: the depot data (and its history) stays when the Postgres container is
+// recreated, e.g. after an Aspire or Docker Desktop update. A persistent container alone keeps
+// the data only as long as that same container exists.
 var postgres = builder.AddPostgres("postgres")
     .WithPgAdmin()
+    .WithDataVolume("depot-postgres-data")
     .WithLifetime(ContainerLifetime.Persistent);
 
 var database = postgres.AddDatabase("TechSpherex-db");

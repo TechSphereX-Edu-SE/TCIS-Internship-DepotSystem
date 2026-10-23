@@ -9,6 +9,7 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Get
     A Vietnam date is turned into the time range [date 00:00 +07, next day 00:00 +07),
     the same way as the throughput statistics, so events between 00:00 and 07:00 VN
     are not counted on the previous (UTC) day.
+    Both lists are newest first (the event the user just recorded is on top).
 */
 public sealed class GetDailyVisitsQueryHandler(IAppDbContext dbContext, TimeProvider timeProvider)
     : IQueryHandler<GetDailyVisitsQuery, Result<DailyVisitsResponse>>
@@ -23,7 +24,9 @@ public sealed class GetDailyVisitsQueryHandler(IAppDbContext dbContext, TimeProv
         var gateIns = await dbContext.ContainerVisits
             .AsNoTracking()
             .Where(v => v.GateInAt >= start && v.GateInAt < end)
-            .OrderBy(v => v.GateInAt)
+            // Feedback 1: newest gate-in first; the container number breaks ties at the same time
+            .OrderByDescending(v => v.GateInAt)
+            .ThenBy(v => v.Container.ContainerNumber)
             .Select(v => new DailyGateInResponse(
                 v.Id, v.Container.ContainerNumber, v.Container.IsoCode, v.Container.Size, v.Container.Category,
                 v.LineOperator.Code, v.Block.Code, v.Bay, v.Row, v.Tier, v.Grade,
@@ -33,7 +36,9 @@ public sealed class GetDailyVisitsQueryHandler(IAppDbContext dbContext, TimeProv
         var gateOuts = await dbContext.ContainerVisits
             .AsNoTracking()
             .Where(v => v.GateOutAt >= start && v.GateOutAt < end)
-            .OrderBy(v => v.GateOutAt)
+            // Newest gate-out first, same tie-break as the gate-ins
+            .OrderByDescending(v => v.GateOutAt)
+            .ThenBy(v => v.Container.ContainerNumber)
             .Select(v => new DailyGateOutResponse(
                 v.Id, v.Container.ContainerNumber, v.Container.IsoCode, v.Container.Size, v.Container.Category,
                 v.LineOperator.Code,

@@ -37,10 +37,12 @@ public static class LineOperatorEndpoints
     private static async Task<IResult> GetAll(
         int? page,
         int? pageSize,
+        string? search,
         IQueryHandler<GetAllLineOperatorsQuery, Result<PagedResult<LineOperatorResponse>>> handler,
         CancellationToken cancellationToken)
     {
-        var query = new GetAllLineOperatorsQuery(page ?? 1, pageSize ?? 20);
+        // ?search= filters by part of the code or the name (searchable dropdowns)
+        var query = new GetAllLineOperatorsQuery(page ?? 1, pageSize ?? 20, search);
         var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
