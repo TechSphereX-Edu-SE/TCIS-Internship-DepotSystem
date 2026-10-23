@@ -28,6 +28,8 @@ import {
   releasedSummary,
   repairMarker,
   vietnamToday,
+  formatMoney,
+  payerText,
 } from './depot-models';
 
 describe('depot display helpers', () => {
@@ -249,5 +251,18 @@ describe('report and history helpers (feedback 7 + 8)', () => {
       'Chuyển sửa ngoài · Xưởng A',
     );
     expect(exitText({ exitPurpose: null, deliveryOrderNumber: null, repairFacility: null })).toBe('');
+  });
+});
+
+describe('repair cost helpers (feedback 4)', () => {
+  it('formats VND without decimals and other currencies with cents', () => {
+    expect(formatMoney(4_200_000, 'VND')).toBe('4.200.000 VND');
+    expect(formatMoney(1250.5, 'USD')).toBe('1.250,5 USD');
+    expect(formatMoney(0, 'VND')).toBe('0 VND');
+  });
+
+  it('adds the party name to the payer role when there is one', () => {
+    expect(payerText({ payer: 'Owner', payerName: 'Triton' })).toBe('Chủ sở hữu (Triton)');
+    expect(payerText({ payer: 'LineOperator', payerName: null })).toBe('Hãng khai thác');
   });
 });

@@ -2,8 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  EstimateDecisionRequest,
   ExternalRepair,
   ExternalRepairStatus,
+  LinePayerRequest,
   PagedResult,
   RecordedDamage,
   RepairAction,
@@ -13,6 +15,7 @@ import {
   RepairPhoto,
   ReportDamageRequest,
   RequestExternalRepairRequest,
+  UpdateEstimateRequest,
 } from './depot-models';
 
 // Inspection & repair cases (feedback 4): /api/repair-cases and /api/repair-photos
@@ -33,6 +36,8 @@ export class RepairApi {
     if (filter.reportedTo) params['reportedTo'] = filter.reportedTo;
     if (filter.external !== null && filter.external !== undefined) params['external'] = filter.external;
     if (filter.facility?.trim()) params['facility'] = filter.facility.trim();
+    if (filter.payer) params['payer'] = filter.payer;
+    if (filter.payerStatus) params['payerStatus'] = filter.payerStatus;
     return this.http.get<PagedResult<RepairCaseSummary>>(this.baseUrl, { params });
   }
 
@@ -74,6 +79,36 @@ export class RepairApi {
   // Only before the container leaves: 409 ExternalRepair.NotRequested otherwise
   cancelExternal(id: string, reason: string): Observable<void> {
     return this.http.post<void>(`/api/external-repairs/${id}/cancel`, { reason });
+  }
+
+  // ---------- repair costs (feedback 4) ----------
+
+  /*
+    New estimate version (draft) of a case; a later version copies the items of the previous one.
+    409 RepairEstimate.NotInspected / OpenVersion, RepairCase.Closed
+  */
+  createEstimate(caseId: string, currency: string, note: string | null, evidence: string | null): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`${this.baseUrl}/${caseId}/estimates`, { currency, note, evidence });
+  }
+
+  // Saves a draft (header + the whole item table); 409 RepairEstimate.NotDraft once submitted
+  updateEstimate(estimateId: string, request: UpdateEstimateRequest): Observable<void> {
+    return this.http.put<void>(`/api/repair-estimates/${estimateId}`, request);
+  }
+
+  // 400 RepairEstimate.NoLines for an empty draft
+  submitEstimate(estimateId: string): Observable<void> {
+    return this.http.post<void>(`/api/repair-estimates/${estimateId}/submit`, {});
+  }
+
+  // Answer of the approving party; approving the first version approves the repair
+  decideEstimate(estimateId: string, request: EstimateDecisionRequest): Observable<void> {
+    return this.http.post<void>(`/api/repair-estimates/${estimateId}/decision`, request);
+  }
+
+  // Who pays one item; allowed in every status (amounts do not change)
+  setLinePayer(estimateId: string, lineId: string, request: LinePayerRequest): Observable<void> {
+    return this.http.put<void>(`/api/repair-estimates/${estimateId}/lines/${lineId}/payer`, request);
   }
 
   /*

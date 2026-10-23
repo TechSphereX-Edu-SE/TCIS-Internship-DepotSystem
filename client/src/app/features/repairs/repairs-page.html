@@ -56,6 +56,24 @@
         <input id="facility" formControlName="facility" placeholder="Một phần tên xưởng" autocomplete="off" />
       </div>
       <div class="field">
+        <label for="payer">Bên chịu phí</label>
+        <select id="payer" formControlName="payer">
+          <option value="">Tất cả</option>
+          @for (p of payers; track p) {
+          <option [value]="p">{{ payerLabel[p] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="payerStatus">Phân bổ chi phí</label>
+        <select id="payerStatus" formControlName="payerStatus">
+          <option value="">Tất cả</option>
+          @for (s of payerStatuses; track s) {
+          <option [value]="s">{{ payerStatusLabel[s] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
         <label for="reportedFrom">Báo hư từ ngày</label>
         <input id="reportedFrom" type="date" formControlName="reportedFrom" />
       </div>
@@ -109,6 +127,12 @@
                 <span class="chip" [class]="statusChip[item.status]">{{ statusLabel[item.status] }}</span>
                 @if (item.externalStatus) {
                 <div class="muted small">{{ externalLabel[item.externalStatus] }} · {{ item.externalFacility }}</div>
+                }
+                @if (item.estimateVersion && item.estimateStatus) {
+                <div class="muted small">
+                  Dự toán v{{ item.estimateVersion }} · {{ estimateStatusLabel[item.estimateStatus] }}
+                  · {{ formatMoney(item.estimateTotal ?? 0, item.estimateCurrency ?? 'VND') }}
+                </div>
                 }
               </td>
               <td>
@@ -171,7 +195,7 @@
           <label for="actionNote">
             Ghi chú <span class="muted label-note">(bắt buộc khi nghiệm thu không đạt)</span>
           </label>
-          <textarea id="actionNote" rows="2" formControlName="note" maxlength="500" placeholder="VD: HMM duyệt qua email 21/10"></textarea>
+          <textarea id="actionNote" rows="2" formControlName="note" maxlength="500" placeholder="VD: Đã thay ván sàn, chờ sơn"></textarea>
           @if (noteMissing()) {
           <span class="field-error">Ghi lý do sửa lại.</span>
           }
@@ -184,6 +208,9 @@
           <button class="btn btn-secondary" type="button" [disabled]="acting()" (click)="act(action)">{{ actionLabel[action] }}</button>
           }
         </div>
+        @if (d.status === 'AwaitingEstimateApproval') {
+        <p class="muted small">Việc sửa được duyệt khi một phiên bản dự toán được duyệt (phần Chi phí sửa chữa bên dưới).</p>
+        }
         @if (actionError(); as error) {
         <div class="alert alert-red" role="alert"><strong>Không thực hiện được ({{ error.status }}):</strong> {{ error.message }}</div>
         }
@@ -193,6 +220,9 @@
         Hồ sơ đã đạt. Container hết bị chặn sửa chữa và được xuất bãi bình thường. Hư hỏng mới sẽ mở hồ sơ mới.
       </div>
       }
+
+      <!-- Repair costs (feedback 4): estimate versions, approval of the repair, who pays -->
+      <app-repair-estimate-panel [detail]="d" (changed)="estimateChanged()" />
 
       <!-- Outside repair (feedback 4): request here, the container leaves from the gate-out page -->
       @if (d.transfers.length > 0 || d.canRequestExternal) {

@@ -1,0 +1,290 @@
+<div class="block estimates">
+  <div class="estimates-head">
+    <h3>Chi phí sửa chữa <span class="muted">· {{ estimates().length }} phiên bản</span></h3>
+    @if (detail().canCreateEstimate) {
+    <div class="create" [formGroup]="createForm">
+      <label class="sr-only" for="estimateCurrency">Tiền tệ</label>
+      <select id="estimateCurrency" formControlName="currency">
+        @for (c of currencies; track c) {
+        <option [value]="c">{{ c }}</option>
+        }
+      </select>
+      <button class="btn btn-primary btn-small" type="button" [disabled]="busy()" (click)="create()">
+        {{ latest() ? 'Lập phiên bản mới (từ v' + latest()!.version + ')' : 'Lập dự toán' }}
+      </button>
+    </div>
+    }
+  </div>
+
+  @if (estimates().length === 0) {
+  <p class="muted small">
+    @if (detail().repairNeeded === true) {
+    Chưa có dự toán. Lập dự toán, gửi cho bên duyệt rồi ghi nhận quyết định: duyệt dự toán là duyệt sửa.
+    } @else {
+    Dự toán được lập sau khi giám định kết luận cần sửa.
+    }
+  </p>
+  }
+
+  @if (error(); as e) {
+  <div class="alert alert-red" role="alert"><strong>Không thực hiện được ({{ e.status }}):</strong> {{ e.message }}</div>
+  }
+
+  @for (estimate of estimates(); track estimate.id) {
+  <article class="version" [class.folded]="!isUnfolded(estimate)">
+    <header class="version-head">
+      <button class="link-button version-title" type="button" (click)="toggle(estimate)" [disabled]="estimate.id === latest()?.id"
+              [attr.aria-expanded]="isUnfolded(estimate)">
+        Phiên bản v{{ estimate.version }}
+      </button>
+      <span class="chip" [class]="statusChip[estimate.status]">{{ statusLabel[estimate.status] }}</span>
+      <span class="total">{{ formatMoney(estimate.total, estimate.currency) }}</span>
+    </header>
+
+    @if (isUnfolded(estimate)) {
+    <p class="muted small">
+      Lập {{ formatDateTime(estimate.createdAt) }}{{ estimate.createdBy ? ' · ' + estimate.createdBy : '' }}
+      @if (estimate.submittedAt) { · gửi duyệt {{ formatDateTime(estimate.submittedAt) }}{{ estimate.submittedBy ? ' · ' + estimate.submittedBy : '' }} }
+    </p>
+
+    @if (estimate.status === 'Draft' && isCaseOpen()) {
+    <!-- ================= Draft: editable table ================= -->
+    <form class="draft" [formGroup]="draftForm" (ngSubmit)="saveDraft(estimate)" novalidate>
+      <div class="draft-header">
+        <div class="field small-field">
+          <label for="draftCurrency">Tiền tệ</label>
+          <select id="draftCurrency" formControlName="currency">
+            @for (c of currencies; track c) {
+            <option [value]="c">{{ c }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="draftEvidence">Căn cứ <span class="muted label-note">(số EIR, biên bản giám định, ảnh)</span></label>
+          <input id="draftEvidence" formControlName="evidence" maxlength="1000" placeholder="VD: EIR-2026-0042, ảnh cửa sau" />
+        </div>
+      </div>
+
+      <!-- One card per item: the detail column is narrow, a wide table would not fit -->
+      <ol class="line-cards" formArrayName="lines">
+        @for (line of lineControls; track line; let i = $index) {
+        <li class="line-card" [formGroupName]="i">
+          <div class="line-card-head">
+            <strong>Hạng mục {{ i + 1 }}</strong>
+            <button class="link-button small" type="button" (click)="removeLine(i)" [attr.aria-label]="'Xoá hạng mục ' + (i + 1)">Xoá</button>
+          </div>
+          <div class="field wide">
+            <label [for]="'lineFinding' + i">Hư hỏng đã ghi nhận</label>
+            <select [id]="'lineFinding' + i" formControlName="findingId" (change)="findingPicked(i)">
+              <option value="">— Không gắn hư hỏng —</option>
+              @for (f of detail().findings; track f.id) {
+              <option [value]="f.id">{{ f.description }}</option>
+              }
+            </select>
+          </div>
+          <div class="field wide" [class.has-error]="lineInvalid(i, 'damageDescription')">
+            <label [for]="'lineDamage' + i">Mô tả hư hỏng</label>
+            <input [id]="'lineDamage' + i" formControlName="damageDescription" maxlength="500" placeholder="VD: Móp vách trái 30 cm" />
+          </div>
+          <div class="field wide" [class.has-error]="lineInvalid(i, 'repairMethod')">
+            <label [for]="'lineMethod' + i">Phương án sửa</label>
+            <input [id]="'lineMethod' + i" formControlName="repairMethod" maxlength="500" placeholder="VD: Nắn, sơn lại" />
+          </div>
+          <div class="field" [class.has-error]="lineInvalid(i, 'amount')">
+            <label [for]="'lineAmount' + i">Chi phí ({{ draftForm.controls.currency.value }})</label>
+            <input [id]="'lineAmount' + i" type="number" min="0" step="any" formControlName="amount" class="amount" />
+          </div>
+          <div class="field">
+            <label [for]="'linePayer' + i">Bên chịu phí</label>
+            <select [id]="'linePayer' + i" formControlName="payer">
+              @for (p of payers; track p) {
+              <option [value]="p">{{ payerLabel[p] }}</option>
+              }
+            </select>
+          </div>
+          <div class="field wide" [class.has-error]="lineInvalid(i, 'payerName')">
+            <label [for]="'linePayerName' + i">Tên bên chịu phí <span class="muted label-note">(bắt buộc khi "Bên khác")</span></label>
+            <input [id]="'linePayerName' + i" formControlName="payerName" maxlength="200" placeholder="VD: Công ty ABC" />
+          </div>
+        </li>
+        }
+      </ol>
+      <p class="draft-total">Tổng: <strong>{{ formatMoney(draftTotal(), draftForm.controls.currency.value) }}</strong></p>
+      @if (draftSubmitted() && draftForm.invalid) {
+      <span class="field-error">
+        Kiểm tra các ô được đánh dấu: mỗi hạng mục cần hư hỏng, phương án sửa, chi phí từ 0 trở lên; "Bên khác" cần ghi tên.
+      </span>
+      }
+
+      <div class="field">
+        <label for="draftNote">Ghi chú</label>
+        <textarea id="draftNote" rows="2" formControlName="note" maxlength="1000"></textarea>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-secondary" type="button" (click)="addLine()" [disabled]="lineControls.length >= maxLines">+ Thêm hạng mục</button>
+        <button class="btn btn-secondary" type="submit" [disabled]="busy()">Lưu nháp</button>
+        <button class="btn btn-primary" type="button" [disabled]="busy()" (click)="submitDraft(estimate)">Gửi duyệt</button>
+      </div>
+    </form>
+    } @else {
+    <!-- ================= Locked version: items, payers, decision ================= -->
+    @if (estimate.evidence) {
+    <p class="small"><span class="muted">Căn cứ:</span> {{ estimate.evidence }}</p>
+    }
+    <div class="table-wrap">
+      <table class="table lines">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Hư hỏng</th>
+            <th>Phương án sửa</th>
+            <th class="num">Chi phí</th>
+            <th>Bên chịu phí</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (line of estimate.lines; track line.id) {
+          <tr>
+            <td>{{ line.position }}</td>
+            <td>
+              {{ line.damageDescription }}
+              @if (line.findingId && findingText(line.findingId) !== line.damageDescription) {
+              <div class="muted small">Gắn với: {{ findingText(line.findingId) }}</div>
+              }
+            </td>
+            <td>{{ line.repairMethod }}</td>
+            <td class="num">{{ formatMoney(line.amount, estimate.currency) }}</td>
+            <td>
+              <div>{{ payerText(line) }}</div>
+              <span class="chip" [class]="payerStatusChip[line.payerStatus]">{{ payerStatusLabel[line.payerStatus] }}</span>
+              @if (line.payerNote) {
+              <div class="muted small">{{ line.payerNote }}</div>
+              }
+              @if (editingLineId() !== line.id) {
+              <div>
+                <button class="link-button small" type="button" (click)="editPayer(line)">Đổi bên chịu phí</button>
+              </div>
+              }
+            </td>
+          </tr>
+          @if (editingLineId() === line.id) {
+          <tr class="detail-row">
+            <td colspan="5">
+              <form class="payer-form" [formGroup]="payerForm" (ngSubmit)="savePayer(estimate, line)" novalidate>
+                <div class="field">
+                  <label [for]="'payer' + line.id">Bên chịu phí</label>
+                  <select [id]="'payer' + line.id" formControlName="payer">
+                    @for (p of payers; track p) {
+                    <option [value]="p">{{ payerLabel[p] }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="field" [class.has-error]="payerInvalid('payerName')">
+                  <label [for]="'payerName' + line.id">Tên bên chịu phí</label>
+                  <input [id]="'payerName' + line.id" formControlName="payerName" maxlength="200" />
+                  @if (payerInvalid('payerName')) {
+                  <span class="field-error">Ghi tên khi chọn "Bên khác".</span>
+                  }
+                </div>
+                <div class="field">
+                  <label [for]="'payerStatus' + line.id">Tình trạng phân bổ</label>
+                  <select [id]="'payerStatus' + line.id" formControlName="status">
+                    @for (s of payerStatuses; track s) {
+                    <option [value]="s">{{ payerStatusLabel[s] }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="field wide" [class.has-error]="payerInvalid('note')">
+                  <label [for]="'payerNote' + line.id">Ghi chú <span class="muted label-note">(bắt buộc khi tranh chấp)</span></label>
+                  <input [id]="'payerNote' + line.id" formControlName="note" maxlength="500" placeholder="VD: Hãng cho rằng hư từ trước khi vào bãi" />
+                  @if (payerInvalid('note')) {
+                  <span class="field-error">Ghi lý do tranh chấp.</span>
+                  }
+                </div>
+                <div class="actions">
+                  <button class="btn btn-primary btn-small" type="submit" [disabled]="busy()">Lưu</button>
+                  <button class="btn btn-secondary btn-small" type="button" (click)="cancelPayer()">Huỷ</button>
+                </div>
+              </form>
+            </td>
+          </tr>
+          }
+          }
+          <tr class="total">
+            <td colspan="3">Tổng</td>
+            <td class="num">{{ formatMoney(estimate.total, estimate.currency) }}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    @if (estimate.payerTotals.length > 1) {
+    <ul class="payer-totals">
+      @for (p of estimate.payerTotals; track $index) {
+      <li><span>{{ payerText(p) }}</span> <strong>{{ formatMoney(p.amount, estimate.currency) }}</strong></li>
+      }
+    </ul>
+    }
+
+    @if (estimate.note) {
+    <p class="small"><span class="muted">Ghi chú:</span> {{ estimate.note }}</p>
+    }
+
+    @if (estimate.decidedAt) {
+    <p class="decision small">
+      <strong>{{ statusLabel[estimate.status] }}</strong>
+      @if (estimate.approverParty) { bởi {{ estimate.approverParty }}{{ estimate.approverName ? ' (' + estimate.approverName + ')' : '' }} }
+      @if (estimate.approvalReference) { · <span class="mono">{{ estimate.approvalReference }}</span> }
+      · ghi nhận {{ formatDateTime(estimate.decidedAt) }}{{ estimate.decisionRecordedBy ? ' · ' + estimate.decisionRecordedBy : '' }}
+      @if (estimate.decisionNote) { <br /><span class="history-note">“{{ estimate.decisionNote }}”</span> }
+    </p>
+    }
+
+    @if (estimate.status === 'Submitted' && isCaseOpen()) {
+    <!-- The approving party answers outside the system (e-mail, signed paper); this records the answer -->
+    <form class="decision-form" [formGroup]="decisionForm" (ngSubmit)="decide(estimate)" novalidate>
+      <fieldset class="decision-choice">
+        <legend>Quyết định của bên duyệt</legend>
+        @for (d of decisions; track d) {
+        <label class="radio">
+          <input type="radio" formControlName="decision" [value]="d" />
+          {{ decisionLabel[d] }}
+        </label>
+        }
+      </fieldset>
+      <div class="decision-fields">
+        <div class="field" [class.has-error]="decisionInvalid('approverParty')">
+          <label for="approverParty">Bên duyệt @if (decisionNeedsParty()) {<span class="muted label-note">(bắt buộc)</span>}</label>
+          <input id="approverParty" formControlName="approverParty" maxlength="200" placeholder="VD: HMM" />
+          @if (decisionInvalid('approverParty')) {
+          <span class="field-error">Ghi bên đã duyệt.</span>
+          }
+        </div>
+        <div class="field">
+          <label for="approverName">Người duyệt</label>
+          <input id="approverName" formControlName="approverName" maxlength="200" />
+        </div>
+        <div class="field">
+          <label for="approvalReference">Số email / văn bản</label>
+          <input id="approvalReference" class="mono" formControlName="approvalReference" maxlength="200" placeholder="VD: HMM-APR-1023" />
+        </div>
+      </div>
+      <div class="field" [class.has-error]="decisionInvalid('note')">
+        <label for="decisionNote">Ghi chú @if (!decisionNeedsParty()) {<span class="muted label-note">(bắt buộc: lý do / nội dung cần sửa)</span>}</label>
+        <textarea id="decisionNote" rows="2" formControlName="note" maxlength="1000"></textarea>
+        @if (decisionInvalid('note')) {
+        <span class="field-error">Ghi lý do từ chối hoặc nội dung cần chỉnh sửa.</span>
+        }
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" [disabled]="busy()">Ghi nhận quyết định</button>
+      </div>
+    </form>
+    }
+    }
+    }
+  </article>
+  }
+</div>

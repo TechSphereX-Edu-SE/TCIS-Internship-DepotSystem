@@ -973,7 +973,14 @@ export type RepairEventKind =
   | 'ExternalRequested'
   | 'ExternalCancelled'
   | 'SentForExternalRepair'
-  | 'ReturnedFromExternalRepair';
+  | 'ReturnedFromExternalRepair'
+  // Repair costs (feedback 4); EstimateApproved is the step that approves the repair
+  | 'EstimateCreated'
+  | 'EstimateSubmitted'
+  | 'EstimateApproved'
+  | 'EstimateRejected'
+  | 'EstimateChangesRequested'
+  | 'PayerChanged';
 
 export const REPAIR_STATUS_LABEL: Record<RepairCaseStatus, string> = {
   AwaitingInspection: 'Chờ giám định',
@@ -1020,6 +1027,12 @@ export const REPAIR_EVENT_LABEL: Record<RepairEventKind, string> = {
   ExternalCancelled: 'Huỷ yêu cầu sửa ngoài',
   SentForExternalRepair: 'Xuất bãi đi sửa ngoài',
   ReturnedFromExternalRepair: 'Về bãi sau sửa ngoài',
+  EstimateCreated: 'Lập dự toán',
+  EstimateSubmitted: 'Gửi duyệt dự toán',
+  EstimateApproved: 'Dự toán được duyệt',
+  EstimateRejected: 'Dự toán bị từ chối',
+  EstimateChangesRequested: 'Yêu cầu chỉnh sửa dự toán',
+  PayerChanged: 'Cập nhật bên chịu phí',
 };
 
 export const FINDING_SOURCE_LABEL: Record<RepairFindingSource, string> = {
@@ -1053,6 +1066,11 @@ export interface RepairCaseSummary {
   // The outside repair in progress (Requested or GatedOut), if any
   externalStatus: ExternalRepairStatus | null;
   externalFacility: string | null;
+  // Latest estimate version (feedback 4), null when the case has none
+  estimateVersion: number | null;
+  estimateStatus: RepairEstimateStatus | null;
+  estimateTotal: number | null;
+  estimateCurrency: string | null;
 }
 
 export interface RepairFinding {
@@ -1112,6 +1130,9 @@ export interface RepairCaseDetail {
   // True when an outside repair can be requested now (case approved or in repair, in the yard, none active)
   canRequestExternal: boolean;
   transfers: ExternalRepair[];
+  // Every estimate version, newest first; canCreateEstimate = a new version can be made now
+  estimates: RepairEstimate[];
+  canCreateEstimate: boolean;
 }
 
 // Filters of GET /api/repair-cases; open: true = not Passed yet, false = Passed only
@@ -1126,6 +1147,9 @@ export interface RepairCaseFilter {
   // true = only cases with an outside repair in progress; facility = part of the facility name
   external?: boolean | null;
   facility?: string | null;
+  // Latest estimate version has an item paid by this party / in this allocation state
+  payer?: CostPayer | null;
+  payerStatus?: CostPayerStatus | null;
 }
 
 // POST /api/repair-cases/report (source GateIn is refused: gate-in reports with the gate-in itself)
@@ -1152,6 +1176,150 @@ export function photoFileError(file: Pick<File, 'type' | 'size' | 'name'>): stri
   if (file.size > PHOTO_MAX_BYTES) return `${file.name}: ảnh tối đa 5 MB.`;
   if (file.size === 0) return `${file.name}: file rỗng.`;
   return null;
+}
+
+// ---------- repair costs (feedback 4: chi phí sửa chữa) ----------
+
+/*
+  One estimate version per proposal: Draft (items editable) -> Submitted (locked, waiting for the approving
+  party) -> Approved / Rejected / ChangesRequested. The first approved version approves the repair
+  (Chờ duyệt phương án -> Đã duyệt sửa). A new version starts as a copy of the latest one.
+*/
+export type RepairEstimateStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected' | 'ChangesRequested';
+export type RepairEstimateDecision = 'Approve' | 'Reject' | 'RequestChanges';
+export type CostPayer = 'Undetermined' | 'LineOperator' | 'Owner' | 'Customer' | 'Depot' | 'Other';
+// Expected = proposed; Agreed = the party accepted; Disputed = the party contests it (reason required)
+export type CostPayerStatus = 'Expected' | 'Agreed' | 'Disputed';
+
+export const ESTIMATE_STATUS_LABEL: Record<RepairEstimateStatus, string> = {
+  Draft: 'Nháp',
+  Submitted: 'Chờ duyệt',
+  Approved: 'Đã duyệt',
+  Rejected: 'Bị từ chối',
+  ChangesRequested: 'Yêu cầu chỉnh sửa',
+};
+
+export const ESTIMATE_DECISION_LABEL: Record<RepairEstimateDecision, string> = {
+  Approve: 'Duyệt',
+  Reject: 'Từ chối',
+  RequestChanges: 'Yêu cầu chỉnh sửa',
+};
+
+export const COST_PAYER_LABEL: Record<CostPayer, string> = {
+  Undetermined: 'Chưa xác định',
+  LineOperator: 'Hãng khai thác',
+  Owner: 'Chủ sở hữu',
+  Customer: 'Khách hàng',
+  Depot: 'Depot',
+  Other: 'Bên khác',
+};
+
+export const COST_PAYER_STATUS_LABEL: Record<CostPayerStatus, string> = {
+  Expected: 'Dự kiến',
+  Agreed: 'Đã thống nhất',
+  Disputed: 'Tranh chấp',
+};
+
+export const ESTIMATE_DECISIONS: RepairEstimateDecision[] = ['Approve', 'RequestChanges', 'Reject'];
+export const COST_PAYERS: CostPayer[] = ['LineOperator', 'Owner', 'Customer', 'Depot', 'Other', 'Undetermined'];
+export const COST_PAYER_STATUSES: CostPayerStatus[] = ['Expected', 'Agreed', 'Disputed'];
+// Same list as the API validator (RepairEstimateRules.Currencies)
+export const ESTIMATE_CURRENCIES: readonly string[] = ['VND', 'USD'];
+export const ESTIMATE_MAX_LINES = 50;
+export const ESTIMATE_MAX_AMOUNT = 999_999_999_999;
+
+export interface RepairEstimateLine {
+  id: string;
+  position: number;
+  // The reported damage this item costs, when there is one
+  findingId: string | null;
+  damageDescription: string;
+  repairMethod: string;
+  amount: number;
+  payer: CostPayer;
+  payerName: string | null;
+  payerStatus: CostPayerStatus;
+  // Dispute reason or allocation result
+  payerNote: string | null;
+}
+
+// Sum of the items of one version per paying party
+export interface PayerTotal {
+  payer: CostPayer;
+  payerName: string | null;
+  amount: number;
+}
+
+export interface RepairEstimate {
+  id: string;
+  version: number;
+  status: RepairEstimateStatus;
+  currency: string;
+  total: number;
+  note: string | null;
+  evidence: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  submittedAt: string | null;
+  submittedBy: string | null;
+  decidedAt: string | null;
+  decisionRecordedBy: string | null;
+  // Who decided (party and person) and the e-mail / document it was given in
+  approverParty: string | null;
+  approverName: string | null;
+  approvalReference: string | null;
+  decisionNote: string | null;
+  lines: RepairEstimateLine[];
+  payerTotals: PayerTotal[];
+}
+
+// One item as the draft table sends it (PUT /api/repair-estimates/{id} replaces the whole table)
+export interface RepairEstimateLineInput {
+  findingId: string | null;
+  damageDescription: string;
+  repairMethod: string;
+  amount: number;
+  payer: CostPayer;
+  payerName: string | null;
+}
+
+export interface UpdateEstimateRequest {
+  currency: string;
+  note: string | null;
+  evidence: string | null;
+  lines: RepairEstimateLineInput[];
+}
+
+// Approve needs approverParty; Reject / RequestChanges need the note (reason)
+export interface EstimateDecisionRequest {
+  decision: RepairEstimateDecision;
+  approverParty: string | null;
+  approverName: string | null;
+  approvalReference: string | null;
+  note: string | null;
+}
+
+// Disputed needs the note; Other needs payerName
+export interface LinePayerRequest {
+  payer: CostPayer;
+  payerName: string | null;
+  status: CostPayerStatus;
+  note: string | null;
+}
+
+/*
+  "1.500.000 VND" / "1.250,50 USD": Vietnamese grouping; VND has no decimals, other currencies keep cents.
+*/
+export function formatMoney(amount: number, currency: string): string {
+  const digits = currency === 'VND' ? 0 : 2;
+  const text = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: digits }).format(amount);
+  return `${text} ${currency}`;
+}
+
+// "Chủ sở hữu (Triton)" when the role is completed by a name
+export function payerText(item: Pick<RepairEstimateLine, 'payer' | 'payerName'>): string {
+  const role = COST_PAYER_LABEL[item.payer];
+  return item.payerName ? `${role} (${item.payerName})` : role;
 }
 
 // ---------- outside repair (feedback 4: sửa ngoài) ----------

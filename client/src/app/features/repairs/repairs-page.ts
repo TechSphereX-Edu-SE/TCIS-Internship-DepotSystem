@@ -7,6 +7,13 @@ import { ApiError, toApiError } from '../../core/api/api-error';
 import {
   CATEGORY_LABEL,
   CONDITION_LABEL,
+  COST_PAYERS,
+  COST_PAYER_LABEL,
+  COST_PAYER_STATUSES,
+  COST_PAYER_STATUS_LABEL,
+  CostPayer,
+  CostPayerStatus,
+  ESTIMATE_STATUS_LABEL,
   EXTERNAL_REPAIR_STATUS_LABEL,
   ExternalRepair,
   ExternalRepairStatus,
@@ -24,6 +31,7 @@ import {
   RepairCaseSummary,
   SIZE_LABEL,
   formatDateTime,
+  formatMoney,
   formatPosition,
   photoFileError,
 } from '../../core/depot/depot-models';
@@ -31,6 +39,7 @@ import { MasterDataApi } from '../../core/depot/master-data-api';
 import { RepairApi } from '../../core/depot/repair-api';
 import { Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
+import { RepairEstimatePanel } from './repair-estimate-panel';
 
 const PAGE_SIZE = 20;
 
@@ -55,10 +64,12 @@ const EXTERNAL_CHIP: Record<ExternalRepairStatus, string> = {
 // Status dropdown: "open" (every status but Đạt) is the default, the work still to do
 type StatusChoice = 'open' | 'all' | RepairCaseStatus;
 
-// The positive step of a pair is the primary button; the other choices are secondary
+/*
+  The positive step of a pair is the primary button; the other choices are secondary.
+  ApproveRepair is not offered: the repair is approved by approving an estimate (RepairEstimatePanel).
+*/
 const PRIMARY_ACTIONS: readonly RepairAction[] = [
   'InspectNeedsRepair',
-  'ApproveRepair',
   'StartRepair',
   'CompleteRepair',
   'AcceptPassed',
@@ -74,10 +85,12 @@ const PRIMARY_ACTIONS: readonly RepairAction[] = [
   Feedback 4 (sửa ngoài): an approved case can be sent to an outside facility; the container then leaves
   from the gate-out page without an order and the case stays open until it comes back and passes.
   Passed (Đạt) only lifts the repair block; the container stays where it is and leaves through gate-out.
+  Feedback 4 (chi phí): estimate versions and who pays live in RepairEstimatePanel; "Lọc thêm" can find
+  cases by payer or by allocation state (e.g. Tranh chấp).
 */
 @Component({
   selector: 'app-repairs-page',
-  imports: [ReactiveFormsModule, RouterLink, Pager],
+  imports: [ReactiveFormsModule, RouterLink, Pager, RepairEstimatePanel],
   templateUrl: './repairs-page.html',
   styleUrl: './repairs-page.css',
 })
@@ -101,6 +114,12 @@ export class RepairsPage {
   protected readonly formatDateTime = formatDateTime;
   protected readonly externalLabel = EXTERNAL_REPAIR_STATUS_LABEL;
   protected readonly externalChip = EXTERNAL_CHIP;
+  protected readonly estimateStatusLabel = ESTIMATE_STATUS_LABEL;
+  protected readonly formatMoney = formatMoney;
+  protected readonly payers = COST_PAYERS;
+  protected readonly payerLabel = COST_PAYER_LABEL;
+  protected readonly payerStatuses = COST_PAYER_STATUSES;
+  protected readonly payerStatusLabel = COST_PAYER_STATUS_LABEL;
 
   // Main filters, plus the "Lọc thêm" dates (Vietnam calendar days, both included)
   protected readonly filters = this.fb.group({
@@ -112,6 +131,9 @@ export class RepairsPage {
     // '' = all, 'yes' = only cases with an outside repair in progress
     external: [''],
     facility: [''],
+    // Latest estimate version has an item paid by / in this allocation state ('' = any)
+    payer: ['' as CostPayer | ''],
+    payerStatus: ['' as CostPayerStatus | ''],
   });
   protected readonly moreFilters = signal(false);
 
@@ -401,6 +423,12 @@ export class RepairsPage {
     this.reload(id);
   }
 
+  // The estimate panel changed something: show the new case state and list row
+  protected estimateChanged(): void {
+    const id = this.selectedId();
+    if (id) this.reload(id);
+  }
+
   // Reloads the case and the list row (its status, counts and latest finding changed)
   private reload(id: string): void {
     this.detailError.set(null);
@@ -459,6 +487,8 @@ export class RepairsPage {
       reportedTo: v.reportedTo || null,
       external: v.external === 'yes' ? true : null,
       facility: v.facility || null,
+      payer: v.payer || null,
+      payerStatus: v.payerStatus || null,
     };
   }
 
