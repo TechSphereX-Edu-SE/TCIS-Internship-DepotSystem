@@ -105,7 +105,8 @@ export class DeliveryOrdersPage {
 
   constructor() {
     this.loadPage(1);
-    this.masterData.lineOperators().subscribe({
+    // Only partners with the line operator role issue orders / appear in the throughput filter
+    this.masterData.lineOperators('Operator').subscribe({
       next: (operators) => this.operators.set(operators),
       error: (err: unknown) => this.listError.set(toApiError(err).message),
     });

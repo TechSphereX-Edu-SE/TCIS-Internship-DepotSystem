@@ -33,6 +33,7 @@
               <th>ISO · loại</th>
               <th class="num">Vỏ / tối đa (kg)</th>
               <th>Chủ sở hữu</th>
+              <th>Hãng khai thác hôm nay</th>
               <th>Tình trạng</th>
               <th><span class="visually-hidden">Thao tác</span></th>
             </tr>
@@ -45,7 +46,19 @@
                 <span class="mono">{{ item.isoCode }}</span> · {{ sizeLabel[item.size] }} {{ categoryLabel[item.category] }}
               </td>
               <td class="num">{{ item.tareWeightKg }} / {{ item.maxGrossWeightKg }}</td>
-              <td>{{ item.ownerName }}</td>
+              <td>
+                {{ ownerText(item) }}
+                @if (!item.ownerId) {
+                <span class="chip chip-amber" title="Chủ sở hữu nhập tay trước đây, chưa chọn đối tác">chưa đối chiếu</span>
+                }
+              </td>
+              <td>
+                @if (item.currentOperatorCode) {
+                <span class="mono">{{ item.currentOperatorCode }}</span>
+                } @else {
+                <span class="muted">Chưa có</span>
+                }
+              </td>
               <td>
                 <span class="chip" [class.chip-green]="item.condition === 'Normal'" [class.chip-red]="item.condition === 'Damaged'">
                   {{ conditionLabel[item.condition] }}
@@ -54,6 +67,7 @@
               <td>
                 <div class="row-actions">
                   <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Sửa ' + item.containerNumber" (click)="edit(item)">Sửa</button>
+                  <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Quan hệ khai thác ' + item.containerNumber" (click)="openRelations(item)">Khai thác</button>
                   <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Xoá ' + item.containerNumber" (click)="remove(item)">Xoá</button>
                 </div>
               </td>
@@ -63,7 +77,9 @@
         </table>
       </div>
       <app-pager [page]="page()" [totalPages]="totalPages()" label="Phân trang danh sách container" (pageChange)="load($event)" />
-      <p class="muted small">Chỉ xoá được container chưa từng vào bãi. Tình trạng (hư hỏng / bình thường) cập nhật ở màn Xuất bãi.</p>
+      <p class="muted small">
+        Chỉ xoá được container chưa từng vào bãi và chưa có quan hệ khai thác. Tình trạng (hư hỏng / bình thường) cập nhật ở màn Xuất bãi.
+      </p>
       }
     </section>
 
@@ -139,11 +155,24 @@
           <span class="field-error">Không được sau hôm nay.</span>
           }
         </div>
-        <div class="field" [class.has-error]="invalid('ownerName')">
-          <label for="ownerName">Chủ sở hữu</label>
-          <input id="ownerName" formControlName="ownerName" placeholder="VD: MSC" maxlength="100" />
-          @if (invalid('ownerName')) {
-          <span class="field-error">Nhập chủ sở hữu (tối đa 100 ký tự).</span>
+        <!-- Feedback 2: an owner partner from the catalog, not free text -->
+        <div class="field" [class.has-error]="invalid('owner')">
+          <label for="owner">Chủ sở hữu</label>
+          <app-search-select
+            formControlName="owner"
+            inputId="owner"
+            placeholder="Gõ mã hoặc tên đối tác"
+            [load]="loadOwners"
+            [itemKey]="partnerKey"
+            [itemLabel]="partnerLabel"
+            [itemDetail]="partnerDetail"
+            [invalid]="invalid('owner')"
+          />
+          @if (editing() && !editing()!.ownerId) {
+          <span class="muted small">Trước đây nhập tay: “{{ editing()!.ownerName }}”. Chọn đối tác tương ứng để đối chiếu.</span>
+          }
+          @if (invalid('owner')) {
+          <span class="field-error">Chọn chủ sở hữu trong danh mục Đối tác.</span>
           }
         </div>
       </div>
@@ -167,4 +196,144 @@
       </div>
     </form>
   </div>
+  <!-- ================= Operating relations of one container ================= -->
+  @if (relationsOf(); as container) {
+  <section class="card relations" aria-labelledby="relations-title">
+    <div class="list-head">
+      <h2 id="relations-title">Quan hệ khai thác · <span class="mono">{{ container.containerNumber }}</span></h2>
+      <button class="btn btn-secondary btn-small" type="button" (click)="closeRelations()">Đóng</button>
+    </div>
+    <p class="muted small">
+      Chủ sở hữu: {{ ownerText(container) }}. Hãng khai thác là hãng đang thuê/khai thác container trong giai đoạn ghi nhận
+      (có thể khác chủ sở hữu). Nhập bãi chỉ dùng quan hệ <strong>đã xác nhận</strong> còn hiệu lực vào ngày nhập.
+      Container đang ở bãi giữ nguyên hãng của lượt vào.
+    </p>
+
+    @if (assignmentsError(); as message) {
+    <div class="alert alert-red" role="alert">{{ message }}</div>
+    }
+
+    @if (assignments().length === 0) {
+    <p class="muted">Chưa có quan hệ khai thác nào. Container này chưa nhập bãi được cho tới khi có quan hệ đã xác nhận.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Hãng khai thác</th>
+            <th>Giai đoạn</th>
+            <th>Trạng thái</th>
+            <th>Căn cứ</th>
+            <th class="num">Lượt vào</th>
+            <th><span class="visually-hidden">Thao tác</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (a of assignments(); track a.id) {
+          <tr [class.archived]="a.status === 'Cancelled'">
+            <td><span class="mono">{{ a.operatorCode }}</span> <span class="muted">· {{ a.operatorName }}</span></td>
+            <td>{{ periodText(a) }}</td>
+            <td>
+              <span
+                class="chip"
+                [class.chip-green]="a.status === 'Confirmed'"
+                [class.chip-amber]="a.status === 'Pending'"
+                [class.chip-grey]="a.status === 'Cancelled'"
+              >{{ statusLabel[a.status] }}</span>
+              @if (covers(a, today)) {
+              <span class="chip chip-indigo">Hôm nay</span>
+              }
+              @if (a.cancelReason) {
+              <div class="muted small">Lý do huỷ: {{ a.cancelReason }}</div>
+              }
+            </td>
+            <td>
+              {{ a.reference ?? '—' }}
+              @if (a.note) {
+              <div class="muted small">{{ a.note }}</div>
+              }
+            </td>
+            <td class="num">{{ a.visitCount }}</td>
+            <td>
+              <div class="row-actions">
+                @if (a.status === 'Pending') {
+                <button class="btn btn-secondary btn-small" type="button" (click)="confirmAssignment(a)">Xác nhận</button>
+                }
+                @if (a.status === 'Confirmed') {
+                <button class="btn btn-secondary btn-small" type="button" (click)="endAssignment(a)">Kết thúc</button>
+                }
+                @if (a.status !== 'Cancelled' && a.visitCount === 0) {
+                <button class="btn btn-secondary btn-small" type="button" (click)="cancelAssignment(a)">Huỷ</button>
+                }
+              </div>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+
+    <form class="assignment-form" [formGroup]="assignmentForm" (ngSubmit)="addAssignment()" novalidate aria-label="Thêm quan hệ khai thác">
+      <h3>Thêm quan hệ khai thác</h3>
+      <div class="grid-2">
+        <div class="field" [class.has-error]="assignmentForm.controls.operator.invalid && assignmentSubmitted()">
+          <label for="assignmentOperator">Hãng khai thác</label>
+          <app-search-select
+            formControlName="operator"
+            inputId="assignmentOperator"
+            placeholder="Gõ mã hoặc tên hãng"
+            [load]="loadOperators"
+            [itemKey]="partnerKey"
+            [itemLabel]="partnerLabel"
+            [itemDetail]="partnerDetail"
+            [invalid]="assignmentForm.controls.operator.invalid && assignmentSubmitted()"
+          />
+          @if (assignmentForm.controls.operator.invalid && assignmentSubmitted()) {
+          <span class="field-error">Chọn hãng khai thác trong danh mục Đối tác.</span>
+          }
+        </div>
+        <div class="field">
+          <label for="assignmentReference">Số hợp đồng / chỉ thị <span class="muted label-note">(căn cứ)</span></label>
+          <input id="assignmentReference" formControlName="reference" placeholder="VD: HD-2026/015" maxlength="50" />
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="assignmentFrom">Từ ngày</label>
+          <input id="assignmentFrom" type="date" formControlName="validFrom" />
+        </div>
+        <div class="field" [class.has-error]="periodError()">
+          <label for="assignmentTo">Đến ngày <span class="muted label-note">(để trống = không thời hạn)</span></label>
+          <input id="assignmentTo" type="date" formControlName="validTo" />
+          @if (periodError()) {
+          <span class="field-error">Ngày kết thúc không được trước ngày bắt đầu.</span>
+          }
+        </div>
+      </div>
+      <div class="field">
+        <label for="assignmentNote">Ghi chú</label>
+        <input id="assignmentNote" formControlName="note" maxlength="500" />
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" formControlName="confirm" /> Đã đối chiếu với hợp đồng / chỉ thị (xác nhận ngay)
+      </label>
+
+      @if (assignmentApiError(); as error) {
+      <div class="alert alert-red" role="alert">
+        <strong>Không lưu được ({{ error.status }}):</strong> {{ error.message }}
+        @if (error.detail && error.detail !== error.message) {
+        <div class="detail">{{ error.detail }}</div>
+        }
+      </div>
+      }
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" [disabled]="assignmentSaving()">
+          {{ assignmentSaving() ? 'Đang lưu…' : 'Thêm quan hệ' }}
+        </button>
+      </div>
+    </form>
+  </section>
+  }
 </div>

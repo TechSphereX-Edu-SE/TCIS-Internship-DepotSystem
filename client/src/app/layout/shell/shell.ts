@@ -55,7 +55,7 @@ export class Shell {
       title: 'Danh mục',
       items: [
         { label: 'Container', path: '/catalog/containers' },
-        { label: 'Hãng khai thác', path: '/catalog/line-operators' },
+        { label: 'Đối tác', path: '/catalog/line-operators' },
         { label: 'Khách hàng', path: '/catalog/customers' },
         { label: 'Block', path: '/catalog/blocks' },
       ],

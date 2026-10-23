@@ -55,7 +55,7 @@ export const routes: Routes = [
       },
       {
         path: 'catalog/line-operators',
-        title: 'Hãng khai thác · Depot',
+        title: 'Đối tác · Depot',
         loadComponent: () => import('./features/catalog/line-operators-page').then((m) => m.LineOperatorsPage),
       },
       {

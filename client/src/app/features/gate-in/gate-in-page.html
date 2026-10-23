@@ -27,6 +27,7 @@
           [itemLabel]="containerLabel"
           [itemDetail]="containerDetail"
           [invalid]="!!containerError()"
+          [resetKey]="operatorFilterId()"
         />
 
         @if (lookup().kind === 'checking') {
@@ -40,10 +41,18 @@
           <span class="chip chip-green">Chưa ở trong bãi</span>
           <span class="muted">
             {{ state.container.containerNumber }} · {{ state.container.isoCode }} · {{ sizeLabel[state.container.size] }}
-            · {{ categoryLabel[state.container.category] }} · Chủ sở hữu {{ state.container.ownerName }}
+            · {{ categoryLabel[state.container.category] }} · Chủ sở hữu {{ ownerText(state.container) }}
             · {{ conditionLabel[state.container.condition] }}
           </span>
         </div>
+        <!-- Feedback 2: the visit's line operator comes from the confirmed operating assignment, read-only -->
+        <div class="lookup">
+          <span class="chip chip-indigo">Hãng khai thác: {{ state.container.currentOperatorCode }}</span>
+          <span class="muted">theo quan hệ khai thác đã xác nhận cho hôm nay</span>
+        </div>
+        }
+        @if (lookup().kind === 'noOperator') {
+        <span class="muted hint"><a routerLink="/catalog/containers">Ghi nhận quan hệ khai thác ở Danh mục · Container</a></span>
         }
         <span class="muted hint">
           Không thấy container? Hồ sơ phải có trước khi nhập bãi:
@@ -52,21 +61,19 @@
       </div>
 
       <div class="grid-2">
-        <div class="field" [class.has-error]="invalid('lineOperator')">
-          <label for="lineOperator">Hãng khai thác</label>
+        <!-- Optional filter: only containers this line operator operates today -->
+        <div class="field">
+          <label for="operatorFilter">Lọc theo hãng khai thác <span class="muted">(không bắt buộc)</span></label>
           <app-search-select
-            formControlName="lineOperator"
-            inputId="lineOperator"
+            formControlName="operatorFilter"
+            inputId="operatorFilter"
             placeholder="Gõ mã hoặc tên hãng"
             [load]="loadOperators"
             [itemKey]="operatorKey"
             [itemLabel]="operatorLabel"
             [itemDetail]="operatorDetail"
-            [invalid]="invalid('lineOperator')"
           />
-          @if (invalid('lineOperator')) {
-          <span class="field-error">Chọn hãng khai thác trong danh sách.</span>
-          }
+          <span class="muted hint">Đổi hãng sẽ bỏ container đang chọn.</span>
         </div>
 
         <!-- Feedback 3: only blocks whose list of types contains the container's type -->

@@ -15,10 +15,18 @@ export interface PagedResult<T> {
   hasPreviousPage: boolean;
 }
 
+// Partner (Đối tác): one catalog for container owners and line operators; the API path stays /api/line-operators
+export type PartnerRole = 'Owner' | 'Operator';
+
 export interface LineOperator {
   id: string;
   code: string;
   name: string;
+  // Optional tax code (MST)
+  taxCode: string | null;
+  // Can own containers / can operate containers (assignments, visits, delivery orders)
+  isOwner: boolean;
+  isOperator: boolean;
   createdAt: string;
 }
 
@@ -48,10 +56,76 @@ export interface Container {
   maxGrossWeightKg: number;
   tareWeightKg: number;
   manufactureDate: string | null;
+  // Owner text as first recorded (before partners existed), kept so old data can be reconciled
   ownerName: string;
   condition: ContainerCondition;
   conditionNote: string | null;
   createdAt: string;
+  // Owner partner; null until someone picks it in the catalog (shown as "chưa đối chiếu")
+  ownerId: string | null;
+  ownerCode: string | null;
+  ownerPartnerName: string | null;
+  // Line operator of the confirmed operating assignment covering today; null = gate-in is refused
+  currentOperatorId: string | null;
+  currentOperatorCode: string | null;
+}
+
+// ---------- operating assignments (feedback 2: quan hệ khai thác) ----------
+
+export type OperatingAssignmentStatus = 'Pending' | 'Confirmed' | 'Cancelled';
+
+// Which line operator operates a container, from validFrom to validTo (Vietnam dates, both included)
+export interface OperatingAssignment {
+  id: string;
+  containerId: string;
+  containerNumber: string;
+  operatorId: string;
+  operatorCode: string;
+  operatorName: string;
+  validFrom: string;
+  // null = open-ended
+  validTo: string | null;
+  status: OperatingAssignmentStatus;
+  reference: string | null;
+  note: string | null;
+  createdAt: string;
+  confirmedAt: string | null;
+  endedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  // Visits that took their line operator from it: such an assignment can be ended but not cancelled
+  visitCount: number;
+}
+
+// POST /api/containers/{id}/operating-assignments; confirm = already checked against the contract
+export interface CreateOperatingAssignmentRequest {
+  operatorId: string;
+  validFrom: string;
+  validTo: string | null;
+  reference: string | null;
+  note: string | null;
+  confirm: boolean;
+}
+
+export const ASSIGNMENT_STATUS_LABEL: Record<OperatingAssignmentStatus, string> = {
+  Pending: 'Chờ xác nhận',
+  Confirmed: 'Đã xác nhận',
+  Cancelled: 'Đã huỷ',
+};
+
+// "Chủ sở hữu, Hãng khai thác" for the partner list
+export function partnerRolesText(partner: Pick<LineOperator, 'isOwner' | 'isOperator'>): string {
+  const roles = [partner.isOwner ? 'Chủ sở hữu' : '', partner.isOperator ? 'Hãng khai thác' : ''];
+  return roles.filter((r) => r).join(', ');
+}
+
+// Same rule as OperatingAssignment.CoversDate: confirmed and the date inside the period ("yyyy-MM-dd" compare)
+export function assignmentCovers(assignment: Pick<OperatingAssignment, 'status' | 'validFrom' | 'validTo'>, date: string): boolean {
+  return (
+    assignment.status === 'Confirmed' &&
+    assignment.validFrom <= date &&
+    (assignment.validTo === null || date <= assignment.validTo)
+  );
 }
 
 // GET /api/container-visits/position
@@ -272,10 +346,17 @@ export const THROUGHPUT_MAX_DAYS = 366;
 
 // ---------- catalog requests (Danh mục) ----------
 
-// POST /api/line-operators; PUT /api/line-operators/{id} only renames ({ name }), the code never changes
-export interface CreateLineOperatorRequest {
-  code: string;
+// PUT /api/line-operators/{id}: name, tax code and roles; the code never changes. At least one role.
+export interface UpdateLineOperatorRequest {
   name: string;
+  taxCode: string | null;
+  isOwner: boolean;
+  isOperator: boolean;
+}
+
+// POST /api/line-operators
+export interface CreateLineOperatorRequest extends UpdateLineOperatorRequest {
+  code: string;
 }
 
 // POST /api/customers; PUT /api/customers/{id} only renames ({ name }), the tax code never changes
@@ -325,7 +406,8 @@ export interface UpdateContainerRequest {
   tareWeightKg: number;
   // "yyyy-MM-dd" or null when unknown
   manufactureDate: string | null;
-  ownerName: string;
+  // A partner with the owner role, picked from the catalog (no free text)
+  ownerId: string;
 }
 
 // POST /api/containers

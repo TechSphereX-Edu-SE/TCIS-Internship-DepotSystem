@@ -2,6 +2,7 @@ import {
   DailyThroughput,
   DeliveryOrder,
   addDays,
+  assignmentCovers,
   blockAccepts,
   categoriesText,
   dailyTotals,
@@ -11,6 +12,7 @@ import {
   formatDateTime,
   formatPosition,
   orderStatus,
+  partnerRolesText,
   releasedSummary,
   vietnamToday,
 } from './depot-models';
@@ -116,5 +118,24 @@ describe('delivery order status and summary', () => {
       { date: '2026-10-19', gateIn: 0, gateOut: 0 },
       { date: '2026-10-20', gateIn: 0, gateOut: 3 },
     ]);
+  });
+});
+
+describe('partners and operating assignments', () => {
+  it('lists the roles of a partner', () => {
+    expect(partnerRolesText({ isOwner: true, isOperator: true })).toBe('Chủ sở hữu, Hãng khai thác');
+    expect(partnerRolesText({ isOwner: true, isOperator: false })).toBe('Chủ sở hữu');
+    expect(partnerRolesText({ isOwner: false, isOperator: true })).toBe('Hãng khai thác');
+  });
+
+  it('only counts a confirmed assignment whose period includes the date (both ends included)', () => {
+    const period = { status: 'Confirmed' as const, validFrom: '2026-10-01', validTo: '2026-10-31' };
+
+    expect(assignmentCovers(period, '2026-10-01')).toBe(true);
+    expect(assignmentCovers(period, '2026-10-31')).toBe(true);
+    expect(assignmentCovers(period, '2026-11-01')).toBe(false);
+    expect(assignmentCovers({ ...period, validTo: null }, '2027-05-01')).toBe(true);
+    expect(assignmentCovers({ ...period, status: 'Pending' }, '2026-10-15')).toBe(false);
+    expect(assignmentCovers({ ...period, status: 'Cancelled' }, '2026-10-15')).toBe(false);
   });
 });

@@ -33,12 +33,14 @@ const SEARCH_PAGE_SIZE = 20;
 
 /*
   State of the selected container: only catalog containers can be picked (feedback 3),
-  so the number is always valid; what is left to check is whether it is already in the yard.
+  so the number is always valid; what is left to check is whether it is already in the yard,
+  and (feedback 2) whether a confirmed operating assignment names its line operator for today.
 */
 type Lookup =
   | { kind: 'idle' }
   | { kind: 'checking' }
   | { kind: 'inYard'; container: Container; position: ContainerPosition }
+  | { kind: 'noOperator'; container: Container }
   | { kind: 'ready'; container: Container }
   | { kind: 'error'; message: string };
 
@@ -61,12 +63,14 @@ export class GateInPage {
 
   /*
     Same fields as GateInCommand; Bay/Row/Tier are disabled for a virtual block.
-    Container and line operator hold the picked row (or null): the dropdowns never keep typed text.
+    The container holds the picked row (or null): the dropdown never keeps typed text.
+    Feedback 2: the line operator is not typed here. It comes from the container's confirmed operating
+    assignment for today; operatorFilter only narrows the container list to the containers it operates.
     The A/B/C grade is gone (feedback 3: it was only a placeholder label, not a quality rule).
   */
   protected readonly form = inject(FormBuilder).nonNullable.group({
     container: new FormControl<Container | null>(null, Validators.required),
-    lineOperator: new FormControl<LineOperator | null>(null, Validators.required),
+    operatorFilter: new FormControl<LineOperator | null>(null),
     blockId: ['', Validators.required],
     bay: new FormControl<number | null>(null),
     row: new FormControl<number | null>(1),
@@ -76,16 +80,18 @@ export class GateInPage {
     vehicleNo: ['', [Validators.required, Validators.maxLength(20)]],
   });
 
-  // Search loaders for the two dropdowns; the API ranks exact match, then prefix, then the rest
+  // Search loaders for the two dropdowns; the API ranks exact match, then prefix, then the rest.
+  // With a line operator chosen, only containers it operates today are listed.
   protected readonly loadContainers: SearchPageLoader<Container> = (term, page) =>
-    this.masterData.containerPage(term, page, SEARCH_PAGE_SIZE);
+    this.masterData.containerPage(term, page, SEARCH_PAGE_SIZE, this.form.controls.operatorFilter.value?.id);
   protected readonly loadOperators: SearchPageLoader<LineOperator> = (term, page) =>
-    this.masterData.lineOperatorPage(page, SEARCH_PAGE_SIZE, term);
+    this.masterData.lineOperatorPage(page, SEARCH_PAGE_SIZE, term, 'Operator');
 
   protected readonly containerKey = (c: Container) => c.id;
   protected readonly containerLabel = (c: Container) => c.containerNumber;
   protected readonly containerDetail = (c: Container) =>
-    `${c.isoCode} · ${SIZE_LABEL[c.size]} · ${CATEGORY_LABEL[c.category]} · ${c.ownerName}`;
+    `${c.isoCode} · ${SIZE_LABEL[c.size]} · ${CATEGORY_LABEL[c.category]} · KT ${c.currentOperatorCode ?? 'chưa có'}`;
+  protected readonly ownerText = (c: Container) => c.ownerCode ?? `${c.ownerName} (chưa đối chiếu)`;
   protected readonly operatorKey = (o: LineOperator) => o.id;
   protected readonly operatorLabel = (o: LineOperator) => o.code;
   protected readonly operatorDetail = (o: LineOperator) => o.name;
@@ -113,6 +119,9 @@ export class GateInPage {
 
   protected readonly container = computed(() => this.value().container);
 
+  // A new filter drops the picked container and its results (the dropdown's resetKey)
+  protected readonly operatorFilterId = computed(() => this.value().operatorFilter?.id ?? null);
+
   /*
     Feedback 3: the block dropdown only offers blocks whose list of types contains the container's
     type (one block can take several types). Before a container is picked every block is listed.
@@ -139,6 +148,9 @@ export class GateInPage {
         return state.message;
       case 'inYard':
         return `Container đang ở trong bãi tại ${this.positionText(state.position)}.`;
+      case 'noOperator':
+        return 'Container chưa có quan hệ khai thác đã xác nhận cho hôm nay, nên chưa biết hãng khai thác. ' +
+          'Ghi nhận và xác nhận ở Danh mục · Container trước khi nhập bãi.';
       case 'idle':
         return this.submitted() ? 'Chọn container trong danh sách.' : null;
       default:
@@ -147,7 +159,7 @@ export class GateInPage {
   });
 
   // The API would reject these anyway, so the button stays disabled
-  protected readonly blocked = computed(() => ['inYard', 'checking'].includes(this.lookup().kind));
+  protected readonly blocked = computed(() => ['inYard', 'noOperator', 'checking'].includes(this.lookup().kind));
 
   // Row shown on the map = row typed in the form (when it is inside the block), otherwise row 1
   protected readonly mapRow = computed(() => {
@@ -232,13 +244,14 @@ export class GateInPage {
     const block = this.selectedBlock();
     const errors = this.positionErrors();
     const v = this.form.getRawValue();
-    if (state.kind !== 'ready' || !block || !v.lineOperator || this.form.invalid || hasSlotErrors(errors)) {
+    if (state.kind !== 'ready' || !state.container.currentOperatorId || !block || this.form.invalid || hasSlotErrors(errors)) {
       return;
     }
 
     const request: GateInRequest = {
       containerId: state.container.id,
-      lineOperatorId: v.lineOperator.id,
+      // The operator of today's confirmed assignment; the API checks it again
+      lineOperatorId: state.container.currentOperatorId,
       blockId: block.id,
       bay: block.isVirtual ? null : v.bay,
       row: block.isVirtual ? null : v.row,
@@ -268,10 +281,10 @@ export class GateInPage {
     });
   }
 
-  // "Làm lại": clear the container data but keep the block and row the user is working on
+  // "Làm lại": clear the container data but keep the block, row and operator filter the user is working on
   protected resetForNext(): void {
-    const { blockId, row } = this.form.getRawValue();
-    this.form.reset({ blockId, row });
+    const { blockId, row, operatorFilter } = this.form.getRawValue();
+    this.form.reset({ blockId, row, operatorFilter });
     this.applyBlockRules();
     this.submitted.set(false);
     this.apiError.set(null);
@@ -279,25 +292,23 @@ export class GateInPage {
   }
 
   // Red border + message for a plain required/length rule or a matching API validation error
-  protected invalid(name: 'lineOperator' | 'blockId' | 'vehicleNo' | 'conditionNote'): boolean {
+  protected invalid(name: 'blockId' | 'vehicleNo' | 'conditionNote'): boolean {
     const control = this.form.controls[name];
-    const apiField = name === 'lineOperator' ? 'lineOperatorId' : name;
-    return (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), apiField);
+    return (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), name);
   }
 
   protected positionText(position: ContainerPosition): string {
     return formatPosition(position.blockCode, position.bay, position.row, position.tier);
   }
 
-  // In the yard already -> position found; 404 NotInYard -> ready for gate-in
+  // In the yard already -> position found; 404 NotInYard -> ready, unless no operator is confirmed for today
   private checkInYard(container: Container): Observable<Lookup> {
     const lookup$ = this.yard.position(container.containerNumber).pipe(
       map((position): Lookup => ({ kind: 'inYard', container, position })),
       catchError((err: unknown) => {
         const error = toApiError(err);
-        return of<Lookup>(
-          error.code === 'ContainerVisit.NotInYard' ? { kind: 'ready', container } : { kind: 'error', message: error.message },
-        );
+        if (error.code !== 'ContainerVisit.NotInYard') return of<Lookup>({ kind: 'error', message: error.message });
+        return of<Lookup>(container.currentOperatorId ? { kind: 'ready', container } : { kind: 'noOperator', container });
       }),
     );
     return concat(of<Lookup>({ kind: 'checking' }), lookup$);
@@ -306,7 +317,7 @@ export class GateInPage {
   private applyLookup(state: Lookup): void {
     this.lookup.set(state);
     // Start from the condition recorded on the container; the gate check may change it.
-    // The line operator is NOT guessed from the owner or the number prefix (feedback 2).
+    // The line operator is NOT guessed from the owner, the number prefix or an earlier visit (feedback 2).
     if (state.kind === 'ready') this.form.controls.condition.setValue(state.container.condition);
   }
 

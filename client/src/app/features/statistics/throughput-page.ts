@@ -92,7 +92,8 @@ export class ThroughputPage {
   });
 
   constructor() {
-    this.masterData.lineOperators().subscribe({
+    // Only partners with the line operator role issue orders / appear in the throughput filter
+    this.masterData.lineOperators('Operator').subscribe({
       next: (operators) => this.operators.set(operators),
       error: (err: unknown) => this.error.set(toApiError(err).message),
     });

@@ -8,14 +8,18 @@ import {
   CreateContainerRequest,
   CreateCustomerRequest,
   CreateLineOperatorRequest,
+  CreateOperatingAssignmentRequest,
   Customer,
   DeleteBlockResult,
   LineOperator,
+  OperatingAssignment,
   PagedResult,
+  PartnerRole,
   ResizeBlockRequest,
   UpdateBlockRequest,
   UpdateConditionRequest,
   UpdateContainerRequest,
+  UpdateLineOperatorRequest,
 } from './depot-models';
 
 // Create responses only carry the new id (plus the key fields, not needed by the screens)
@@ -28,10 +32,13 @@ type CreatedResult = { id: string };
 export class MasterDataApi {
   private readonly http = inject(HttpClient);
 
-  // A depot has a handful of operators and blocks, so one large page is enough for a dropdown
-  lineOperators(): Observable<LineOperator[]> {
+  // A depot has a handful of partners and blocks, so one large page is enough for a dropdown.
+  // role: only owners (container form) or only line operators (orders, statistics); every partner when left out
+  lineOperators(role?: PartnerRole): Observable<LineOperator[]> {
+    const params: Record<string, string | number> = { pageSize: 100 };
+    if (role) params['role'] = role;
     return this.http
-      .get<PagedResult<LineOperator>>('/api/line-operators', { params: { pageSize: 100 } })
+      .get<PagedResult<LineOperator>>('/api/line-operators', { params })
       .pipe(map((page) => [...page.items].sort((a, b) => a.code.localeCompare(b.code))));
   }
 
@@ -63,9 +70,9 @@ export class MasterDataApi {
 
   // ---------- catalog screens: one page of a list, create / update ----------
 
-  // search: part of the code or the name (exact code first, then codes starting with the text)
-  lineOperatorPage(page: number, pageSize: number, search = ''): Observable<PagedResult<LineOperator>> {
-    return this.page<LineOperator>('/api/line-operators', page, pageSize, search);
+  // search: part of the code or the name (exact code first, then codes starting with the text); role: see lineOperators
+  lineOperatorPage(page: number, pageSize: number, search = '', role?: PartnerRole): Observable<PagedResult<LineOperator>> {
+    return this.page<LineOperator>('/api/line-operators', page, pageSize, search, role ? { role } : {});
   }
 
   // 201 with { id, code, name }; 409 LineOperator.Duplicate when the code exists
@@ -73,9 +80,10 @@ export class MasterDataApi {
     return this.http.post<CreatedResult>('/api/line-operators', request);
   }
 
-  // The code is the operator's identity on orders and reports, so only the name can change
-  renameLineOperator(id: string, name: string): Observable<void> {
-    return this.http.put<void>(`/api/line-operators/${id}`, { name });
+  // The code is the partner's identity on orders and reports, so it never changes.
+  // 409 Partner.OwnerRoleInUse / Partner.OperatorRoleInUse when removing a role still in use
+  updateLineOperator(id: string, request: UpdateLineOperatorRequest): Observable<void> {
+    return this.http.put<void>(`/api/line-operators/${id}`, request);
   }
 
   // search: part of the tax code or the name
@@ -120,9 +128,9 @@ export class MasterDataApi {
     return this.http.put<void>(`/api/blocks/${id}/size`, request);
   }
 
-  // search: part of the container number
-  containerPage(search: string, page: number, pageSize: number): Observable<PagedResult<Container>> {
-    return this.page<Container>('/api/containers', page, pageSize, search);
+  // search: part of the container number; operatorId: only containers that line operator operates today
+  containerPage(search: string, page: number, pageSize: number, operatorId?: string | null): Observable<PagedResult<Container>> {
+    return this.page<Container>('/api/containers', page, pageSize, search, operatorId ? { operatorId } : {});
   }
 
   // 201 with { id, containerNumber, isoCode }; 409 Container.Duplicate; 400 when the ISO code does not fit
@@ -140,9 +148,42 @@ export class MasterDataApi {
     return this.http.delete<void>(`/api/containers/${id}`);
   }
 
-  // GET a list endpoint with page / pageSize and an optional ?search= (left out when empty)
-  private page<T>(url: string, page: number, pageSize: number, search = ''): Observable<PagedResult<T>> {
-    const params: Record<string, string | number> = { page, pageSize };
+  // ---------- operating assignments (quan hệ khai thác) ----------
+
+  // Every assignment of a container, newest period first (cancelled ones included, as history)
+  containerAssignments(containerId: string): Observable<OperatingAssignment[]> {
+    return this.http.get<OperatingAssignment[]>(`/api/containers/${containerId}/operating-assignments`);
+  }
+
+  // 409 Partner.NotOperator, OperatingAssignment.Overlap (when confirm = true)
+  createAssignment(containerId: string, request: CreateOperatingAssignmentRequest): Observable<CreatedResult> {
+    return this.http.post<CreatedResult>(`/api/containers/${containerId}/operating-assignments`, request);
+  }
+
+  // 409 OperatingAssignment.Overlap when another confirmed period covers some of the same days
+  confirmAssignment(id: string): Observable<void> {
+    return this.http.post<void>(`/api/operating-assignments/${id}/confirm`, {});
+  }
+
+  // validTo = last day included; 409 OperatingAssignment.UsedAfterEnd when a later gate-in used it
+  endAssignment(id: string, validTo: string): Observable<void> {
+    return this.http.post<void>(`/api/operating-assignments/${id}/end`, { validTo });
+  }
+
+  // 409 OperatingAssignment.InUse once a visit took its operator from it
+  cancelAssignment(id: string, reason: string): Observable<void> {
+    return this.http.post<void>(`/api/operating-assignments/${id}/cancel`, { reason });
+  }
+
+  // GET a list endpoint with page / pageSize, an optional ?search= (left out when empty) and extra filters
+  private page<T>(
+    url: string,
+    page: number,
+    pageSize: number,
+    search = '',
+    filters: Record<string, string> = {},
+  ): Observable<PagedResult<T>> {
+    const params: Record<string, string | number> = { page, pageSize, ...filters };
     if (search.trim()) params['search'] = search.trim();
     return this.http.get<PagedResult<T>>(url, { params });
   }

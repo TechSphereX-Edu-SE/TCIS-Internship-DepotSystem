@@ -5,6 +5,7 @@ import { Observable, map, startWith } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { checkContainerNumber, containerNumberError, isoCodeError, suggestIsoCode } from '../../core/depot/container-number';
 import {
+  ASSIGNMENT_STATUS_LABEL,
   CATEGORIES,
   CATEGORY_HINT,
   CATEGORY_LABEL,
@@ -12,14 +13,38 @@ import {
   Container,
   ContainerCategory,
   ContainerSize,
+  LineOperator,
+  OperatingAssignment,
   SIZE_LABEL,
   UpdateContainerRequest,
+  assignmentCovers,
   formatDate,
   vietnamToday,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { Pager } from '../../shared/pager/pager';
+import { SearchPageLoader, SearchSelect } from '../../shared/search-select/search-select';
 import { ToastService } from '../../shared/toast/toast-service';
+
+// Rows asked per page by the search dropdowns (about 5 are visible, the rest load while scrolling)
+const SEARCH_PAGE_SIZE = 20;
+
+/*
+  The owner partner of a container as a dropdown row, so editing shows the current owner.
+  Only the fields the dropdown displays are known from the container; the rest are placeholders.
+*/
+function ownerOf(container: Container): LineOperator | null {
+  if (!container.ownerId) return null;
+  return {
+    id: container.ownerId,
+    code: container.ownerCode ?? '',
+    name: container.ownerPartnerName ?? '',
+    taxCode: null,
+    isOwner: true,
+    isOperator: false,
+    createdAt: '',
+  };
+}
 
 const PAGE_SIZE = 20;
 
@@ -33,10 +58,16 @@ const weightValidators = [Validators.required, Validators.min(1), Validators.pat
   The number and the ISO code are checked while typing with the same rules as the API validators,
   so the clerk sees the mistake in Vietnamese before saving.
   The condition is changed on the gate-out screen (repair flow), not here.
+
+  Feedback 2 (23/10/2026):
+    - the owner is picked from the partner catalog (owner role), never typed; containers recorded
+      before that keep their old owner text and show "chưa đối chiếu" until someone picks the owner
+    - "Khai thác" opens the operating relations of a container: which line operator operates it,
+      for which period. Gate-in only uses a confirmed relation covering the gate-in date.
 */
 @Component({
   selector: 'app-containers-page',
-  imports: [ReactiveFormsModule, Pager],
+  imports: [ReactiveFormsModule, Pager, SearchSelect],
   templateUrl: './containers-page.html',
   styleUrl: './containers-page.css',
 })
@@ -63,10 +94,39 @@ export class ContainersPage {
     tareWeightKg: new FormControl<number | null>(null, weightValidators),
     maxGrossWeightKg: new FormControl<number | null>(null, weightValidators),
     manufactureDate: [''],
-    ownerName: ['', [Validators.required, Validators.maxLength(100)]],
+    owner: new FormControl<LineOperator | null>(null, Validators.required),
   });
 
   protected readonly search = new FormControl('', { nonNullable: true });
+
+  // Partner dropdowns: owners for the container form, line operators for an operating relation
+  protected readonly loadOwners: SearchPageLoader<LineOperator> = (term, page) =>
+    this.api.lineOperatorPage(page, SEARCH_PAGE_SIZE, term, 'Owner');
+  protected readonly loadOperators: SearchPageLoader<LineOperator> = (term, page) =>
+    this.api.lineOperatorPage(page, SEARCH_PAGE_SIZE, term, 'Operator');
+  protected readonly partnerKey = (p: LineOperator) => p.id;
+  protected readonly partnerLabel = (p: LineOperator) => p.code;
+  protected readonly partnerDetail = (p: LineOperator) => (p.taxCode ? `${p.name} · MST ${p.taxCode}` : p.name);
+
+  // ---------- operating relations (quan hệ khai thác) of one container ----------
+  protected readonly statusLabel = ASSIGNMENT_STATUS_LABEL;
+  protected readonly covers = assignmentCovers;
+  protected readonly relationsOf = signal<Container | null>(null);
+  protected readonly assignments = signal<OperatingAssignment[]>([]);
+  protected readonly assignmentsError = signal<string | null>(null);
+  protected readonly assignmentSubmitted = signal(false);
+  protected readonly assignmentSaving = signal(false);
+  protected readonly assignmentApiError = signal<ApiError | null>(null);
+
+  // Same rules as CreateOperatingAssignmentValidator; confirm = already checked against the contract
+  protected readonly assignmentForm = inject(FormBuilder).nonNullable.group({
+    operator: new FormControl<LineOperator | null>(null, Validators.required),
+    validFrom: [vietnamToday(), Validators.required],
+    validTo: [''],
+    reference: ['', Validators.maxLength(50)],
+    note: ['', Validators.maxLength(500)],
+    confirm: [true],
+  });
 
   protected readonly items = signal<Container[]>([]);
   protected readonly totalCount = signal(0);
@@ -154,7 +214,8 @@ export class ContainersPage {
       tareWeightKg: item.tareWeightKg,
       maxGrossWeightKg: item.maxGrossWeightKg,
       manufactureDate: item.manufactureDate ?? '',
-      ownerName: item.ownerName,
+      // Not reconciled yet: the old text is shown next to the field, the user picks the partner
+      owner: ownerOf(item),
     });
     // The number is the identity of the container (PUT does not take it)
     this.form.controls.containerNumber.disable();
@@ -198,7 +259,7 @@ export class ContainersPage {
       tareWeightKg: Number(v.tareWeightKg),
       maxGrossWeightKg: Number(v.maxGrossWeightKg),
       manufactureDate: v.manufactureDate || null,
-      ownerName: v.ownerName.trim(),
+      ownerId: v.owner!.id,
     };
     const current = this.editing();
     const number = v.containerNumber.trim().toUpperCase();
@@ -221,8 +282,119 @@ export class ContainersPage {
     });
   }
 
-  protected invalid(name: 'tareWeightKg' | 'maxGrossWeightKg' | 'ownerName'): boolean {
+  protected invalid(name: 'tareWeightKg' | 'maxGrossWeightKg' | 'owner'): boolean {
     const control = this.form.controls[name];
-    return (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), name);
+    const apiField = name === 'owner' ? 'ownerId' : name;
+    return (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), apiField);
+  }
+
+  // Owner code when reconciled, otherwise the text recorded before partners existed
+  protected ownerText(item: Container): string {
+    return item.ownerCode ?? item.ownerName;
+  }
+
+  // ---------- operating relations ----------
+
+  protected openRelations(item: Container): void {
+    this.relationsOf.set(item);
+    this.assignmentForm.reset({ validFrom: vietnamToday(), confirm: true });
+    this.assignmentSubmitted.set(false);
+    this.assignmentApiError.set(null);
+    this.loadAssignments(item);
+  }
+
+  protected closeRelations(): void {
+    this.relationsOf.set(null);
+    this.assignments.set([]);
+  }
+
+  // The period of a relation as "01/10/2026 → 31/12/2026" or "01/10/2026 → (không thời hạn)"
+  protected periodText(a: OperatingAssignment): string {
+    return `${formatDate(a.validFrom)} → ${a.validTo ? formatDate(a.validTo) : '(không thời hạn)'}`;
+  }
+
+  protected addAssignment(): void {
+    const container = this.relationsOf();
+    this.assignmentSubmitted.set(true);
+    this.assignmentApiError.set(null);
+    this.assignmentForm.markAllAsTouched();
+    if (!container || this.assignmentForm.invalid || this.periodError()) return;
+
+    const v = this.assignmentForm.getRawValue();
+    this.assignmentSaving.set(true);
+    this.api
+      .createAssignment(container.id, {
+        operatorId: v.operator!.id,
+        validFrom: v.validFrom,
+        validTo: v.validTo || null,
+        reference: v.reference.trim() || null,
+        note: v.note.trim() || null,
+        confirm: v.confirm,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success(`Đã ghi nhận ${v.operator!.code} khai thác ${container.containerNumber}`);
+          this.assignmentForm.reset({ validFrom: vietnamToday(), confirm: true });
+          this.assignmentSubmitted.set(false);
+          this.assignmentSaving.set(false);
+          this.afterAssignmentChange(container);
+        },
+        error: (err: unknown) => {
+          this.assignmentApiError.set(toApiError(err));
+          this.assignmentSaving.set(false);
+        },
+      });
+  }
+
+  // The end date cannot be before the start date (same rule as the API)
+  protected periodError(): boolean {
+    const { validFrom, validTo } = this.assignmentForm.getRawValue();
+    return !!validTo && !!validFrom && validTo < validFrom;
+  }
+
+  protected confirmAssignment(a: OperatingAssignment): void {
+    this.runAssignmentAction(this.api.confirmAssignment(a.id), `Đã xác nhận ${a.operatorCode}`);
+  }
+
+  // Last day included; a visit that already came in later keeps its basis, so the API may refuse
+  protected endAssignment(a: OperatingAssignment): void {
+    const validTo = prompt(`Ngày cuối ${a.operatorCode} khai thác (yyyy-MM-dd):`, vietnamToday());
+    if (!validTo) return;
+    this.runAssignmentAction(this.api.endAssignment(a.id, validTo.trim()), `Đã kết thúc ${a.operatorCode}`);
+  }
+
+  // Only for a relation recorded by mistake (none of its visits); the reason is kept
+  protected cancelAssignment(a: OperatingAssignment): void {
+    const reason = prompt(`Lý do huỷ quan hệ khai thác ${a.operatorCode}:`);
+    if (!reason?.trim()) return;
+    this.runAssignmentAction(this.api.cancelAssignment(a.id, reason.trim()), `Đã huỷ ${a.operatorCode}`);
+  }
+
+  private runAssignmentAction(request$: Observable<void>, message: string): void {
+    const container = this.relationsOf();
+    if (!container) return;
+    request$.subscribe({
+      next: () => {
+        this.toast.success(message);
+        this.afterAssignmentChange(container);
+      },
+      error: (err: unknown) => this.toast.error(toApiError(err).message),
+    });
+  }
+
+  // The list column "Hãng khai thác hôm nay" depends on the relations, so the page reloads too
+  private afterAssignmentChange(container: Container): void {
+    this.loadAssignments(container);
+    this.load(this.page());
+  }
+
+  private loadAssignments(container: Container): void {
+    this.api.containerAssignments(container.id).subscribe({
+      next: (list) => {
+        this.assignments.set(list);
+        this.assignmentsError.set(null);
+      },
+      error: (err: unknown) => this.assignmentsError.set(toApiError(err).message),
+    });
   }
 }
