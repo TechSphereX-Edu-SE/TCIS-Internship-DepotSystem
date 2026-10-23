@@ -1,0 +1,58 @@
+<input
+  type="text"
+  role="combobox"
+  autocomplete="off"
+  spellcheck="false"
+  [id]="inputId()"
+  [value]="text()"
+  [placeholder]="placeholder()"
+  [disabled]="disabled()"
+  [class.has-selection]="selected() !== null"
+  [attr.aria-invalid]="invalid() || null"
+  aria-autocomplete="list"
+  [attr.aria-expanded]="open()"
+  [attr.aria-controls]="inputId() + '-list'"
+  [attr.aria-activedescendant]="open() && activeIndex() >= 0 ? optionId(activeIndex()) : null"
+  (focus)="onFocus()"
+  (input)="onInput($any($event.target).value)"
+  (keydown)="onKeydown($event)"
+  (blur)="onBlur()"
+/>
+
+@if (open()) {
+  <ul
+    #list
+    class="search-select-list"
+    role="listbox"
+    [id]="inputId() + '-list'"
+    [style.--visible-rows]="visibleRows"
+    (scroll)="onScroll(list)"
+  >
+    @for (item of items(); track itemKey()(item); let i = $index) {
+      <li
+        role="option"
+        class="search-select-option"
+        [id]="optionId(i)"
+        [class.active]="i === activeIndex()"
+        [attr.aria-selected]="i === activeIndex()"
+        (mousedown)="onOptionMouseDown($event, item)"
+      >
+        <span class="option-label">{{ itemLabel()(item) }}</span>
+        @if (itemDetail()(item); as detail) {
+          <span class="option-detail">{{ detail }}</span>
+        }
+      </li>
+    }
+
+    <!-- Status rows: they say why the list is empty instead of showing nothing -->
+    @if (loading()) {
+      <li class="search-select-status" role="presentation">Đang tìm…</li>
+    } @else if (failed()) {
+      <li class="search-select-status error" role="presentation">
+        Không tải được danh sách, gõ lại để thử lại.
+      </li>
+    } @else if (items().length === 0) {
+      <li class="search-select-status" role="presentation">Không có kết quả phù hợp.</li>
+    }
+  </ul>
+}
