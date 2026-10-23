@@ -10,6 +10,7 @@ using TechSpherex.CleanArchitecture.Domain.Entities;
 using TechSpherex.CleanArchitecture.Infrastructure.Caching;
 using TechSpherex.CleanArchitecture.Infrastructure.Identity;
 using TechSpherex.CleanArchitecture.Infrastructure.Persistence;
+using TechSpherex.CleanArchitecture.Infrastructure.Persistence.Demo;
 using TechSpherex.CleanArchitecture.Infrastructure.Rules;
 using TechSpherex.CleanArchitecture.Infrastructure.Storage;
 using TechSpherex.CleanArchitecture.Infrastructure.Tenancy;
@@ -41,6 +42,9 @@ public static class DependencyInjection
 
         // Repair photos on the server disk (Q4); stateless, so one instance serves every request
         services.AddSingleton<IRepairPhotoStorage, LocalRepairPhotoStorage>();
+
+        // Feedback 10: demo data tool, only called by the demo endpoints (Development); one per request
+        services.AddScoped<DemoDataSeeder>();
     }
 
     private static void AddAuth(this IServiceCollection services, IConfiguration configuration)

@@ -29,6 +29,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<ContainerMove> ContainerMoves => Set<ContainerMove>();
     public DbSet<RepairEstimate> RepairEstimates => Set<RepairEstimate>();
     public DbSet<RepairEstimateLine> RepairEstimateLines => Set<RepairEstimateLine>();
+    // Feedback 10: anchor of the demo data (only the demo seeder uses it, so it is not on IAppDbContext)
+    public DbSet<DemoDataset> DemoDatasets => Set<DemoDataset>();
+
+    /*
+        Feedback 10: the demo seeder replays past events through the normal handlers. While it runs, the audit
+        times (CreatedAt / LastModifiedAt) follow its clock, so an order or estimate created "120 days ago" also
+        shows that date. Null (always outside the seeder) = real time. The seeder clears it when done,
+        because pooled contexts are reused.
+    */
+    internal TimeProvider? AuditClock { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -69,15 +79,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     private void UpdateAuditableEntities()
     {
         var entries = ChangeTracker.Entries<AuditableEntity>();
+        var now = AuditClock?.GetUtcNow() ?? DateTimeOffset.UtcNow;
         foreach (var entry in entries)
         {
             switch (entry.State)
             {
                 case EntityState.Added:
-                    entry.Entity.CreatedAt = DateTimeOffset.UtcNow;
+                    entry.Entity.CreatedAt = now;
                     break;
                 case EntityState.Modified:
-                    entry.Entity.LastModifiedAt = DateTimeOffset.UtcNow;
+                    entry.Entity.LastModifiedAt = now;
                     break;
             }
         }

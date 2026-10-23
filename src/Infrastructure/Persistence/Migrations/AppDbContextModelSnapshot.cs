@@ -716,6 +716,31 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.DemoDataset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AnchorAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset?>("LastSeededAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("DemoDatasets", (string)null);
+                });
+
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ExternalRepairTransfer", b =>
                 {
                     b.Property<Guid>("Id")

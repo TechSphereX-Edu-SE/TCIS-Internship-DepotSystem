@@ -133,6 +133,9 @@ try
     app.MapDeliveryOrderEndpoints();
     app.MapStatisticsEndpoints();
 
+    // Feedback 10: demo data commands; mapped only in Development with Demo:Enabled (set by the AppHost)
+    app.MapDemoEndpoints();
+
     // Map gRPC services
     app.MapGrpcService<TodoGrpcService>();
 
