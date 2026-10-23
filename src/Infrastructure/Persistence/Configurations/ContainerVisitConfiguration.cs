@@ -19,10 +19,13 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
             t.HasCheckConstraint("CK_ContainerVisits_GateOutAfterGateIn",
                 "\"GateOutAt\" IS NULL OR \"GateOutAt\" >= \"GateInAt\"");
 
-            // Gate-out time, vehicle and delivery order are set together
+            // Gate-out time, vehicle and purpose are set together; cấp rỗng has a delivery order,
+            // chuyển sửa ngoài has none (feedback 4/6)
             t.HasCheckConstraint("CK_ContainerVisits_GateOutFields",
-                "(\"GateOutAt\" IS NULL AND \"GateOutVehicleNo\" IS NULL AND \"DeliveryOrderId\" IS NULL) OR " +
-                "(\"GateOutAt\" IS NOT NULL AND \"GateOutVehicleNo\" IS NOT NULL AND \"DeliveryOrderId\" IS NOT NULL)");
+                "(\"GateOutAt\" IS NULL AND \"GateOutVehicleNo\" IS NULL AND \"DeliveryOrderId\" IS NULL AND \"ExitPurpose\" IS NULL) OR " +
+                "(\"GateOutAt\" IS NOT NULL AND \"GateOutVehicleNo\" IS NOT NULL AND " +
+                "((\"ExitPurpose\" = 'EmptyRelease' AND \"DeliveryOrderId\" IS NOT NULL) OR " +
+                "(\"ExitPurpose\" = 'ExternalRepair' AND \"DeliveryOrderId\" IS NULL)))");
         });
 
         builder.HasKey(v => v.Id);
@@ -54,6 +57,10 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
         builder.Property(v => v.ConditionNoteIn).HasMaxLength(500);
         builder.Property(v => v.GateInVehicleNo).IsRequired().HasMaxLength(20);
         builder.Property(v => v.GateOutVehicleNo).HasMaxLength(20);
+        builder.Property(v => v.ExitPurpose).HasConversion<string>().HasMaxLength(20);
+
+        // xmin: concurrent gate-outs / moves of the same container -> 409 Data.ConcurrentUpdate
+        builder.Property(v => v.RowVersion).IsRowVersion();
 
         // At most one open visit (not gated out) per container
         builder.HasIndex(v => v.ContainerId)

@@ -39,7 +39,7 @@ public sealed class GetContainersInYardQueryHandlerTests
         var goneVisit = GateIn(gone, a, 5, 1, 1);
         var order = new DeliveryOrder("DO-001", msc.Id, customer.Id, new DateOnly(2026, 10, 31), "MSC VESSEL 01");
         order.AddLine(ContainerCategory.Dry, 1);
-        goneVisit.GateOut(order, ContainerCategory.Dry, "51C-99999", Now.AddHours(1));
+        goneVisit.GateOut(order, ContainerCategory.Dry, ContainerSize.Ft20, "51C-99999", Now.AddHours(1));
 
         dbContext.AddRange(msc, customer, a, wait, first, second, inWait, gone, order,
             GateIn(first, a, 1, 1, 1), GateIn(second, a, 3, 2, 1), GateIn(inWait, wait, null, null, null), goneVisit);

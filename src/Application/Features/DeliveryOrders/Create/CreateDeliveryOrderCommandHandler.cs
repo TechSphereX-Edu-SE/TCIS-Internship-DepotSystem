@@ -49,7 +49,7 @@ public sealed class CreateDeliveryOrderCommandHandler(IAppDbContext dbContext, T
 
         foreach (var line in command.Lines)
         {
-            var added = order.AddLine(line.Category, line.Quantity);
+            var added = order.AddLine(line.Category, line.Quantity, line.Size);
             if (added.IsFailure)
                 return Result.Failure<CreateDeliveryOrderResponse>(added.Error!);
         }

@@ -288,7 +288,7 @@ public sealed class BlockHandlerTests
         // The seeded visit came in "now" (real clock), so the order and the gate-out follow the real clock too
         var order = new DeliveryOrder("DO-1", visit.LineOperatorId, customer.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(30), "VESSEL 01");
         order.AddLine(ContainerCategory.Dry, 1);
-        visit.GateOut(order, ContainerCategory.Dry, "51C-99999", DateTimeOffset.UtcNow).IsSuccess.Should().BeTrue();
+        visit.GateOut(order, ContainerCategory.Dry, ContainerSize.Ft20, "51C-99999", DateTimeOffset.UtcNow).IsSuccess.Should().BeTrue();
         dbContext.AddRange(customer, order);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

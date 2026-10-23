@@ -2,6 +2,8 @@ using TechSpherex.CleanArchitecture.Api.Extensions;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOut;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOutForRepair;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetGateOutCandidates;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetPosition;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Move;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
@@ -34,6 +36,15 @@ public static class ContainerVisitEndpoints
             .AddEndpointFilter<ValidationFilter<GateOutCommand>>()
             .WithName("GateOutContainer")
             .WithSummary("Release a container under a delivery order of its line operator");
+
+        group.MapPost("/gate-out-repair", GateOutForRepair)
+            .AddEndpointFilter<ValidationFilter<GateOutForRepairCommand>>()
+            .WithName("GateOutContainerForRepair")
+            .WithSummary("Confirm a container requested for outside repair has left (no delivery order used)");
+
+        group.MapGet("/gate-out-candidates", GetGateOutCandidates)
+            .WithName("GetGateOutCandidates")
+            .WithSummary("Containers in the yard matching a delivery order, with the reason when one cannot leave yet");
 
         group.MapGet("/position", GetPosition)
             .WithName("GetContainerPosition")
@@ -74,6 +85,29 @@ public static class ContainerVisitEndpoints
     CancellationToken cancellationToken)
     {
         var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> GateOutForRepair(
+        GateOutForRepairCommand command,
+        ICommandHandler<GateOutForRepairCommand, Result<GateOutForRepairResponse>> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    // deliveryOrderId is required; search = part of the container number
+    private static async Task<IResult> GetGateOutCandidates(
+        Guid deliveryOrderId,
+        string? search,
+        int? page,
+        int? pageSize,
+        IQueryHandler<GetGateOutCandidatesQuery, Result<PagedResult<GateOutCandidate>>> handler,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetGateOutCandidatesQuery(deliveryOrderId, search, page ?? 1, pageSize ?? 20);
+        var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
 

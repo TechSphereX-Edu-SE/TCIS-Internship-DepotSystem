@@ -50,5 +50,23 @@ public enum RepairEventKind
     StartRepair = 5,
     CompleteRepair = 6,
     AcceptPassed = 7,
-    AcceptRejected = 8
+    AcceptRejected = 8,
+    // External repair (feedback 4: sửa ngoài); the case status does not change with these
+    ExternalRequested = 9,
+    ExternalCancelled = 10,
+    SentForExternalRepair = 11,
+    ReturnedFromExternalRepair = 12
+}
+
+/*
+    Transfer of a container to an outside repair facility (feedback 4, sửa ngoài):
+    Requested (on the repair page) -> GatedOut (confirmed at the gate-out page) -> Returned (new gate-in),
+    or Cancelled before it leaves. The repair case stays open the whole time.
+*/
+public enum ExternalRepairStatus
+{
+    Requested = 0,
+    Cancelled = 1,
+    GatedOut = 2,
+    Returned = 3
 }

@@ -20,7 +20,10 @@ public sealed class DeliveryOrderLineConfiguration : IEntityTypeConfiguration<De
 
         builder.Property(l => l.Category).HasConversion<string>().HasMaxLength(20);
 
-        // One line per container category within an order
-        builder.HasIndex(l => new { l.DeliveryOrderId, l.Category }).IsUnique();
+        // Q1: lines by type and size; null only on lines from before sizes were recorded (= both sizes)
+        builder.Property(l => l.Size).HasConversion<string>().HasMaxLength(10);
+
+        // One line per type and size within an order (DeliveryOrder.AddLine also refuses a no-size line next to a sized one)
+        builder.HasIndex(l => new { l.DeliveryOrderId, l.Category, l.Size }).IsUnique();
     }
 }

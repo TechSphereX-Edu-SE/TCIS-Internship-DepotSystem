@@ -55,6 +55,12 @@ public sealed class ContainerVisit : AuditableEntity
     public Guid? DeliveryOrderId { get; private set; }
     public DeliveryOrder? DeliveryOrder { get; private set; }
 
+    // Feedback 6: cấp rỗng (with a delivery order) or chuyển sửa ngoài (without); null while in the yard
+    public GateOutPurpose? ExitPurpose { get; private set; }
+
+    // PostgreSQL xmin: two gate-outs (or a gate-out and a move) of the same container cannot both succeed
+    public uint RowVersion { get; private set; }
+
     public bool IsInYard => GateOutAt is null;
 
     private ContainerVisit() { }
@@ -135,8 +141,9 @@ public sealed class ContainerVisit : AuditableEntity
         return Result.Success();
     }
 
-    // Releases the container under a delivery order of the same line operator
-    public Result GateOut(DeliveryOrder order, ContainerCategory category, string vehicleNo, DateTimeOffset gateOutAt)
+    // Releases the container (cấp rỗng) under a delivery order of the same line operator, using the line of its type and size
+    public Result GateOut(
+        DeliveryOrder order, ContainerCategory category, ContainerSize size, string vehicleNo, DateTimeOffset gateOutAt)
     {
         if (!IsInYard)
             return Result.Failure(Error.Conflict("ContainerVisit.AlreadyGatedOut", "Container has already left the depot."));
@@ -145,18 +152,37 @@ public sealed class ContainerVisit : AuditableEntity
             return Result.Failure(Error.Conflict("ContainerVisit.WrongLineOperator",
                 "The delivery order belongs to a different line operator."));
 
-        // The expiry date is a Vietnam date, so compare it with the Vietnam date of the gate-out
+        // The expiry date is a Vietnam date: the order compares it with the Vietnam date of the gate-out
         // (gateOutAt.Date would depend on the offset the instant carries, e.g. UTC)
-        var release = order.Release(category, DepotTime.DateOf(gateOutAt));
+        var release = order.Release(category, size, gateOutAt);
         if (release.IsFailure)
             return release;
 
+        DeliveryOrderId = order.Id;
+        Leave(GateOutPurpose.EmptyRelease, vehicleNo, gateOutAt);
+        return Result.Success();
+    }
+
+    /*
+        Feedback 4: the container leaves for an outside repair facility. No delivery order is used and
+        its condition stays Damaged; the transfer (ExternalRepairTransfer) records where it went.
+    */
+    public Result GateOutForRepair(string vehicleNo, DateTimeOffset gateOutAt)
+    {
+        if (!IsInYard)
+            return Result.Failure(Error.Conflict("ContainerVisit.AlreadyGatedOut", "Container has already left the depot."));
+
+        Leave(GateOutPurpose.ExternalRepair, vehicleNo, gateOutAt);
+        return Result.Success();
+    }
+
+    private void Leave(GateOutPurpose purpose, string vehicleNo, DateTimeOffset gateOutAt)
+    {
         // The container leaves its block (see Block.PlacementVersion); null when the block was not loaded
         Block?.RecordContainerChange();
-        DeliveryOrderId = order.Id;
+        ExitPurpose = purpose;
         GateOutAt = gateOutAt;
         GateOutVehicleNo = vehicleNo.Trim().ToUpperInvariant();
-        return Result.Success();
     }
 
     // Vietnam calendar days in the yard as of <paramref name="now"/> (0 on the gate-in day)

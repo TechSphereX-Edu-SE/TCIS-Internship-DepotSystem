@@ -49,7 +49,7 @@ public sealed class StatisticsHandlerTests
         var cmaOut = GateIn(5, seed.Cma, new DateTimeOffset(2026, 10, 5, 8, 0, 0, Vn));
         var order = new DeliveryOrder("DO-001", seed.Cma.Id, customer.Id, new DateOnly(2026, 10, 31), "CMA VESSEL 01");
         order.AddLine(ContainerCategory.Dry, 1);
-        cmaOut.GateOut(order, ContainerCategory.Dry, "51C-99999", new DateTimeOffset(2026, 10, 20, 15, 0, 0, Vn));
+        cmaOut.GateOut(order, ContainerCategory.Dry, ContainerSize.Ft20, "51C-99999", new DateTimeOffset(2026, 10, 20, 15, 0, 0, Vn));
 
         dbContext.AddRange(
             GateIn(0, seed.Msc, new DateTimeOffset(2026, 10, 20, 10, 0, 0, Vn)),

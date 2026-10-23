@@ -28,6 +28,10 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Gat
     Feedback 3/4: a container that comes in Damaged gets a repair case "Chờ giám định" (or a new finding
     in its open case) in the same transaction. That blocks release until the case passes; it is not
     a decision that the container must be repaired, and the container stays where it was placed.
+    Feedback 4 (sửa ngoài): a container coming back from an outside repair facility gets a new visit that
+    is linked to its transfer (Returned) and recorded in the case history. Its case stays open: the
+    facility's "repaired" is not an acceptance. While a case is open the container stays Damaged,
+    whatever condition the gate records for this visit.
     currentUser is optional so tests can build the handler with the database and the clock only.
 */
 public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider timeProvider, ICurrentUser? currentUser = null)
@@ -69,6 +73,9 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
                 $"Container {container.ContainerNumber} is operated by {basis.Operator.Code} on {today:dd/MM/yyyy} " +
                 "according to its confirmed operating assignment."));
 
+        // Kept for a container back from outside repair (GateIn below records the gate's condition)
+        var conditionNoteBefore = container.ConditionNote;
+
         // The domain validates the slot (range, bay parity, 40ft footprint) before creating the visit.
         // Nothing is saved on failure, so the condition it sets on the tracked container is discarded.
         var gateIn = ContainerVisit.GateIn(
@@ -92,12 +99,21 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
         var visit = gateIn.Value!;
         dbContext.ContainerVisits.Add(visit);
 
-        Guid? repairCaseId = null;
+        var returned = await RecordReturnFromRepairAsync(container.Id, visit, now, cancellationToken);
+        if (returned.IsFailure)
+            return Result.Failure<GateInResponse>(returned.Error!);
+
+        Guid? repairCaseId = returned.Value;
         if (command.Condition == ContainerCondition.Damaged)
         {
             var recorded = await dbContext.RecordDamageAsync(
                 container, visit.Id, command.ConditionNote!, RepairFindingSource.GateIn, now, currentUser?.Email, cancellationToken);
             repairCaseId = recorded.CaseId;
+        }
+        else if (repairCaseId is not null)
+        {
+            // Back from outside repair but not accepted yet: keep the repair block visible on the container
+            container.UpdateCondition(ContainerCondition.Damaged, conditionNoteBefore);
         }
 
         // The partial unique indexes (one open visit per container, one container per slot)
@@ -106,7 +122,25 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
 
         return Result.Success(new GateInResponse(
             visit.Id, container.ContainerNumber, block.Code,
-            visit.Bay, visit.Row, visit.Tier, visit.GateInAt, repairCaseId));
+            visit.Bay, visit.Row, visit.Tier, visit.GateInAt, repairCaseId, returned.Value is not null));
+    }
+
+    // Links the new visit to the transfer of a container at an outside facility; returns its case id (null otherwise)
+    private async Task<Result<Guid?>> RecordReturnFromRepairAsync(
+        Guid containerId, ContainerVisit visit, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var transfer = await dbContext.ExternalRepairTransfers
+            .Include(t => t.RepairCase)
+            .FirstOrDefaultAsync(t => t.ContainerId == containerId && t.Status == ExternalRepairStatus.GatedOut, cancellationToken);
+        if (transfer is null)
+            return Result.Success<Guid?>(null);
+
+        var marked = transfer.MarkReturned(transfer.RepairCase, visit, now, currentUser?.Email);
+        if (marked.IsFailure)
+            return Result.Failure<Guid?>(marked.Error!);
+
+        dbContext.RepairCaseEvents.Add(marked.Value!);
+        return Result.Success<Guid?>(transfer.RepairCaseId);
     }
 
     // Open visit = not gated out yet

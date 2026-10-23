@@ -44,14 +44,21 @@ public sealed class GetDailyVisitsQueryHandler(IAppDbContext dbContext, TimeProv
                 v.Id, v.Container.ContainerNumber, v.Container.IsoCode, v.Container.Size, v.Container.Category,
                 v.LineOperator.Code,
                 v.DeliveryOrder != null ? v.DeliveryOrder.OrderNumber : null,
-                // The order line of the same container type (one line per type, enforced at creation)
+                // The order line the container used: same type, same size or no size (lines never overlap)
                 v.DeliveryOrder != null
-                    ? v.DeliveryOrder.Lines.Where(l => l.Category == v.Container.Category).Select(l => (int?)l.Quantity).FirstOrDefault()
+                    ? v.DeliveryOrder.Lines
+                        .Where(l => l.Category == v.Container.Category && (l.Size == null || l.Size == v.Container.Size))
+                        .Select(l => (int?)l.Quantity).FirstOrDefault()
                     : null,
                 v.DeliveryOrder != null
-                    ? v.DeliveryOrder.Lines.Where(l => l.Category == v.Container.Category).Select(l => (int?)(l.Quantity - l.ReleasedQuantity)).FirstOrDefault()
+                    ? v.DeliveryOrder.Lines
+                        .Where(l => l.Category == v.Container.Category && (l.Size == null || l.Size == v.Container.Size))
+                        .Select(l => (int?)(l.Quantity - l.ReleasedQuantity)).FirstOrDefault()
                     : null,
-                v.GateOutVehicleNo, v.GateOutAt!.Value))
+                v.GateOutVehicleNo, v.GateOutAt!.Value,
+                v.ExitPurpose,
+                // Facility of the external repair transfer this gate-out confirmed
+                dbContext.ExternalRepairTransfers.Where(t => t.GateOutVisitId == v.Id).Select(t => t.Facility).FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         return Result.Success(new DailyVisitsResponse(date, gateIns, gateOuts));

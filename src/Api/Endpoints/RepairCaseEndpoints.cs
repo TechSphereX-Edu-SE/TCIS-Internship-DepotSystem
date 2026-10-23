@@ -2,6 +2,7 @@ using FluentValidation;
 using TechSpherex.CleanArchitecture.Api.Extensions;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Act;
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.External;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Get;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.GetAll;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Photos;
@@ -46,6 +47,22 @@ public static class RepairCaseEndpoints
             .WithName("UploadRepairPhoto")
             .WithSummary("Upload a JPG/PNG photo (max 5 MB) to an open case, optionally for one finding");
 
+        group.MapPost("/{id:guid}/external-repair", RequestExternal)
+            .WithName("RequestExternalRepair")
+            .WithSummary("Ask to send the container to an outside repair facility (confirmed at gate-out)");
+
+        var external = app.MapGroup("/api/external-repairs")
+            .WithTags("Repair cases")
+            .RequireAuthorization();
+
+        external.MapGet("/", GetExternal)
+            .WithName("GetExternalRepairs")
+            .WithSummary("Outside repair transfers (e.g. status=Requested: waiting to leave at gate-out)");
+
+        external.MapPost("/{id:guid}/cancel", CancelExternal)
+            .WithName("CancelExternalRepair")
+            .WithSummary("Withdraw an outside repair transfer that has not left yet");
+
         app.MapGet("/api/repair-photos/{id:guid}", GetPhoto)
             .WithTags("Repair cases")
             .RequireAuthorization()
@@ -63,11 +80,13 @@ public static class RepairCaseEndpoints
         Guid? containerId,
         DateOnly? reportedFrom,
         DateOnly? reportedTo,
+        bool? external,
+        string? facility,
         IQueryHandler<GetRepairCasesQuery, Result<PagedResult<RepairCaseSummary>>> handler,
         CancellationToken cancellationToken)
     {
         var query = new GetRepairCasesQuery(page ?? 1, pageSize ?? 20, search, status, open, operatorId, containerId,
-            reportedFrom, reportedTo);
+            reportedFrom, reportedTo, external, facility);
         var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
@@ -125,6 +144,51 @@ public static class RepairCaseEndpoints
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
 
+    private static async Task<IResult> RequestExternal(
+        Guid id,
+        ExternalRepairRequest request,
+        IValidator<RequestExternalRepairCommand> validator,
+        ICommandHandler<RequestExternalRepairCommand, Result<Guid>> handler,
+        CancellationToken cancellationToken)
+    {
+        var command = new RequestExternalRepairCommand(id, request.Facility, request.Reason, request.Reference);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(new { id = result.Value }) : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> GetExternal(
+        ExternalRepairStatus? status,
+        string? search,
+        int? page,
+        int? pageSize,
+        IQueryHandler<GetExternalRepairsQuery, Result<PagedResult<ExternalRepairResponse>>> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(
+            new GetExternalRepairsQuery(status, search, page ?? 1, pageSize ?? 20), cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> CancelExternal(
+        Guid id,
+        CancelExternalRepairRequest request,
+        IValidator<CancelExternalRepairCommand> validator,
+        ICommandHandler<CancelExternalRepairCommand, Result> handler,
+        CancellationToken cancellationToken)
+    {
+        var command = new CancelExternalRepairCommand(id, request.Reason);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
+    }
+
     private static async Task<IResult> GetPhoto(
         Guid id,
         IQueryHandler<GetRepairPhotoQuery, Result<RepairPhotoFile>> handler,
@@ -138,3 +202,7 @@ public static class RepairCaseEndpoints
 }
 
 public sealed record RepairActionRequest(RepairAction Action, string? Note);
+
+public sealed record ExternalRepairRequest(string Facility, string Reason, string Reference);
+
+public sealed record CancelExternalRepairRequest(string Reason);

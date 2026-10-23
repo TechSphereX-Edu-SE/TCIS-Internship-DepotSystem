@@ -33,5 +33,7 @@ public sealed record GateInResponse(
     int? Row,
     int? Tier,
     DateTimeOffset GateInAt,
-    // Feedback 3/4: set when the container came in Damaged - the repair case (Chờ giám định) it went into
-    Guid? RepairCaseId);
+    // Feedback 3/4: set when the container came in Damaged - the repair case (Chờ giám định) it went into -
+    // or came back from an outside repair facility (ReturnedFromRepair) - the case it belongs to
+    Guid? RepairCaseId,
+    bool ReturnedFromRepair);

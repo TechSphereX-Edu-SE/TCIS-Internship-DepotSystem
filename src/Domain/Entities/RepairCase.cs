@@ -124,6 +124,10 @@ public sealed class RepairCase : AuditableEntity
         return Result.Success(RepairCaseEvent.Create(this, kind, from, Status, note, at, actor));
     }
 
+    // History row that does not change the status (external repair steps)
+    public RepairCaseEvent Record(RepairEventKind kind, string? note, DateTimeOffset at, string? actor) =>
+        RepairCaseEvent.Create(this, kind, Status, Status, note, at, actor);
+
     public static Error Closed() =>
         Error.Conflict("RepairCase.Closed", "The repair case is already closed.");
 }

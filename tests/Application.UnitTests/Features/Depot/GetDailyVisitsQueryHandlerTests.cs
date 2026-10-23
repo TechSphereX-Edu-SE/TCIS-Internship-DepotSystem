@@ -36,7 +36,7 @@ public sealed class GetDailyVisitsQueryHandlerTests
         var leftVisit = GateIn(leftToday, new DateTimeOffset(2026, 10, 21, 23, 30, 0, Vn));
         var order = new DeliveryOrder("DO-001", msc.Id, customer.Id, new DateOnly(2026, 10, 31), "MSC VESSEL 01");
         order.AddLine(ContainerCategory.Dry, 2);
-        leftVisit.GateOut(order, ContainerCategory.Dry, "51c-99999", new DateTimeOffset(2026, 10, 22, 8, 30, 0, Vn));
+        leftVisit.GateOut(order, ContainerCategory.Dry, ContainerSize.Ft20, "51c-99999", new DateTimeOffset(2026, 10, 22, 8, 30, 0, Vn));
 
         dbContext.AddRange(msc, customer, wait, today, leftToday, afterMidnight, order, leftVisit,
             GateIn(today, new DateTimeOffset(2026, 10, 22, 8, 0, 0, Vn)),

@@ -16,10 +16,12 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Gat
          the condition cannot simply be switched back to Normal any more.
       3. Nothing is stacked on the container (409) - the one above must be moved first.
       4. Domain (ContainerVisit.GateOut / DeliveryOrder.Release), all 409:
-         order of the same line operator, not expired (Vietnam date), has a line for the
-         container type, and quantity left on that line.
-    The CHECK on DeliveryOrderLines (ReleasedQuantity <= Quantity) still guards the database
-    if two gate-outs take the last unit at the same time.
+         order of the same line operator, not cancelled, not expired (Vietnam date), has a line for the
+         container type and size (Q1), and quantity left on that line.
+    Feedback 6 (no double release, no release beyond the quantity): the visit and the order have a row
+    version, so a second gate-out of the same container or under the same order at the same moment
+    fails with 409 Data.ConcurrentUpdate; the CHECK on DeliveryOrderLines (ReleasedQuantity <= Quantity)
+    is only the last guard.
 */
 public sealed class GateOutCommandHandler(IAppDbContext dbContext, TimeProvider timeProvider)
     : ICommandHandler<GateOutCommand, Result<GateOutResponse>>
@@ -53,15 +55,15 @@ public sealed class GateOutCommandHandler(IAppDbContext dbContext, TimeProvider 
         if (leave.IsFailure)
             return Result.Failure<GateOutResponse>(leave.Error!);
 
-        var gateOut = visit.GateOut(order, container.Category, command.VehicleNo, timeProvider.GetUtcNow());
+        var gateOut = visit.GateOut(order, container.Category, container.Size, command.VehicleNo, timeProvider.GetUtcNow());
         if (gateOut.IsFailure)
             return Result.Failure<GateOutResponse>(gateOut.Error!);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var remaining = order.Lines.Single(l => l.Category == container.Category).RemainingQuantity;
+        var remaining = order.LineFor(container.Category, container.Size)!.RemainingQuantity;
         return Result.Success(new GateOutResponse(
             visit.Id, container.ContainerNumber, order.OrderNumber, container.Category,
-            remaining, visit.GateOutVehicleNo!, visit.GateOutAt!.Value));
+            remaining, visit.GateOutVehicleNo!, visit.GateOutAt!.Value, container.Size));
     }
 }

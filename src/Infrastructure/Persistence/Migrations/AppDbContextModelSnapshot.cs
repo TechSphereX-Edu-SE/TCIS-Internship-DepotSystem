@@ -411,6 +411,10 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("DeliveryOrderId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ExitPurpose")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<DateTimeOffset>("GateInAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -457,6 +461,12 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<int?>("Row")
                         .HasColumnType("integer");
 
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.Property<int?>("Tier")
                         .HasColumnType("integer");
 
@@ -484,7 +494,7 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_ContainerVisits_GateOutAfterGateIn", "\"GateOutAt\" IS NULL OR \"GateOutAt\" >= \"GateInAt\"");
 
-                            t.HasCheckConstraint("CK_ContainerVisits_GateOutFields", "(\"GateOutAt\" IS NULL AND \"GateOutVehicleNo\" IS NULL AND \"DeliveryOrderId\" IS NULL) OR (\"GateOutAt\" IS NOT NULL AND \"GateOutVehicleNo\" IS NOT NULL AND \"DeliveryOrderId\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_ContainerVisits_GateOutFields", "(\"GateOutAt\" IS NULL AND \"GateOutVehicleNo\" IS NULL AND \"DeliveryOrderId\" IS NULL AND \"ExitPurpose\" IS NULL) OR (\"GateOutAt\" IS NOT NULL AND \"GateOutVehicleNo\" IS NOT NULL AND ((\"ExitPurpose\" = 'EmptyRelease' AND \"DeliveryOrderId\" IS NOT NULL) OR (\"ExitPurpose\" = 'ExternalRepair' AND \"DeliveryOrderId\" IS NULL)))");
 
                             t.HasCheckConstraint("CK_ContainerVisits_Position", "(\"Bay\" IS NULL AND \"Row\" IS NULL AND \"Tier\" IS NULL) OR (\"Bay\" >= 1 AND \"Row\" >= 1 AND \"Tier\" >= 1)");
                         });
@@ -532,6 +542,13 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -550,6 +567,9 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<string>("LastModifiedBy")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("LastReleasedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("LineOperatorId")
                         .HasColumnType("uuid");
 
@@ -557,6 +577,12 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.Property<string>("VesselVoyage")
                         .IsRequired()
@@ -572,7 +598,10 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrderNumber")
                         .IsUnique();
 
-                    b.ToTable("DeliveryOrders", (string)null);
+                    b.ToTable("DeliveryOrders", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DeliveryOrders_Cancel", "(\"CancelledAt\" IS NULL AND \"CancelReason\" IS NULL) OR (\"CancelledAt\" IS NOT NULL AND \"CancelReason\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.DeliveryOrderLine", b =>
@@ -595,14 +624,115 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<int>("ReleasedQuantity")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Size")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("DeliveryOrderId", "Category")
+                    b.HasIndex("DeliveryOrderId", "Category", "Size")
                         .IsUnique();
 
                     b.ToTable("DeliveryOrderLines", null, t =>
                         {
                             t.HasCheckConstraint("CK_DeliveryOrderLines_Quantity", "\"Quantity\" > 0 AND \"ReleasedQuantity\" BETWEEN 0 AND \"Quantity\"");
+                        });
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ExternalRepairTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ContainerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Facility")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("GateOutVisitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("GatedOutAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("RepairCaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("ReturnVisitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GateOutVisitId");
+
+                    b.HasIndex("RepairCaseId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ExternalRepairTransfers_RepairCaseId_Active")
+                        .HasFilter("\"Status\" IN ('Requested', 'GatedOut')");
+
+                    b.HasIndex("ReturnVisitId");
+
+                    b.HasIndex("ContainerId", "Status");
+
+                    b.HasIndex("Status", "RequestedAt");
+
+                    b.ToTable("ExternalRepairTransfers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ExternalRepairTransfers_Status", "(\"Status\" = 'Requested' AND \"GateOutVisitId\" IS NULL AND \"CancelledAt\" IS NULL) OR (\"Status\" = 'Cancelled' AND \"GateOutVisitId\" IS NULL AND \"CancelledAt\" IS NOT NULL AND \"CancelReason\" IS NOT NULL) OR (\"Status\" = 'GatedOut' AND \"GateOutVisitId\" IS NOT NULL AND \"ReturnVisitId\" IS NULL) OR (\"Status\" = 'Returned' AND \"GateOutVisitId\" IS NOT NULL AND \"ReturnVisitId\" IS NOT NULL)");
                         });
                 });
 
@@ -1084,6 +1214,35 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasForeignKey("DeliveryOrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ExternalRepairTransfer", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Container", "Container")
+                        .WithMany()
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", null)
+                        .WithMany()
+                        .HasForeignKey("GateOutVisitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", "RepairCase")
+                        .WithMany()
+                        .HasForeignKey("RepairCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnVisitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Container");
+
+                    b.Navigation("RepairCase");
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.OperatingAssignment", b =>

@@ -26,7 +26,7 @@ public sealed class DeliveryOrderHandlerTests
 
     private static CreateDeliveryOrderCommand Command(Seed seed, string number = "do-001", DateOnly? expiry = null) =>
         new(number, seed.LineOperator.Id, seed.Customer.Id, expiry ?? Today.AddDays(10), "MSC Anna 042W",
-            [new DeliveryOrderLineRequest(ContainerCategory.Dry, 3), new DeliveryOrderLineRequest(ContainerCategory.Reefer, 1)]);
+            [new DeliveryOrderLineRequest(ContainerCategory.Dry, 3, ContainerSize.Ft20), new DeliveryOrderLineRequest(ContainerCategory.Reefer, 1, ContainerSize.Ft40)]);
 
     private static Task<Result<CreateDeliveryOrderResponse>> CreateAsync(
         AppDbContext dbContext, CreateDeliveryOrderCommand command, DateTimeOffset? now = null) =>
@@ -103,16 +103,21 @@ public sealed class DeliveryOrderHandlerTests
     {
         var validator = new CreateDeliveryOrderValidator();
         var valid = new CreateDeliveryOrderCommand("DO/2026-001", Guid.NewGuid(), Guid.NewGuid(), Today, "MSC ANNA 042W",
-            [new DeliveryOrderLineRequest(ContainerCategory.Dry, 2)]);
+            [new DeliveryOrderLineRequest(ContainerCategory.Dry, 2, ContainerSize.Ft20)]);
 
         validator.Validate(valid).IsValid.Should().BeTrue();
         validator.Validate(valid with { OrderNumber = "DO 001" }).IsValid.Should().BeFalse(); // space not allowed
         validator.Validate(valid with { Lines = [] }).IsValid.Should().BeFalse();
-        validator.Validate(valid with { Lines = [new(ContainerCategory.Dry, 0)] }).IsValid.Should().BeFalse();
+        validator.Validate(valid with { Lines = [new(ContainerCategory.Dry, 0, ContainerSize.Ft20)] }).IsValid.Should().BeFalse();
+        validator.Validate(valid with { Lines = [new(ContainerCategory.Dry, 1)] }).IsValid.Should().BeFalse(); // size is required (Q1)
         validator.Validate(valid with
         {
-            Lines = [new(ContainerCategory.Dry, 1), new(ContainerCategory.Dry, 2)] // same type twice
+            Lines = [new(ContainerCategory.Dry, 1, ContainerSize.Ft20), new(ContainerCategory.Dry, 2, ContainerSize.Ft20)] // same type and size twice
         }).IsValid.Should().BeFalse();
+        validator.Validate(valid with
+        {
+            Lines = [new(ContainerCategory.Dry, 1, ContainerSize.Ft20), new(ContainerCategory.Dry, 2, ContainerSize.Ft40)] // one line per size
+        }).IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -129,7 +134,8 @@ public sealed class DeliveryOrderHandlerTests
         result.Value.LineOperatorCode.Should().Be("MSC");
         result.Value.IsExpired.Should().BeFalse();
         result.Value.Lines.Should().ContainSingle(l =>
-            l.Category == ContainerCategory.Dry && l.Quantity == 3 && l.ReleasedQuantity == 0 && l.RemainingQuantity == 3);
+            l.Category == ContainerCategory.Dry && l.Size == ContainerSize.Ft20 && l.Quantity == 3 && l.ReleasedQuantity == 0 && l.RemainingQuantity == 3);
+        result.Value.Status.Should().Be(DeliveryOrderStatus.NotStarted);
     }
 
     [Fact]

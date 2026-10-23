@@ -1,3 +1,4 @@
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.External;
 using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.RepairCases.Shared;
 
@@ -6,6 +7,7 @@ namespace TechSpherex.CleanArchitecture.Application.Features.RepairCases.Shared;
     OperatorCode: line operator of the visit the case was opened in (null when opened outside the yard).
     BlockCode/Bay/Row/Tier: where the container is now (null when it is not in the yard);
     the case itself never changes the position.
+    ExternalStatus / ExternalFacility: the active outside repair transfer (waiting to leave or at the facility), if any.
 */
 public sealed record RepairCaseSummary(
     Guid Id,
@@ -23,7 +25,9 @@ public sealed record RepairCaseSummary(
     string? BlockCode,
     int? Bay,
     int? Row,
-    int? Tier);
+    int? Tier,
+    ExternalRepairStatus? ExternalStatus,
+    string? ExternalFacility);
 
 public sealed record RepairFindingResponse(
     Guid Id, string Description, RepairFindingSource Source, Guid? VisitId, DateTimeOffset ReportedAt, string? ReportedBy);
@@ -38,6 +42,8 @@ public sealed record RepairCaseEventResponse(
     The whole case for the detail panel. AllowedActions comes from the same transition table the
     domain uses, so the screen only offers what the API accepts. ConditionAtGateIn is the condition
     recorded on the visit (kept even after the case is closed).
+    CanRequestExternal: the case may be sent to an outside facility now (approved / in repair, container
+    in the yard, no active transfer); Transfers = every outside repair transfer of the case, newest first.
 */
 public sealed record RepairCaseDetail(
     Guid Id,
@@ -62,4 +68,6 @@ public sealed record RepairCaseDetail(
     IReadOnlyList<RepairAction> AllowedActions,
     IReadOnlyList<RepairFindingResponse> Findings,
     IReadOnlyList<RepairPhotoResponse> Photos,
-    IReadOnlyList<RepairCaseEventResponse> History);
+    IReadOnlyList<RepairCaseEventResponse> History,
+    bool CanRequestExternal,
+    IReadOnlyList<ExternalRepairResponse> Transfers);

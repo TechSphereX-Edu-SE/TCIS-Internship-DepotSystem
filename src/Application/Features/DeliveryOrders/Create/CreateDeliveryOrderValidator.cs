@@ -17,18 +17,19 @@ public sealed class CreateDeliveryOrderValidator : AbstractValidator<CreateDeliv
         RuleFor(x => x.ExpiryDate).NotEmpty();
         RuleFor(x => x.VesselVoyage).NotEmpty().MaximumLength(50);
 
-        // At least one container type; each type once (one order line per type)
+        // At least one line; each type + size once (Q1: one order line per type and size)
         RuleFor(x => x.Lines)
             .NotEmpty()
             .WithMessage("The order must have at least one container type and quantity.");
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
             line.RuleFor(l => l.Category).IsInEnum();
+            line.RuleFor(l => l.Size).NotNull().IsInEnum().WithMessage("Choose the container size of each line.");
             line.RuleFor(l => l.Quantity).GreaterThanOrEqualTo(1);
         });
         RuleFor(x => x.Lines)
-            .Must(lines => lines.Select(l => l.Category).Distinct().Count() == lines.Count)
+            .Must(lines => lines.Select(l => (l.Category, l.Size)).Distinct().Count() == lines.Count)
             .When(x => x.Lines is { Count: > 0 })
-            .WithMessage("Each container type can appear only once in an order.");
+            .WithMessage("Each container type and size can appear only once in an order.");
     }
 }

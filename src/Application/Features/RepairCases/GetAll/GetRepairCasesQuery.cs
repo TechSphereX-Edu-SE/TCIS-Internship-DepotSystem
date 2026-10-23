@@ -9,6 +9,8 @@ namespace TechSpherex.CleanArchitecture.Application.Features.RepairCases.GetAll;
     more = reported between two Vietnam dates (both included).
     Open: true = every status except Passed, false = Passed only, null = all.
     ContainerId: the cases of one container (e.g. from gate-out or the container catalog).
+    More filters (feedback 8): External = sửa ngoài (true: sent or to be sent to a facility, false: repaired
+    at the depot only), Facility = part of the facility name.
     Filters run in SQL before paging, so the count matches the rows.
 */
 public sealed record GetRepairCasesQuery(
@@ -20,5 +22,7 @@ public sealed record GetRepairCasesQuery(
     Guid? OperatorId = null,
     Guid? ContainerId = null,
     DateOnly? ReportedFrom = null,
-    DateOnly? ReportedTo = null)
+    DateOnly? ReportedTo = null,
+    bool? External = null,
+    string? Facility = null)
     : IQuery<Result<PagedResult<RepairCaseSummary>>>;

@@ -37,7 +37,10 @@ public sealed record DailyGateInResponse(
     string VehicleNo,
     DateTimeOffset GateInAt);
 
-// OrderLineQuantity / OrderLineRemaining: the delivery order line of the container's type, as it is now
+/*
+    OrderLineQuantity / OrderLineRemaining: the delivery order line of the container's type and size, as it is now.
+    ExitPurpose: cấp rỗng (with an order) or chuyển sửa ngoài (RepairFacility = where it went, no order).
+*/
 public sealed record DailyGateOutResponse(
     Guid VisitId,
     string ContainerNumber,
@@ -49,4 +52,6 @@ public sealed record DailyGateOutResponse(
     int? OrderLineQuantity,
     int? OrderLineRemaining,
     string? VehicleNo,
-    DateTimeOffset GateOutAt);
+    DateTimeOffset GateOutAt,
+    GateOutPurpose? ExitPurpose,
+    string? RepairFacility);

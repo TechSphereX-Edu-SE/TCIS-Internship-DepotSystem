@@ -2,9 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Act;
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.External;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
+using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.RepairCases.Get;
 
 // Findings and history oldest first (they read as a story); photos in upload order
@@ -44,12 +46,27 @@ public sealed class GetRepairCaseQueryHandler(IAppDbContext dbContext)
             .Include(v => v.Block)
             .FirstOrDefaultAsync(v => v.ContainerId == repairCase.ContainerId && v.GateOutAt == null, cancellationToken);
 
+        var transfers = await dbContext.ExternalRepairTransfers.AsNoTracking()
+            .Where(t => t.RepairCaseId == repairCase.Id)
+            .OrderByDescending(t => t.RequestedAt)
+            .Select(ExternalRepairProjection.ToResponse(dbContext.ContainerVisits))
+            .ToListAsync(cancellationToken);
+        var canRequestExternal = repairCase.IsOpen && openVisit is not null &&
+                                 ExternalRepairTransfer.AllowedCaseStatuses.Contains(repairCase.Status) &&
+                                 !transfers.Any(t => t.Status is ExternalRepairStatus.Requested or ExternalRepairStatus.GatedOut);
+
+        // Steps that pass the case are not offered while a transfer is active (see ApplyRepairActionCommandHandler)
+        var hasActiveTransfer = transfers.Any(t => t.Status is ExternalRepairStatus.Requested or ExternalRepairStatus.GatedOut);
+        var actions = RepairCase.ActionsFrom(repairCase.Status)
+            .Where(a => !hasActiveTransfer || RepairCase.Transitions[a].To != RepairCaseStatus.Passed)
+            .ToList();
+
         var container = repairCase.Container;
         return Result.Success(new RepairCaseDetail(
             repairCase.Id, container.Id, container.ContainerNumber, container.IsoCode, container.Size, container.Category,
             container.Owner?.Code, repairCase.Status, repairCase.RepairNeeded, repairCase.OpenedAt, repairCase.ClosedAt,
             repairCase.VisitId, repairCase.Visit?.LineOperator.Code, repairCase.Visit?.ConditionIn,
             openVisit is not null, openVisit?.Block.Code, openVisit?.Bay, openVisit?.Row, openVisit?.Tier,
-            RepairCase.ActionsFrom(repairCase.Status), findings, photos, history));
+            actions, findings, photos, history, canRequestExternal, transfers));
     }
 }

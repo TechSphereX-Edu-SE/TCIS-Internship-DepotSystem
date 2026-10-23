@@ -72,7 +72,7 @@ public sealed class ContainerVisitTests
         var visit = GateIn(new DateTimeOffset(2026, 10, 1, 8, 0, 0, Vn));
         var order = Order(new DateOnly(2026, 10, 31));
 
-        var result = visit.GateOut(order, _container.Category, "51C-99999",
+        var result = visit.GateOut(order, _container.Category, _container.Size, "51C-99999",
             new DateTimeOffset(2026, 10, 15, 9, 0, 0, Vn));
 
         result.IsSuccess.Should().BeTrue();
@@ -88,7 +88,7 @@ public sealed class ContainerVisitTests
         var order = Order(new DateOnly(2026, 10, 31));
 
         // 31/10 18:00 UTC is already 01/11 01:00 in Vietnam, after the expiry date
-        var result = visit.GateOut(order, _container.Category, "51C-99999",
+        var result = visit.GateOut(order, _container.Category, _container.Size, "51C-99999",
             new DateTimeOffset(2026, 10, 31, 18, 0, 0, TimeSpan.Zero));
 
         result.Error!.Code.Should().Be("DeliveryOrder.Expired");
@@ -100,7 +100,7 @@ public sealed class ContainerVisitTests
         var visit = GateIn(new DateTimeOffset(2026, 10, 1, 8, 0, 0, Vn));
         var order = Order(new DateOnly(2026, 10, 10));
 
-        var result = visit.GateOut(order, _container.Category, "51C-99999",
+        var result = visit.GateOut(order, _container.Category, _container.Size, "51C-99999",
             new DateTimeOffset(2026, 10, 11, 9, 0, 0, Vn));
 
         result.Error!.Code.Should().Be("DeliveryOrder.Expired");
@@ -112,10 +112,10 @@ public sealed class ContainerVisitTests
     {
         var order = Order(new DateOnly(2026, 10, 31), quantity: 1);
         var at = new DateTimeOffset(2026, 10, 15, 9, 0, 0, Vn);
-        GateIn(at.AddDays(-5)).GateOut(order, ContainerCategory.Dry, "51C-1", at);
+        GateIn(at.AddDays(-5)).GateOut(order, ContainerCategory.Dry, ContainerSize.Ft20, "51C-1", at);
 
         var second = GateIn(at.AddDays(-3));
-        var result = second.GateOut(order, ContainerCategory.Dry, "51C-2", at);
+        var result = second.GateOut(order, ContainerCategory.Dry, ContainerSize.Ft20, "51C-2", at);
 
         result.Error!.Code.Should().Be("DeliveryOrder.QuantityExceeded");
     }
@@ -126,7 +126,7 @@ public sealed class ContainerVisitTests
         var visit = GateIn(new DateTimeOffset(2026, 10, 1, 8, 0, 0, Vn));
         var order = Order(new DateOnly(2026, 10, 31), lineOperatorId: Guid.NewGuid());
 
-        var result = visit.GateOut(order, _container.Category, "51C-99999",
+        var result = visit.GateOut(order, _container.Category, _container.Size, "51C-99999",
             new DateTimeOffset(2026, 10, 15, 9, 0, 0, Vn));
 
         result.Error!.Code.Should().Be("ContainerVisit.WrongLineOperator");
@@ -139,7 +139,7 @@ public sealed class ContainerVisitTests
         var order = new DeliveryOrder("DO002", _msc.Id, _customer.Id, new DateOnly(2026, 10, 31), "MSC ANNA 042W");
         order.AddLine(ContainerCategory.Reefer, 2);
 
-        var result = visit.GateOut(order, _container.Category, "51C-99999",
+        var result = visit.GateOut(order, _container.Category, _container.Size, "51C-99999",
             new DateTimeOffset(2026, 10, 15, 9, 0, 0, Vn));
 
         result.Error!.Code.Should().Be("DeliveryOrder.TypeNotAllowed");

@@ -49,6 +49,19 @@ public sealed class GetRepairCasesQueryHandler(IAppDbContext dbContext)
             cases = cases.Where(c => c.OpenedAt < end);
         }
 
+        // Cancelled transfers do not count: the container never went out under them
+        if (query.External is { } external)
+            cases = external
+                ? cases.Where(c => dbContext.ExternalRepairTransfers.Any(t => t.RepairCaseId == c.Id && t.Status != ExternalRepairStatus.Cancelled))
+                : cases.Where(c => !dbContext.ExternalRepairTransfers.Any(t => t.RepairCaseId == c.Id && t.Status != ExternalRepairStatus.Cancelled));
+
+        if (!string.IsNullOrWhiteSpace(query.Facility))
+        {
+            var facility = query.Facility.Trim().ToLower();
+            cases = cases.Where(c => dbContext.ExternalRepairTransfers.Any(t =>
+                t.RepairCaseId == c.Id && t.Status != ExternalRepairStatus.Cancelled && t.Facility.ToLower().Contains(facility)));
+        }
+
         var totalCount = await cases.CountAsync(cancellationToken);
 
         // Newest report first; the id breaks ties so paging is stable
@@ -74,6 +87,12 @@ public sealed class GetRepairCasesQueryHandler(IAppDbContext dbContext)
                 Position = dbContext.ContainerVisits
                     .Where(v => v.ContainerId == c.ContainerId && v.GateOutAt == null)
                     .Select(v => new { v.Block.Code, v.Bay, v.Row, v.Tier })
+                    .FirstOrDefault(),
+                // The active outside repair transfer (at most one per case)
+                External = dbContext.ExternalRepairTransfers
+                    .Where(t => t.RepairCaseId == c.Id &&
+                                (t.Status == ExternalRepairStatus.Requested || t.Status == ExternalRepairStatus.GatedOut))
+                    .Select(t => new { t.Status, t.Facility })
                     .FirstOrDefault()
             })
             .ToListAsync(cancellationToken);
@@ -81,7 +100,8 @@ public sealed class GetRepairCasesQueryHandler(IAppDbContext dbContext)
         var rows = items.Select(x => new RepairCaseSummary(
                 x.Case.Id, x.Case.ContainerId, x.ContainerNumber, x.Size, x.Category, x.Case.Status,
                 x.OperatorCode, x.Case.OpenedAt, x.Case.ClosedAt, x.LatestFinding ?? "", x.FindingCount, x.PhotoCount,
-                x.Position?.Code, x.Position?.Bay, x.Position?.Row, x.Position?.Tier))
+                x.Position?.Code, x.Position?.Bay, x.Position?.Row, x.Position?.Tier,
+                x.External?.Status, x.External?.Facility))
             .ToList();
 
         return Result.Success(new PagedResult<RepairCaseSummary>(rows, totalCount, query.Page, query.PageSize));
