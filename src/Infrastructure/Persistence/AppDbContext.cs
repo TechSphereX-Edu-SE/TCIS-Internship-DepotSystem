@@ -20,6 +20,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<Block> Blocks => Set<Block>();
     public DbSet<ContainerVisit> ContainerVisits => Set<ContainerVisit>();
     public DbSet<DeliveryOrder> DeliveryOrders => Set<DeliveryOrder>();
+    public DbSet<OperatingAssignment> OperatingAssignments => Set<OperatingAssignment>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

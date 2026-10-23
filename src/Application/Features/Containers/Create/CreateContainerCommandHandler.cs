@@ -20,6 +20,12 @@ public sealed class CreateContainerCommandHandler(IAppDbContext dbContext)
             return Result.Failure<CreateContainerResponse>(
                 Error.Conflict("Container.Duplicate", $"Container '{number}' already exists."));
 
+        var owner = await dbContext.LineOperators.FindAsync([command.OwnerId], cancellationToken);
+        if (owner is null)
+            return Result.Failure<CreateContainerResponse>(Error.NotFound("LineOperator.NotFound",
+                $"Partner with ID '{command.OwnerId}' was not found."));
+
+        // The owner text recorded with the container is the owner's code (a reference for later reconciliation)
         var container = new Container(
             number,
             command.IsoCode,
@@ -28,7 +34,11 @@ public sealed class CreateContainerCommandHandler(IAppDbContext dbContext)
             command.MaxGrossWeightKg,
             command.TareWeightKg,
             command.ManufactureDate,
-            command.OwnerName);
+            owner.Code);
+
+        var setOwner = container.SetOwner(owner);
+        if (setOwner.IsFailure)
+            return Result.Failure<CreateContainerResponse>(setOwner.Error!);
 
         dbContext.Containers.Add(container);
         await dbContext.SaveChangesAsync(cancellationToken);

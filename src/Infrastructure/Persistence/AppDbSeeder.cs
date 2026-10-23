@@ -25,15 +25,17 @@ public static class AppDbSeeder
         await SeedDepotMasterDataAsync(context, logger);
     }
 
-    // Depot sample data: line operators, customers, yard blocks, containers.
+    // Depot sample data: partners, customers, yard blocks, containers, operating assignments.
     private static async Task SeedDepotMasterDataAsync(AppDbContext context, ILogger logger)
     {
         if (!await context.LineOperators.AnyAsync())
         {
+            // The three lines own and operate containers; Triton is a leasing company that only owns them
             context.LineOperators.AddRange(
-                new LineOperator("MSC", "Mediterranean Shipping Company"),
-                new LineOperator("CMA", "CMA CGM"),
-                new LineOperator("HMM", "Hyundai Merchant Marine"));
+                new LineOperator("MSC", "Mediterranean Shipping Company", isOwner: true, isOperator: true),
+                new LineOperator("CMA", "CMA CGM", isOwner: true, isOperator: true),
+                new LineOperator("HMM", "Hyundai Merchant Marine", isOwner: true, isOperator: true),
+                new LineOperator("TRI", "Triton International", isOwner: true, isOperator: false));
         }
 
         if (!await context.Customers.AnyAsync())
@@ -59,15 +61,66 @@ public static class AppDbSeeder
             context.Containers.AddRange(
                 new Container("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, new DateOnly(2019, 5, 1), "MSC"),
                 new Container("MSCU5551234", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2250, new DateOnly(2020, 3, 1), "MSC"),
-                new Container("CMAU7654327", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3750, new DateOnly(2018, 8, 1), "CMA CGM"),
-                new Container("CMAU9001110", "45G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3900, new DateOnly(2021, 1, 1), "CMA CGM"),
+                new Container("CMAU7654327", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3750, new DateOnly(2018, 8, 1), "CMA"),
+                new Container("CMAU9001110", "45G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3900, new DateOnly(2021, 1, 1), "CMA"),
                 new Container("HMMU2468109", "45R1", ContainerSize.Ft40, ContainerCategory.Reefer, 34000, 4800, new DateOnly(2022, 6, 1), "HMM"),
                 new Container("HMMU3007776", "22R1", ContainerSize.Ft20, ContainerCategory.Reefer, 30480, 3000, new DateOnly(2022, 9, 1), "HMM"));
         }
 
         var saved = await context.SaveChangesAsync();
+        saved += await SeedSampleOwnersAndAssignmentsAsync(context);
         if (saved > 0)
             logger.LogInformation("Seeded {Count} depot master data rows", saved);
+    }
+
+    /*
+        Sample containers -> (owner code, operator code). HMMU2468109 is the feedback example:
+        HMM owns it, CMA rents it, so CMA is the operator at gate-in.
+        Runs on new and on upgraded databases: an owner is only set when missing, and assignments
+        are only added while there is none at all, so real data is never overwritten.
+    */
+    private static readonly (string Number, string Owner, string Operator)[] SampleRelations =
+    [
+        ("MSCU1234566", "MSC", "MSC"),
+        ("MSCU5551234", "MSC", "MSC"),
+        ("CMAU7654327", "CMA", "CMA"),
+        ("CMAU9001110", "CMA", "CMA"),
+        ("HMMU2468109", "HMM", "CMA"),
+        ("HMMU3007776", "HMM", "HMM")
+    ];
+
+    private static async Task<int> SeedSampleOwnersAndAssignmentsAsync(AppDbContext context)
+    {
+        var numbers = SampleRelations.Select(r => r.Number).ToList();
+        var containers = await context.Containers
+            .Where(c => numbers.Contains(c.ContainerNumber))
+            .ToDictionaryAsync(c => c.ContainerNumber);
+        var partners = await context.LineOperators.ToDictionaryAsync(p => p.Code);
+        var addAssignments = !await context.OperatingAssignments.AnyAsync();
+        var confirmedAt = DateTimeOffset.UtcNow;
+
+        foreach (var (number, ownerCode, operatorCode) in SampleRelations)
+        {
+            if (!containers.TryGetValue(number, out var container))
+                continue;
+
+            if (container.OwnerId is null && partners.TryGetValue(ownerCode, out var owner))
+            {
+                owner.AddOwnerRole();
+                container.SetOwner(owner);
+            }
+
+            if (!addAssignments || !partners.TryGetValue(operatorCode, out var lineOperator))
+                continue;
+
+            // Open-ended and already confirmed, so the sample containers can be gated in straight away
+            var assignment = OperatingAssignment.Create(
+                container, lineOperator, new DateOnly(2026, 1, 1), validTo: null, "SEED", "Sample data");
+            if (assignment.IsSuccess && assignment.Value!.Confirm(confirmedAt).IsSuccess)
+                context.OperatingAssignments.Add(assignment.Value);
+        }
+
+        return await context.SaveChangesAsync();
     }
 
 

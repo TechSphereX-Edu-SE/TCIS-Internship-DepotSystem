@@ -15,6 +15,12 @@ public sealed class ContainerVisit : AuditableEntity
     public Guid LineOperatorId { get; private set; }
     public LineOperator LineOperator { get; private set; } = default!;
 
+    /*
+        Operating assignment the line operator was taken from at gate-in (feedback 2: căn cứ phân công).
+        Null for visits recorded before assignments existed. Never changed afterwards (Q5).
+    */
+    public Guid? OperatingAssignmentId { get; private set; }
+
     // Current yard position (Bay/Row/Tier are null for a virtual block)
     public Guid BlockId { get; private set; }
     public Block Block { get; private set; } = default!;
@@ -64,8 +70,14 @@ public sealed class ContainerVisit : AuditableEntity
         ContainerCondition condition,
         string? conditionNote,
         string vehicleNo,
-        DateTimeOffset gateInAt)
+        DateTimeOffset gateInAt,
+        OperatingAssignment? basis = null)
     {
+        // The visit's operator must be the one of the assignment it is based on
+        if (basis is not null && (basis.OperatorId != lineOperatorId || basis.ContainerId != container.Id))
+            return Result.Failure<ContainerVisit>(Error.Conflict("ContainerVisit.OperatorMismatch",
+                "The line operator does not match the confirmed operating assignment of the container."));
+
         // The block must take this container type before its position is even looked at
         var accepts = block.CheckAccepts(container.Category);
         if (accepts.IsFailure)
@@ -82,6 +94,7 @@ public sealed class ContainerVisit : AuditableEntity
         {
             ContainerId = container.Id,
             LineOperatorId = lineOperatorId,
+            OperatingAssignmentId = basis?.Id,
             BlockId = block.Id,
             Bay = bay,
             Row = row,

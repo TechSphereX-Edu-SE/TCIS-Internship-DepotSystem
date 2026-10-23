@@ -23,7 +23,10 @@ public sealed class MoveContainerCommandHandlerTests
             new Container("HMMU0000016", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "HMM"),
             new Container("CMAU1234564", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3800, null, "CMA"));
 
-        dbContext.AddRange(seed.LineOperator, seed.Physical, seed.Repair, seed.X20, seed.Y20, seed.Z40);
+        dbContext.AddRange(seed.LineOperator, seed.Physical, seed.Repair, seed.X20, seed.Y20, seed.Z40,
+            DepotTestData.Confirmed(seed.X20, seed.LineOperator),
+            DepotTestData.Confirmed(seed.Y20, seed.LineOperator),
+            DepotTestData.Confirmed(seed.Z40, seed.LineOperator));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         return seed;
     }

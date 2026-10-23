@@ -11,6 +11,9 @@ namespace TechSpherex.CleanArchitecture.Application.UnitTests.Features.Depot;
 // Get, list and delete of container master data
 public sealed class ContainerQueryHandlerTests
 {
+    // 21/10/2026 09:00 in Vietnam: "today" for the current operator
+    private static readonly DateTimeOffset Now = new(2026, 10, 21, 9, 0, 0, TimeSpan.FromHours(7));
+
     private static async Task<Container> SeedContainerAsync(AppDbContext dbContext, string number = "MSCU1234566")
     {
         var container = new Container(number, "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200,
@@ -26,7 +29,7 @@ public sealed class ContainerQueryHandlerTests
         await using var dbContext = TestDbContextFactory.Create();
         var container = await SeedContainerAsync(dbContext);
 
-        var result = await new GetContainerQueryHandler(dbContext)
+        var result = await new GetContainerQueryHandler(dbContext, new FixedTimeProvider(Now))
             .HandleAsync(new GetContainerQuery(container.Id), TestContext.Current.CancellationToken);
 
         result.Value!.ContainerNumber.Should().Be("MSCU1234566");
@@ -41,7 +44,7 @@ public sealed class ContainerQueryHandlerTests
     {
         await using var dbContext = TestDbContextFactory.Create();
 
-        var result = await new GetContainerQueryHandler(dbContext)
+        var result = await new GetContainerQueryHandler(dbContext, new FixedTimeProvider(Now))
             .HandleAsync(new GetContainerQuery(Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         result.Error!.Type.Should().Be(ErrorType.NotFound);
@@ -55,7 +58,7 @@ public sealed class ContainerQueryHandlerTests
         await SeedContainerAsync(dbContext, "CMAU1234564");
         await SeedContainerAsync(dbContext, "CSQU3054383");
 
-        var result = await new GetAllContainersQueryHandler(dbContext)
+        var result = await new GetAllContainersQueryHandler(dbContext, new FixedTimeProvider(Now))
             .HandleAsync(new GetAllContainersQuery(Page: 2, PageSize: 2), TestContext.Current.CancellationToken);
 
         result.Value!.Items.Should().ContainSingle();
@@ -73,7 +76,7 @@ public sealed class ContainerQueryHandlerTests
         await SeedContainerAsync(dbContext, "CMAU1234564");
 
         // Lower case and spaces are normalized like the stored numbers
-        var result = await new GetAllContainersQueryHandler(dbContext)
+        var result = await new GetAllContainersQueryHandler(dbContext, new FixedTimeProvider(Now))
             .HandleAsync(new GetAllContainersQuery(Search: " mscu "), TestContext.Current.CancellationToken);
 
         result.Value!.TotalCount.Should().Be(2);
@@ -89,10 +92,70 @@ public sealed class ContainerQueryHandlerTests
         await SeedContainerAsync(dbContext, "CSQU3054383");
 
         // Digits match inside the number (not a prefix), so both are in the "rest" group, by number
-        var result = await new GetAllContainersQueryHandler(dbContext)
+        var result = await new GetAllContainersQueryHandler(dbContext, new FixedTimeProvider(Now))
             .HandleAsync(new GetAllContainersQuery(Search: "1234"), TestContext.Current.CancellationToken);
 
         result.Value!.Items.Select(c => c.ContainerNumber).Should().Equal("CMAU1234564", "MSCU1234566");
+    }
+
+    [Fact]
+    public async Task Get_Should_Return_The_Owner_And_Todays_Operator()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var container = await SeedContainerAsync(dbContext, "HMMU2468109");
+        var hmm = DepotTestData.Partner("HMM");
+        var cma = DepotTestData.Partner("CMA");
+        container.SetOwner(hmm);
+        // HMM owns it, CMA rents it from 01/10/2026 (feedback 2 example)
+        dbContext.AddRange(hmm, cma, DepotTestData.Confirmed(container, cma, from: new DateOnly(2026, 10, 1)));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new GetContainerQueryHandler(dbContext, new FixedTimeProvider(Now))
+            .HandleAsync(new GetContainerQuery(container.Id), TestContext.Current.CancellationToken);
+
+        result.Value!.OwnerCode.Should().Be("HMM");
+        result.Value.CurrentOperatorCode.Should().Be("CMA");
+    }
+
+    [Fact]
+    public async Task GetAll_Should_Filter_By_Todays_Operator_Not_By_Owner()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var rented = await SeedContainerAsync(dbContext, "HMMU2468109");
+        var own = await SeedContainerAsync(dbContext, "HMMU3007776");
+        var ended = await SeedContainerAsync(dbContext, "CMAU1234564");
+        var hmm = DepotTestData.Partner("HMM");
+        var cma = DepotTestData.Partner("CMA");
+        rented.SetOwner(hmm);
+        own.SetOwner(hmm);
+        dbContext.AddRange(hmm, cma,
+            DepotTestData.Confirmed(rented, cma),                                          // HMM owns, CMA operates
+            DepotTestData.Confirmed(own, hmm),                                             // HMM owns and operates
+            DepotTestData.Confirmed(ended, cma, to: new DateOnly(2026, 10, 20)));          // CMA's period ended yesterday
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new GetAllContainersQueryHandler(dbContext, new FixedTimeProvider(Now))
+            .HandleAsync(new GetAllContainersQuery(OperatorId: cma.Id), TestContext.Current.CancellationToken);
+
+        result.Value!.Items.Should().ContainSingle();
+        result.Value.Items[0].ContainerNumber.Should().Be("HMMU2468109");
+        result.Value.Items[0].OwnerCode.Should().Be("HMM");
+        result.Value.Items[0].CurrentOperatorCode.Should().Be("CMA");
+    }
+
+    [Fact]
+    public async Task Delete_Should_Keep_Container_With_Operating_History()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var container = await SeedContainerAsync(dbContext);
+        var msc = DepotTestData.Partner("MSC");
+        dbContext.AddRange(msc, DepotTestData.Confirmed(container, msc));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new DeleteContainerCommandHandler(dbContext)
+            .HandleAsync(new DeleteContainerCommand(container.Id), TestContext.Current.CancellationToken);
+
+        result.Error!.Code.Should().Be("Container.HasHistory");
     }
 
     [Fact]

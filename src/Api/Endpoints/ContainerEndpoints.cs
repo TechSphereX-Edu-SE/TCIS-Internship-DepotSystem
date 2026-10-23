@@ -49,11 +49,13 @@ public static class ContainerEndpoints
         int? page,
         int? pageSize,
         string? search,
+        Guid? operatorId,
         IQueryHandler<GetAllContainersQuery, Result<PagedResult<ContainerResponse>>> handler,
         CancellationToken cancellationToken)
     {
         // ?search= filters by part of the container number (gate-in lookup, container list search box)
-        var query = new GetAllContainersQuery(page ?? 1, pageSize ?? 10, search);
+        // ?operatorId= keeps containers whose confirmed operating assignment today names that operator
+        var query = new GetAllContainersQuery(page ?? 1, pageSize ?? 10, search, operatorId);
         var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
@@ -87,7 +89,7 @@ public static class ContainerEndpoints
     {
         // Validate the command (id from the route + body), not the raw request
         var command = new UpdateContainerCommand(id, request.IsoCode, request.Size, request.Category,
-            request.MaxGrossWeightKg, request.TareWeightKg, request.ManufactureDate, request.OwnerName);
+            request.MaxGrossWeightKg, request.TareWeightKg, request.ManufactureDate, request.OwnerId);
         var validation = await validator.ValidateAsync(command, cancellationToken);
         if (!validation.IsValid)
             return Results.ValidationProblem(validation.ToDictionary());
@@ -130,7 +132,7 @@ public sealed record UpdateContainerRequest(
     int MaxGrossWeightKg,
     int TareWeightKg,
     DateOnly? ManufactureDate,
-    string OwnerName);
+    Guid OwnerId);
 
 
 public sealed record UpdateContainerConditionRequest(

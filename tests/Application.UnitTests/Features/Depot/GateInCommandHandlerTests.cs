@@ -23,7 +23,9 @@ public sealed class GateInCommandHandlerTests
             new Container("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "MSC"),
             new Container("CMAU1234564", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3800, null, "CMA"));
 
-        dbContext.AddRange(seed.LineOperator, seed.Physical, seed.Virtual, seed.Ft20, seed.Ft40);
+        dbContext.AddRange(seed.LineOperator, seed.Physical, seed.Virtual, seed.Ft20, seed.Ft40,
+            DepotTestData.Confirmed(seed.Ft20, seed.LineOperator),
+            DepotTestData.Confirmed(seed.Ft40, seed.LineOperator));
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         return seed;
     }
@@ -108,6 +110,7 @@ public sealed class GateInCommandHandlerTests
         var other20 = new Container("CMAU100000X", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "CMA");
         dbContext.Containers.Add(other20);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await DepotTestData.AssignAsync(dbContext, other20, seed.LineOperator);
 
         var result = await handler.HandleAsync(Command(other20, seed, seed.Physical, 5, 3, 1), TestContext.Current.CancellationToken);
 
@@ -142,12 +145,13 @@ public sealed class GateInCommandHandlerTests
         dbContext.ContainerVisits.Should().BeEmpty();
     }
 
-    // Adds an extra 20ft Dry container so a test can fill more than one slot
-    private static async Task<Container> AddFt20Async(AppDbContext dbContext, string number)
+    // Adds an extra 20ft Dry container (operated by the seed line operator) so a test can fill more than one slot
+    private static async Task<Container> AddFt20Async(AppDbContext dbContext, Seed seed, string number)
     {
         var container = new Container(number, "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "HMM");
         dbContext.Containers.Add(container);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await DepotTestData.AssignAsync(dbContext, container, seed.LineOperator);
         return container;
     }
 
@@ -184,7 +188,7 @@ public sealed class GateInCommandHandlerTests
         await using var dbContext = TestDbContextFactory.Create();
         var seed = await SeedAsync(dbContext);
         var handler = Handler(dbContext);
-        var second20 = await AddFt20Async(dbContext, "HMMU0000016");
+        var second20 = await AddFt20Async(dbContext, seed, "HMMU0000016");
         await handler.HandleAsync(Command(seed.Ft20, seed, seed.Physical, 3, 1, 1), TestContext.Current.CancellationToken);
 
         // Only bay 3 is covered below; bay 5 is empty
@@ -221,6 +225,72 @@ public sealed class GateInCommandHandlerTests
         var result = await Handler(dbContext).HandleAsync(command, TestContext.Current.CancellationToken);
 
         result.Error!.Type.Should().Be(ErrorType.NotFound);
+    }
+
+    [Fact]
+    public async Task Should_Return_Conflict_Without_A_Confirmed_Operating_Assignment()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var unassigned = new Container("CMAU100000X", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "CMA");
+        dbContext.Containers.Add(unassigned);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Feedback 2: the operator is never guessed (owner text, prefix, last visit); it must be recorded first
+        var result = await Handler(dbContext).HandleAsync(
+            Command(unassigned, seed, seed.Physical, 5, 3, 1), TestContext.Current.CancellationToken);
+
+        result.Error!.Code.Should().Be("ContainerVisit.NoOperatingAssignment");
+        dbContext.ContainerVisits.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Should_Not_Use_A_Pending_Or_Ended_Assignment()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+
+        // A pending assignment for a new container (not verified yet) ...
+        var pendingOnly = new Container("HMMU0000016", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "HMM");
+        var pending = OperatingAssignment.Create(pendingOnly, seed.LineOperator, DepotTestData.LongAgo, null, null, null).Value!;
+        dbContext.AddRange(pendingOnly, pending);
+        // ... and the seed 20ft whose period ended the day before the gate-in (21/10/2026)
+        dbContext.OperatingAssignments.Single(a => a.ContainerId == seed.Ft20.Id).End(new DateOnly(2026, 10, 20), Now);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var withPending = await Handler(dbContext).HandleAsync(
+            Command(pendingOnly, seed, seed.Physical, 5, 3, 1), TestContext.Current.CancellationToken);
+        var withEnded = await Handler(dbContext).HandleAsync(
+            Command(seed.Ft20, seed, seed.Physical, 7, 3, 1), TestContext.Current.CancellationToken);
+
+        withPending.Error!.Code.Should().Be("ContainerVisit.NoOperatingAssignment");
+        withEnded.Error!.Code.Should().Be("ContainerVisit.NoOperatingAssignment");
+    }
+
+    [Fact]
+    public async Task Should_Take_The_Operator_From_The_Assignment_Not_The_Owner()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var hmm = DepotTestData.Partner("HMM");
+        var hmmOwned = new Container("HMMU2468109", "45R1", ContainerSize.Ft40, ContainerCategory.Reefer, 34000, 4800, null, "HMM");
+        hmmOwned.SetOwner(hmm);
+        var anyType = Block.CreateVirtual("ANY");
+        // HMM owns the container, MSC (the seed operator) rents it
+        dbContext.AddRange(hmm, hmmOwned, anyType, DepotTestData.Confirmed(hmmOwned, seed.LineOperator));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var asOwner = await Handler(dbContext).HandleAsync(
+            Command(hmmOwned, seed, anyType, null, null, null) with { LineOperatorId = hmm.Id },
+            TestContext.Current.CancellationToken);
+        var asOperator = await Handler(dbContext).HandleAsync(
+            Command(hmmOwned, seed, anyType, null, null, null), TestContext.Current.CancellationToken);
+
+        asOwner.Error!.Code.Should().Be("ContainerVisit.OperatorMismatch");
+        asOperator.IsSuccess.Should().BeTrue();
+        var visit = dbContext.ContainerVisits.Single();
+        visit.LineOperatorId.Should().Be(seed.LineOperator.Id);
+        visit.OperatingAssignmentId.Should().Be(dbContext.OperatingAssignments.Single(a => a.ContainerId == hmmOwned.Id).Id);
     }
 
     [Fact]

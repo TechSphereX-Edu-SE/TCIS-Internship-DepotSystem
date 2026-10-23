@@ -23,14 +23,22 @@ public sealed class UpdateContainerCommandHandler(IAppDbContext dbContext) : ICo
                     $"Container '{container.ContainerNumber}' is in the yard; its size cannot be changed."));
         }
 
+        var owner = await dbContext.LineOperators.FindAsync([command.OwnerId], cancellationToken);
+        if (owner is null)
+            return Result.Failure(Error.NotFound("LineOperator.NotFound", $"Partner with ID '{command.OwnerId}' was not found."));
+
+        // Owner first: a partner without the Owner role is refused before anything changes
+        var setOwner = container.SetOwner(owner);
+        if (setOwner.IsFailure)
+            return setOwner;
+
         container.UpdateDetails(
             command.IsoCode,
             command.Size,
             command.Category,
             command.MaxGrossWeightKg,
             command.TareWeightKg,
-            command.ManufactureDate,
-            command.OwnerName);
+            command.ManufactureDate);
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return Result.Success();

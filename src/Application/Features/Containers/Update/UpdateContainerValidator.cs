@@ -30,6 +30,6 @@ public sealed class UpdateContainerValidator : AbstractValidator<UpdateContainer
             .When(x => x.ManufactureDate.HasValue)
             .WithMessage("Manufacture date cannot be in the future.");
 
-        RuleFor(x => x.OwnerName).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.OwnerId).NotEmpty();
     }
 }

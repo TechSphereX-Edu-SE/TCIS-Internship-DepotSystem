@@ -18,7 +18,7 @@ public sealed class CreateLineOperatorCommandHandler(IAppDbContext dbContext)
             return Result.Failure<CreateLineOperatorResponse>(
                 Error.Conflict("LineOperator.Duplicate", $"Line operator '{code}' already exists."));
 
-        var lineOperator = new LineOperator(code, command.Name);
+        var lineOperator = new LineOperator(code, command.Name, command.TaxCode, command.IsOwner, command.IsOperator);
 
         dbContext.LineOperators.Add(lineOperator);
         await dbContext.SaveChangesAsync(cancellationToken);

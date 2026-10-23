@@ -15,7 +15,18 @@ public sealed class Container : AuditableEntity
     public int MaxGrossWeightKg { get; private set; }
     public int TareWeightKg { get; private set; }
     public DateOnly? ManufactureDate { get; private set; }
+
+    /*
+        Owner as free text, as it was first recorded. Before 23/10/2026 this was the only owner field,
+        so it is kept unchanged for reconciliation (feedback 9: không tự đoán hoặc làm mất giá trị).
+        The owner itself is OwnerId (a partner with the Owner role).
+    */
     public string OwnerName { get; private set; } = default!;
+
+    // Owner partner (feedback 2: stored by id, not by name or number prefix); null until reconciled
+    public Guid? OwnerId { get; private set; }
+    public LineOperator? Owner { get; private set; }
+
     public ContainerCondition Condition { get; private set; } = ContainerCondition.Normal;
     public string? ConditionNote { get; private set; }
 
@@ -35,15 +46,27 @@ public sealed class Container : AuditableEntity
         SetDetails(isoCode, size, category, maxGrossWeightKg, tareWeightKg, manufactureDate, ownerName);
     }
 
+    // The owner text recorded at creation is not changed here: the owner is set with SetOwner
     public void UpdateDetails(
         string isoCode,
         ContainerSize size,
         ContainerCategory category,
         int maxGrossWeightKg,
         int tareWeightKg,
-        DateOnly? manufactureDate,
-        string ownerName) =>
-        SetDetails(isoCode, size, category, maxGrossWeightKg, tareWeightKg, manufactureDate, ownerName);
+        DateOnly? manufactureDate) =>
+        SetDetails(isoCode, size, category, maxGrossWeightKg, tareWeightKg, manufactureDate, OwnerName);
+
+    // Only a partner with the Owner role can own a container (409 otherwise)
+    public Result SetOwner(LineOperator owner)
+    {
+        if (!owner.IsOwner)
+            return Result.Failure(Error.Conflict("Partner.NotOwner",
+                $"Partner {owner.Code} is not marked as a container owner."));
+
+        OwnerId = owner.Id;
+        Owner = owner;
+        return Result.Success();
+    }
 
     public void UpdateCondition(ContainerCondition condition, string? note)
     {

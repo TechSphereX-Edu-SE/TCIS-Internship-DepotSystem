@@ -3,6 +3,7 @@ using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.Containers.Update;
 
 // Updates container master data. The container number is the identity and cannot change.
+// OwnerId: a partner with the Owner role; picking it for an older container reconciles its owner text.
 public sealed record UpdateContainerCommand(
     Guid Id,
     string IsoCode,
@@ -11,4 +12,4 @@ public sealed record UpdateContainerCommand(
     int MaxGrossWeightKg,
     int TareWeightKg,
     DateOnly? ManufactureDate,
-    string OwnerName) : ICommand;
+    Guid OwnerId) : ICommand;

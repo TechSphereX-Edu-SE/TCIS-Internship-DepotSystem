@@ -4,6 +4,7 @@ using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.LineOperators.Get;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
+using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.LineOperators.GetAll;
 
 public sealed class GetAllLineOperatorsQueryHandler(IAppDbContext dbContext)
@@ -14,6 +15,13 @@ public sealed class GetAllLineOperatorsQueryHandler(IAppDbContext dbContext)
     {
         var lineOperators = dbContext.LineOperators.AsNoTracking();
         IOrderedQueryable<LineOperator> ordered;
+
+        lineOperators = query.Role switch
+        {
+            PartnerRole.Owner => lineOperators.Where(l => l.IsOwner),
+            PartnerRole.Operator => lineOperators.Where(l => l.IsOperator),
+            _ => lineOperators
+        };
 
         if (string.IsNullOrWhiteSpace(query.Search))
         {

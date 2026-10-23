@@ -349,6 +349,9 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<int>("MaxGrossWeightKg")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("OwnerName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -366,6 +369,8 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ContainerNumber")
                         .IsUnique();
+
+                    b.HasIndex("OwnerId");
 
                     b.ToTable("Containers", null, t =>
                         {
@@ -446,6 +451,9 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("LineOperatorId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("OperatingAssignmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("Row")
                         .HasColumnType("integer");
 
@@ -461,6 +469,8 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeliveryOrderId");
 
                     b.HasIndex("GateInBlockId");
+
+                    b.HasIndex("OperatingAssignmentId");
 
                     b.HasIndex("LineOperatorId", "GateInAt");
 
@@ -613,6 +623,12 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsOperator")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOwner")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset?>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -624,12 +640,86 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
                         .IsUnique();
 
                     b.ToTable("LineOperators", (string)null);
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.OperatingAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ContainerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("OperatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContainerId", "Status");
+
+                    b.HasIndex("OperatorId", "Status");
+
+                    b.ToTable("OperatingAssignments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_OperatingAssignments_Cancel", "(\"Status\" = 'Cancelled') = (\"CancelledAt\" IS NOT NULL AND \"CancelReason\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_OperatingAssignments_Period", "\"ValidTo\" IS NULL OR \"ValidTo\" >= \"ValidFrom\"");
+                        });
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.TodoItem", b =>
@@ -723,6 +813,16 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.Container", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.LineOperator", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Owner");
+                });
+
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", b =>
                 {
                     b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Block", "Block")
@@ -752,6 +852,11 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasForeignKey("LineOperatorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.OperatingAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("OperatingAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Block");
 
@@ -790,6 +895,25 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasForeignKey("DeliveryOrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.OperatingAssignment", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Container", "Container")
+                        .WithMany()
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.LineOperator", "Operator")
+                        .WithMany()
+                        .HasForeignKey("OperatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Container");
+
+                    b.Navigation("Operator");
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.DeliveryOrder", b =>

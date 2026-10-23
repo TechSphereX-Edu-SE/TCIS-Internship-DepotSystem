@@ -24,9 +24,16 @@ public sealed class CreateDeliveryOrderCommandHandler(IAppDbContext dbContext, T
             return Result.Failure<CreateDeliveryOrderResponse>(Error.Validation("DeliveryOrder.AlreadyExpired",
                 $"Expiry date {command.ExpiryDate:dd/MM/yyyy} is before today ({today:dd/MM/yyyy})."));
 
-        if (!await dbContext.LineOperators.AnyAsync(l => l.Id == command.LineOperatorId, cancellationToken))
+        var lineOperator = await dbContext.LineOperators
+            .FirstOrDefaultAsync(l => l.Id == command.LineOperatorId, cancellationToken);
+        if (lineOperator is null)
             return Result.Failure<CreateDeliveryOrderResponse>(Error.NotFound("LineOperator.NotFound",
                 $"Line operator with ID '{command.LineOperatorId}' was not found."));
+
+        // A delivery order is issued by the line operator, so an owner-only partner (e.g. a leasing company) cannot
+        if (!lineOperator.IsOperator)
+            return Result.Failure<CreateDeliveryOrderResponse>(Error.Conflict("Partner.NotOperator",
+                $"Partner {lineOperator.Code} does not have the line operator role."));
 
         if (!await dbContext.Customers.AnyAsync(c => c.Id == command.CustomerId, cancellationToken))
             return Result.Failure<CreateDeliveryOrderResponse>(Error.NotFound("Customer.NotFound",

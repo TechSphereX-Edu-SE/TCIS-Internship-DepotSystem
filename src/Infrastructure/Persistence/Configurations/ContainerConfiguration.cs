@@ -24,6 +24,10 @@ public sealed class ContainerConfiguration : IEntityTypeConfiguration<Container>
         builder.Property(c => c.Size).HasConversion<string>().HasMaxLength(10);
         builder.Property(c => c.Category).HasConversion<string>().HasMaxLength(20);
         builder.Property(c => c.OwnerName).IsRequired().HasMaxLength(100);
+
+        // Owner partner; Restrict: a partner that owns containers cannot be deleted
+        builder.HasOne(c => c.Owner).WithMany()
+            .HasForeignKey(c => c.OwnerId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(c => c.Condition).HasConversion<string>().HasMaxLength(20);
         builder.Property(c => c.ConditionNote).HasMaxLength(500);
     }

@@ -15,5 +15,10 @@ public sealed class LineOperatorConfiguration : IEntityTypeConfiguration<LineOpe
         builder.HasIndex(l => l.Code).IsUnique();
 
         builder.Property(l => l.Name).IsRequired().HasMaxLength(200);
+
+        // Partner catalog (Q2): optional tax code and the two roles
+        builder.Property(l => l.TaxCode).HasMaxLength(20);
+        builder.Property(l => l.IsOwner).IsRequired();
+        builder.Property(l => l.IsOperator).IsRequired();
     }
 }

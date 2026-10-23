@@ -3,6 +3,7 @@ using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.Containers.Create;
 
+// OwnerId: a partner with the Owner role (feedback 9: stored by id, not as typed text)
 public sealed record CreateContainerCommand(
     string ContainerNumber,
     string IsoCode,
@@ -11,7 +12,7 @@ public sealed record CreateContainerCommand(
     int MaxGrossWeightKg,
     int TareWeightKg,
     DateOnly? ManufactureDate,
-    string OwnerName)
+    Guid OwnerId)
     : ICommand<Result<CreateContainerResponse>>;
 
 public sealed record CreateContainerResponse(Guid Id, string ContainerNumber, string IsoCode);

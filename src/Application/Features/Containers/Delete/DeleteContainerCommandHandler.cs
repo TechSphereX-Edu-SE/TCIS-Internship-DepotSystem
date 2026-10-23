@@ -15,11 +15,12 @@ public sealed class DeleteContainerCommandHandler(IAppDbContext dbContext)
             return Result.Failure(Error.NotFound("Container.NotFound", $"Container with ID '{command.Id}' was not found."));
 
         // Keep containers that have been in the yard so history and statistics are not lost
-        var hasHistory = await dbContext.ContainerVisits
-            .AnyAsync(v => v.ContainerId == command.Id, cancellationToken);
+        var hasHistory =
+            await dbContext.ContainerVisits.AnyAsync(v => v.ContainerId == command.Id, cancellationToken) ||
+            await dbContext.OperatingAssignments.AnyAsync(a => a.ContainerId == command.Id, cancellationToken);
         if (hasHistory)
             return Result.Failure(Error.Conflict("Container.HasHistory",
-                $"Container '{container.ContainerNumber}' has gate-in/out history and cannot be deleted."));
+                $"Container '{container.ContainerNumber}' has gate-in/out or operating history and cannot be deleted."));
 
         dbContext.Containers.Remove(container);
         await dbContext.SaveChangesAsync(cancellationToken);

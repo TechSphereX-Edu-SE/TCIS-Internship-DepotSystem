@@ -124,6 +124,7 @@ try
 
     // Depot Endpoint
     app.MapContainerEndpoints();
+    app.MapOperatingAssignmentEndpoints();
     app.MapLineOperatorEndpoints();
     app.MapCustomerEndpoints();
     app.MapBlockEndpoints();

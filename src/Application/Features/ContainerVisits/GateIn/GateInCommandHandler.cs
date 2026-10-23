@@ -2,8 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
+using TechSpherex.CleanArchitecture.Application.Features.OperatingAssignments.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
+using TechSpherex.CleanArchitecture.Domain.Services;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 
 /*
@@ -11,6 +13,10 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Gat
     Order of checks:
       1. Container, line operator and block exist (404).
       2. The container is not already in the yard (409) - one open visit per container.
+      2b. Feedback 2: a confirmed operating assignment covers today (Vietnam date) and names the chosen
+         line operator (409 otherwise). The operator is never guessed from the owner, the number prefix
+         or an earlier visit; missing or conflicting data must be verified first. The visit keeps the
+         assignment as its basis.
       3. The block takes this container type (409) and the position fits the block and the
          container size (400) - done by the domain (ContainerVisit.GateIn -> Block.CheckAccepts,
          Block.ValidateSlot), so the rules live in one place.
@@ -43,13 +49,26 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
             return Result.Failure<GateInResponse>(Error.Conflict("ContainerVisit.AlreadyInYard",
                 $"Container {container.ContainerNumber} is already in the yard."));
 
+        var now = timeProvider.GetUtcNow();
+        var today = DepotTime.DateOf(now);
+        var basis = await dbContext.FindActiveAsync(container.Id, today, cancellationToken);
+        if (basis is null)
+            return Result.Failure<GateInResponse>(Error.Conflict("ContainerVisit.NoOperatingAssignment",
+                $"Container {container.ContainerNumber} has no confirmed operating assignment on {today:dd/MM/yyyy}. " +
+                "Record and confirm which line operator operates it first."));
+
+        if (basis.OperatorId != command.LineOperatorId)
+            return Result.Failure<GateInResponse>(Error.Conflict("ContainerVisit.OperatorMismatch",
+                $"Container {container.ContainerNumber} is operated by {basis.Operator.Code} on {today:dd/MM/yyyy} " +
+                "according to its confirmed operating assignment."));
+
         // The domain validates the slot (range, bay parity, 40ft footprint) before creating the visit.
         // Nothing is saved on failure, so the condition it sets on the tracked container is discarded.
         var gateIn = ContainerVisit.GateIn(
             container, command.LineOperatorId, block,
             command.Bay, command.Row, command.Tier,
             command.Condition, command.ConditionNote,
-            command.VehicleNo, timeProvider.GetUtcNow());
+            command.VehicleNo, now, basis);
         if (gateIn.IsFailure)
             return Result.Failure<GateInResponse>(gateIn.Error!);
 

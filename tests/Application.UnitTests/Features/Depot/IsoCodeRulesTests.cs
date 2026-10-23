@@ -56,7 +56,7 @@ public sealed class IsoCodeRulesTests
     public void Create_Validator_Should_Reject_Iso_Code_Of_Other_Size()
     {
         var command = new CreateContainerCommand(
-            "CSQU3054383", "42G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "MSC");
+            "CSQU3054383", "42G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, Guid.NewGuid());
 
         var result = new CreateContainerValidator().Validate(command);
 

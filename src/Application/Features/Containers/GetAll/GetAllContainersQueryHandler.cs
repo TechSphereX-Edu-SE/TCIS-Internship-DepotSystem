@@ -2,19 +2,29 @@ using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Get;
+using TechSpherex.CleanArchitecture.Application.Features.OperatingAssignments.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
 using TechSpherex.CleanArchitecture.Domain.Services;
 namespace TechSpherex.CleanArchitecture.Application.Features.Containers.GetAll;
 
-public sealed class GetAllContainersQueryHandler(IAppDbContext dbContext)
+public sealed class GetAllContainersQueryHandler(IAppDbContext dbContext, TimeProvider timeProvider)
     : IQueryHandler<GetAllContainersQuery, Result<PagedResult<ContainerResponse>>>
 {
     public async Task<Result<PagedResult<ContainerResponse>>> HandleAsync(
         GetAllContainersQuery query, CancellationToken cancellationToken = default)
     {
-        var containers = dbContext.Containers.AsNoTracking();
+        var today = DepotTime.DateOf(timeProvider.GetUtcNow());
+        var containers = dbContext.Containers.AsNoTracking().Include(c => c.Owner).AsQueryable();
         IOrderedQueryable<Container> ordered;
+
+        if (query.OperatorId is { } operatorId)
+        {
+            var operated = dbContext.OperatingAssignments.ActiveOn(today)
+                .Where(a => a.OperatorId == operatorId)
+                .Select(a => a.ContainerId);
+            containers = containers.Where(c => operated.Contains(c.Id));
+        }
 
         if (string.IsNullOrWhiteSpace(query.Search))
         {
@@ -41,7 +51,18 @@ public sealed class GetAllContainersQueryHandler(IAppDbContext dbContext)
             .Take(query.PageSize)
             .ToListAsync(cancellationToken);
 
-        var items = page.Select(ContainerResponse.From).ToList();
+        // Today's operator of the containers on this page, in one query
+        var ids = page.Select(c => c.Id).ToList();
+        var operators = await dbContext.OperatingAssignments.AsNoTracking()
+            .Include(a => a.Operator)
+            .Where(a => ids.Contains(a.ContainerId))
+            .ActiveOn(today)
+            .ToListAsync(cancellationToken);
+        var operatorByContainer = operators
+            .GroupBy(a => a.ContainerId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.ValidFrom).First().Operator);
+
+        var items = page.Select(c => ContainerResponse.From(c, operatorByContainer.GetValueOrDefault(c.Id))).ToList();
 
         return Result.Success(new PagedResult<ContainerResponse>(items, totalCount, query.Page, query.PageSize));
     }

@@ -44,6 +44,10 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
         builder.HasOne(v => v.GateInBlock).WithMany()
             .HasForeignKey(v => v.GateInBlockId).OnDelete(DeleteBehavior.Restrict);
 
+        // Operating assignment used at gate-in (căn cứ phân công); null on older visits
+        builder.HasOne<OperatingAssignment>().WithMany()
+            .HasForeignKey(v => v.OperatingAssignmentId).OnDelete(DeleteBehavior.Restrict);
+
         // Legacy A/B/C grade: nullable, only older visits have one
         builder.Property(v => v.Grade).HasConversion<string>().HasMaxLength(5);
         builder.Property(v => v.ConditionIn).HasConversion<string>().HasMaxLength(20);

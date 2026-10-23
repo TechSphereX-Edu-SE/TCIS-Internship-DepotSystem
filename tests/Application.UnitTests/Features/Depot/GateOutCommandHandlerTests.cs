@@ -50,6 +50,7 @@ public sealed class GateOutCommandHandlerTests
         AppDbContext dbContext, Seed seed, Container container, int bay, int tier = 1,
         LineOperator? lineOperator = null, ContainerCondition condition = ContainerCondition.Normal)
     {
+        await DepotTestData.AssignAsync(dbContext, container, lineOperator ?? seed.Msc);
         var result = await new GateInCommandHandler(dbContext, new FixedTimeProvider(Now)).HandleAsync(
             new GateInCommand(container.Id, (lineOperator ?? seed.Msc).Id, seed.Yard.Id, bay, 1, tier,
                 condition, condition == ContainerCondition.Damaged ? "Dent on door" : null, "51C-11111"),

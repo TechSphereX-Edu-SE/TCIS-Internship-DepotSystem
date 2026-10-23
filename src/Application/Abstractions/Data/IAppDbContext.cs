@@ -14,5 +14,6 @@ public interface IAppDbContext
     DbSet<Block> Blocks { get; }
     DbSet<ContainerVisit> ContainerVisits { get; }
     DbSet<DeliveryOrder> DeliveryOrders { get; }
+    DbSet<OperatingAssignment> OperatingAssignments { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
