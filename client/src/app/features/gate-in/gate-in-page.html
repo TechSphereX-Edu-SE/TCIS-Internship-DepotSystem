@@ -46,6 +46,8 @@
           [itemKey]="containerKey"
           [itemLabel]="containerLabel"
           [itemDetail]="containerDetail"
+          [itemBadge]="containerBadge"
+          [itemNote]="containerNote"
           [invalid]="!!containerError()"
           [resetKey]="operatorFilterId()"
         />
@@ -55,6 +57,37 @@
         }
         @if (containerError(); as message) {
         <span class="field-error">{{ message }}</span>
+        }
+
+        <!-- Feedback 23/10: already in the yard -> the screens that deal with it (gate-in is not possible) -->
+        @if (inYard(); as state) {
+        <div class="resolve">
+          @if (state.container.situation?.openRepairCaseId; as caseId) {
+          <a [routerLink]="['/repairs']" [queryParams]="{ caseId }">
+            Mở hồ sơ sửa chữa ({{ repairStatusLabel[state.container.situation!.openRepairStatus!] }})
+          </a>
+          }
+          @if (state.container.situation?.outsideRepairStatus === 'Requested') {
+          <a [routerLink]="['/gate-out']" [queryParams]="{ tab: 'repair' }">Xuất đi sửa ngoài</a>
+          } @else {
+          <a routerLink="/gate-out">Xuất bãi</a>
+          }
+          <a [routerLink]="['/yard']" [queryParams]="{ container: state.container.containerNumber }">Vị trí &amp; đảo chuyển</a>
+          <a [routerLink]="['/statistics/history']" [queryParams]="historyParams(state.container)">Lịch sử container</a>
+        </div>
+        }
+
+        <!-- No confirmed operator today: open its relations in the catalog, which links back here with it picked -->
+        @if (noOperator(); as state) {
+        <div class="resolve">
+          <a
+            [routerLink]="['/catalog/containers']"
+            [queryParams]="{ relations: state.container.containerNumber, returnTo: 'gate-in' }"
+          >
+            Ghi nhận quan hệ khai thác cho {{ state.container.containerNumber }}
+          </a>
+          <span class="muted">Xác nhận xong bấm "Quay lại Nhập bãi" để nhập tiếp container này.</span>
+        </div>
         }
         @if (ready(); as state) {
         <div class="lookup">
@@ -70,9 +103,34 @@
           <span class="chip chip-indigo">Hãng khai thác: {{ state.container.currentOperatorCode }}</span>
           <span class="muted">theo quan hệ khai thác đã xác nhận cho hôm nay</span>
         </div>
+
+        <!-- Feedback 23/10: what is known about it before it comes in (none of these blocks the gate-in) -->
+        @if (state.container.situation; as situation) {
+        @if (situation.outsideRepairStatus === 'GatedOut') {
+        <div class="alert alert-blue situation">
+          Container đang ở xưởng sửa ngoài {{ situation.outsideRepairFacility }}: lần nhập này ghi nhận là về từ sửa ngoài,
+          hồ sơ vẫn mở và container chưa xuất được cho đến khi nghiệm thu đạt.
+          @if (situation.openRepairCaseId) {
+          <a [routerLink]="['/repairs']" [queryParams]="{ caseId: situation.openRepairCaseId }">Mở hồ sơ</a>
+          }
+        </div>
+        } @else if (situation.openRepairCaseId) {
+        <div class="alert alert-amber situation">
+          Container có hồ sơ sửa chữa đang mở ({{ repairStatusLabel[situation.openRepairStatus!] }}): vẫn nhập bãi được,
+          nhưng chưa xuất được cho đến khi nghiệm thu đạt.
+          <a [routerLink]="['/repairs']" [queryParams]="{ caseId: situation.openRepairCaseId }">Mở hồ sơ</a>
+        </div>
         }
-        @if (lookup().kind === 'noOperator') {
-        <span class="muted hint"><a routerLink="/catalog/containers">Ghi nhận quan hệ khai thác ở Danh mục · Container</a></span>
+        <span class="muted hint">
+          @if (situation.lastGateOutAt) {
+          Lần ra bãi gần nhất: {{ formatDateTime(situation.lastGateOutAt) }}
+          @if (situation.lastExitPurpose) { ({{ exitPurposeLabel[situation.lastExitPurpose] }}) }.
+          } @else {
+          Container chưa từng vào bãi.
+          }
+          <a [routerLink]="['/statistics/history']" [queryParams]="historyParams(state.container)">Lịch sử container</a>
+        </span>
+        }
         }
         <span class="muted hint">
           Không thấy container? Hồ sơ phải có trước khi nhập bãi:

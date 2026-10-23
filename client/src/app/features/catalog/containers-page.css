@@ -56,3 +56,13 @@
     margin: 0;
     font-size: 15px;
   }
+
+/* Inline end date of an operating relation ("Kết thúc") */
+.end-date {
+  width: 150px;
+  padding: 4px 8px;
+}
+
+.handover {
+  margin-top: 8px;
+}

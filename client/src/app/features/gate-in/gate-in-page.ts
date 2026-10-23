@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable, catchError, concat, concatMap, from, map, of, startWith, switchMap, toArray } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import {
@@ -13,14 +13,20 @@ import {
   ContainerCondition,
   ContainerPosition,
   DailyGateIn,
+  GATE_OUT_PURPOSE_LABEL,
   GateInRequest,
   LineOperator,
+  REPAIR_STATUS_LABEL,
   SIZE_LABEL,
   YardContainer,
   blockAccepts,
   categoriesText,
+  formatDateTime,
   formatPosition,
+  gateInBadge,
+  historyLinkParams,
   photoFileError,
+  situationText,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { RepairApi } from '../../core/depot/repair-api';
@@ -69,12 +75,17 @@ export class GateInPage {
   private readonly yard = inject(YardApi);
   private readonly repairs = inject(RepairApi);
   private readonly toast = inject(ToastService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly sizeLabel = SIZE_LABEL;
   protected readonly categoryLabel = CATEGORY_LABEL;
   protected readonly conditionLabel = CONDITION_LABEL;
   protected readonly formatPosition = formatPosition;
   protected readonly categoriesText = categoriesText;
+  protected readonly repairStatusLabel = REPAIR_STATUS_LABEL;
+  protected readonly exitPurposeLabel = GATE_OUT_PURPOSE_LABEL;
+  protected readonly formatDateTime = formatDateTime;
 
   /*
     Same fields as GateInCommand; Bay/Row/Tier are disabled for a virtual block.
@@ -106,6 +117,9 @@ export class GateInPage {
   protected readonly containerLabel = (c: Container) => c.containerNumber;
   protected readonly containerDetail = (c: Container) =>
     `${c.isoCode} · ${SIZE_LABEL[c.size]} · ${CATEGORY_LABEL[c.category]} · KT ${c.currentOperatorCode ?? 'chưa có'}`;
+  // Feedback 23/10: each row also says whether it can come in (chip) and where it is now (third line)
+  protected readonly containerBadge = gateInBadge;
+  protected readonly containerNote = (c: Container) => situationText(c.situation);
   protected readonly ownerText = (c: Container) => c.ownerCode ?? `${c.ownerName} (chưa đối chiếu)`;
   protected readonly operatorKey = (o: LineOperator) => o.id;
   protected readonly operatorLabel = (o: LineOperator) => o.code;
@@ -161,6 +175,17 @@ export class GateInPage {
     return state.kind === 'ready' ? state : null;
   });
 
+  // Typed views of the two refused states, so the template can show the screens that resolve them
+  protected readonly inYard = computed(() => {
+    const state = this.lookup();
+    return state.kind === 'inYard' ? state : null;
+  });
+
+  protected readonly noOperator = computed(() => {
+    const state = this.lookup();
+    return state.kind === 'noOperator' ? state : null;
+  });
+
   // Message under the container field (null when there is nothing to report)
   protected readonly containerError = computed(() => {
     const state = this.lookup();
@@ -171,7 +196,7 @@ export class GateInPage {
         return `Container đang ở trong bãi tại ${this.positionText(state.position)}.`;
       case 'noOperator':
         return 'Container chưa có quan hệ khai thác đã xác nhận cho hôm nay, nên chưa biết hãng khai thác. ' +
-          'Ghi nhận và xác nhận ở Danh mục · Container trước khi nhập bãi.';
+          'Ghi nhận và xác nhận trước khi nhập bãi.';
       case 'idle':
         return this.submitted() ? 'Chọn container trong danh sách.' : null;
       default:
@@ -222,6 +247,7 @@ export class GateInPage {
   constructor() {
     this.loadBlocks();
     this.loadToday();
+    this.pickFromLink();
 
     /*
       A picked container is checked against the yard (open visit -> blocked, with its position).
@@ -349,6 +375,11 @@ export class GateInPage {
     return missingNote || (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), name);
   }
 
+  // Feedback 7 history of this container (all its visits), the place to check where it went
+  protected historyParams(container: Container): Record<string, string | number> {
+    return historyLinkParams({ containerId: container.id, search: container.containerNumber });
+  }
+
   protected positionText(position: ContainerPosition): string {
     return formatPosition(position.blockCode, position.bay, position.row, position.tier);
   }
@@ -389,6 +420,26 @@ export class GateInPage {
       }),
     );
     return concat(of<Lookup>({ kind: 'checking' }), lookup$);
+  }
+
+  /*
+    Feedback 23/10: "?container=MSCU1234566" picks that container, so the catalog can send the clerk back
+    here after confirming its operating relation. The number is looked up like a typed search (exact
+    match ranks first) and only an exact match is picked. The parameter is then removed, so a reload
+    after the gate-in does not pick the same container again.
+  */
+  private pickFromLink(): void {
+    const number = this.route.snapshot.queryParamMap.get('container')?.trim().toUpperCase();
+    if (!number) return;
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { container: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.masterData.containerPage(number, 1, 1).subscribe({
+      next: (page) => {
+        const exact = page.items.find((c) => c.containerNumber === number);
+        if (exact) this.form.controls.container.setValue(exact);
+        else this.toast.error(`Không tìm thấy container ${number} trong danh mục.`);
+      },
+      error: (err: unknown) => this.toast.error(toApiError(err).message),
+    });
   }
 
   private applyLookup(state: Lookup): void {

@@ -1,4 +1,6 @@
 using FluentAssertions;
+using TechSpherex.CleanArchitecture.Application.Features.Containers.GetAll;
+using TechSpherex.CleanArchitecture.Application.Features.Containers.Shared;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOut;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOutForRepair;
@@ -349,5 +351,61 @@ public sealed class GateOutOrderAndRepairTests
         row.ExitPurpose.Should().Be(GateOutPurpose.ExternalRepair);
         row.RepairFacility.Should().Be("Xưởng Cát Lái");
         row.DeliveryOrderNumber.Should().BeNull();
+    }
+
+    /*
+        Feedback 23/10 (gate-in dropdown): the container list says where each container is.
+        MSCU1234566 in the yard at A 01-1-1 with an open case, MSCU5551234 released as an empty,
+        CMAU1234564 at the outside facility, CSQU3054383 never came in.
+    */
+    [Fact]
+    public async Task Container_List_Should_Show_Where_Each_Container_Is()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var order = await AddOrderAsync(dbContext, seed);
+        var damaged = await AddContainerAsync(dbContext, "MSCU1234566");
+        var released = await AddContainerAsync(dbContext, "MSCU5551234");
+        var outside = await AddContainerAsync(dbContext, "CMAU1234564");
+        await AddContainerAsync(dbContext, "CSQU3054383");
+
+        var damagedIn = await GateInAsync(dbContext, seed, damaged, bay: 1, condition: ContainerCondition.Damaged);
+        await GateInAsync(dbContext, seed, released, bay: 3);
+        (await GateOutAsync(dbContext, released, order)).IsSuccess.Should().BeTrue();
+        var outsideIn = await GateInAsync(dbContext, seed, outside, bay: 5, condition: ContainerCondition.Damaged);
+        var outsideCase = outsideIn.RepairCaseId!.Value;
+        await ActAsync(dbContext, outsideCase, RepairAction.InspectNeedsRepair);
+        await RepairEstimateSteps.ApproveAsync(dbContext, outsideCase, new FixedTimeProvider(Now));
+        var requested = await RequestExternalAsync(dbContext, outsideCase);
+        (await GateOutForRepairAsync(dbContext, requested.Value)).IsSuccess.Should().BeTrue();
+
+        var page = await new GetAllContainersQueryHandler(dbContext, new FixedTimeProvider(Now))
+            .HandleAsync(new GetAllContainersQuery(PageSize: 10), TestContext.Current.CancellationToken);
+        var byNumber = page.Value!.Items.ToDictionary(c => c.ContainerNumber, c => c.Situation!);
+
+        var inYard = byNumber["MSCU1234566"];
+        inYard.InYard.Should().BeTrue();
+        inYard.BlockCode.Should().Be("A");
+        inYard.Bay.Should().Be(1);
+        inYard.Row.Should().Be(1);
+        inYard.Tier.Should().Be(1);
+        inYard.OpenRepairCaseId.Should().Be(damagedIn.RepairCaseId);
+        inYard.OpenRepairStatus.Should().Be("AwaitingInspection");
+
+        var gone = byNumber["MSCU5551234"];
+        gone.InYard.Should().BeFalse();
+        gone.LastExitPurpose.Should().Be("EmptyRelease");
+        gone.OpenRepairCaseId.Should().BeNull();
+
+        var atFacility = byNumber["CMAU1234564"];
+        atFacility.InYard.Should().BeFalse();
+        atFacility.LastExitPurpose.Should().Be("ExternalRepair");
+        atFacility.OutsideRepairFacility.Should().Be("Xưởng Cát Lái");
+        atFacility.OutsideRepairStatus.Should().Be("GatedOut");
+        atFacility.OpenRepairCaseId.Should().Be(outsideCase);
+
+        var never = byNumber["CSQU3054383"];
+        never.Should().Be(new ContainerSituation(
+            false, null, null, null, null, null, null, null, null, null, null, null));
     }
 }

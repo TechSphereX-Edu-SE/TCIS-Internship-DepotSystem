@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.Get;
+using TechSpherex.CleanArchitecture.Application.Features.Containers.Shared;
 using TechSpherex.CleanArchitecture.Application.Features.OperatingAssignments.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
@@ -54,7 +55,12 @@ public sealed class GetAllContainersQueryHandler(IAppDbContext dbContext, TimePr
             .GroupBy(a => a.ContainerId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.ValidFrom).First().Operator);
 
-        var items = page.Select(c => ContainerResponse.From(c, operatorByContainer.GetValueOrDefault(c.Id))).ToList();
+        // Feedback 23/10: the gate-in dropdown shows where each container is, loaded for this page only
+        var situations = await dbContext.LoadSituationsAsync(ids, cancellationToken);
+
+        var items = page
+            .Select(c => ContainerResponse.From(c, operatorByContainer.GetValueOrDefault(c.Id), situations.GetValueOrDefault(c.Id)))
+            .ToList();
 
         return Result.Success(new PagedResult<ContainerResponse>(items, totalCount, query.Page, query.PageSize));
     }

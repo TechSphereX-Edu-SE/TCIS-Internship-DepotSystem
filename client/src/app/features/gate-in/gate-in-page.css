@@ -164,3 +164,19 @@
   margin-bottom: 24px;
 }
 
+
+/* Feedback 23/10: links to the screens that resolve why the container cannot come in */
+.resolve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+/* Repair notes of a container that can come in */
+.situation {
+  margin-top: 8px;
+  font-size: 13px;
+}

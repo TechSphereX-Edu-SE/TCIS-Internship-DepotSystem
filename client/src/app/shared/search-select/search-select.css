@@ -47,6 +47,23 @@ input[aria-invalid='true'] {
   box-shadow: inset 3px 0 0 var(--focus);
 }
 
+/* Label and the optional state chip on one line */
+.option-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+}
+
+/* Third line (where the container is): same size as the detail, a bit darker so it reads as the state */
+.option-note {
+  color: var(--ink);
+}
+
 .option-label {
   font-family: var(--font-mono);
   font-size: 14px;

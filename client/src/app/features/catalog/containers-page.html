@@ -276,6 +276,15 @@
       Container đang ở bãi giữ nguyên hãng của lượt vào.
     </p>
 
+    <!-- Feedback 23/10: came from gate-in -> back there with this container picked (it is checked again) -->
+    @if (returnToGateIn()) {
+    <div class="alert alert-blue">
+      Mở từ Nhập bãi. Ghi nhận và <strong>xác nhận</strong> quan hệ còn hiệu lực hôm nay, rồi
+      <a [routerLink]="['/gate-in']" [queryParams]="{ container: container.containerNumber }">quay lại Nhập bãi với
+        {{ container.containerNumber }}</a>.
+    </div>
+    }
+
     @if (assignmentsError(); as message) {
     <div class="alert alert-red" role="alert">{{ message }}</div>
     }
@@ -327,7 +336,15 @@
                 <button class="btn btn-secondary btn-small" type="button" (click)="confirmAssignment(a)">Xác nhận</button>
                 }
                 @if (a.status === 'Confirmed') {
-                <button class="btn btn-secondary btn-small" type="button" (click)="endAssignment(a)">Kết thúc</button>
+                @if (endingId() === a.id) {
+                <!-- Last day the operator operates it (included); the API refuses a day before a later gate-in -->
+                <label class="visually-hidden" [for]="'end-' + a.id">Ngày cuối {{ a.operatorCode }} khai thác</label>
+                <input class="end-date" type="date" [id]="'end-' + a.id" [formControl]="endDate" [min]="a.validFrom" />
+                <button class="btn btn-primary btn-small" type="button" (click)="endAssignment(a)">Lưu</button>
+                <button class="btn btn-secondary btn-small" type="button" (click)="endingId.set(null)">Bỏ</button>
+                } @else {
+                <button class="btn btn-secondary btn-small" type="button" (click)="startEnding(a)">Kết thúc</button>
+                }
                 }
                 @if (a.status !== 'Cancelled' && a.visitCount === 0) {
                 <button class="btn btn-secondary btn-small" type="button" (click)="cancelAssignment(a)">Huỷ</button>
@@ -386,12 +403,27 @@
         <input type="checkbox" formControlName="confirm" /> Đã đối chiếu với hợp đồng / chỉ thị (xác nhận ngay)
       </label>
 
+      <!-- Feedback 23/10: say which confirmed relation clashes before saving, and offer the handover -->
+      @if (overlap(); as clash) {
+      <div class="alert alert-amber" role="status">
+        Trùng giai đoạn với <strong>{{ clash.operatorCode }}</strong> ({{ periodText(clash) }}, đã xác nhận).
+        Mỗi ngày container chỉ có một hãng khai thác.
+        @if (handoverDate(); as lastDay) {
+        <div class="handover">
+          <button class="btn btn-secondary btn-small" type="button" (click)="endClashAndAdd()" [disabled]="assignmentSaving()">
+            Kết thúc {{ clash.operatorCode }} ngày {{ formatDate(lastDay) }} rồi thêm quan hệ mới
+          </button>
+        </div>
+        } @else {
+        Chọn "Từ ngày" sau ngày {{ formatDate(clash.validFrom) }}, hoặc huỷ quan hệ đó nếu ghi nhầm.
+        }
+      </div>
+      }
+
+      <!-- The Vietnamese message is enough here; the clash itself is explained by the box above -->
       @if (assignmentApiError(); as error) {
       <div class="alert alert-red" role="alert">
-        <strong>Không lưu được ({{ error.status }}):</strong> {{ error.message }}
-        @if (error.detail && error.detail !== error.message) {
-        <div class="detail">{{ error.detail }}</div>
-        }
+        <strong>Không lưu được:</strong> {{ error.message }}
       </div>
       }
 

@@ -95,6 +95,75 @@ export interface Container {
   // Line operator of the confirmed operating assignment covering today; null = gate-in is refused
   currentOperatorId: string | null;
   currentOperatorCode: string | null;
+  // Where the container is now (filled by GET /api/containers and /api/containers/{id})
+  situation?: ContainerSituation | null;
+}
+
+/*
+  Feedback 23/10 (gate-in dropdown): the situation of a container, so the clerk sees before picking it
+  whether it can come in and what blocks it. Same fields as ContainerSituation of the API.
+*/
+export interface ContainerSituation {
+  inYard: boolean;
+  // Open visit; bay/row/tier are null in a virtual block
+  blockCode: string | null;
+  bay: number | null;
+  row: number | null;
+  tier: number | null;
+  gateInAt: string | null;
+  // Last closed visit; null when it never came in
+  lastGateOutAt: string | null;
+  lastExitPurpose: GateOutPurpose | null;
+  // Repair case not passed yet (it blocks release, not gate-in)
+  openRepairCaseId: string | null;
+  openRepairStatus: RepairCaseStatus | null;
+  // Active outside repair: Requested = still in the yard, GatedOut = at the facility
+  outsideRepairFacility: string | null;
+  outsideRepairStatus: ExternalRepairStatus | null;
+}
+
+// Tones of the global .chip-* classes
+export type ChipTone = 'green' | 'red' | 'amber' | 'indigo' | 'grey';
+
+export interface StatusBadge {
+  text: string;
+  tone: ChipTone;
+}
+
+/*
+  Badge of a container in the gate-in dropdown, in the order the API checks:
+  already in the yard (refused), no confirmed operator today (refused), back from outside repair
+  (accepted, linked to the transfer), otherwise accepted. Null when the API sent no situation.
+*/
+export function gateInBadge(container: Container): StatusBadge | null {
+  const situation = container.situation;
+  if (!situation) return null;
+  if (situation.inYard) return { text: 'Đang trong bãi', tone: 'red' };
+  if (!container.currentOperatorId) return { text: 'Chưa có hãng KT', tone: 'amber' };
+  if (situation.outsideRepairStatus === 'GatedOut') return { text: 'Về từ sửa ngoài', tone: 'indigo' };
+  return { text: 'Nhập được', tone: 'green' };
+}
+
+/*
+  One line on where the container is: its position in the yard, the outside facility, its last exit
+  or "never came in", then the open repair case. Empty when the API sent no situation.
+*/
+export function situationText(situation: ContainerSituation | null | undefined): string {
+  if (!situation) return '';
+  const parts: string[] = [];
+  if (situation.inYard) {
+    parts.push(`Tại ${formatPosition(situation.blockCode ?? '?', situation.bay, situation.row, situation.tier)}`);
+    if (situation.outsideRepairStatus === 'Requested') parts.push('chờ xuất đi sửa ngoài');
+  } else if (situation.outsideRepairStatus === 'GatedOut') {
+    parts.push(`Ở xưởng ${situation.outsideRepairFacility}`);
+  } else if (situation.lastGateOutAt) {
+    const purpose = situation.lastExitPurpose ? ` (${GATE_OUT_PURPOSE_LABEL[situation.lastExitPurpose]})` : '';
+    parts.push(`Ra bãi ${formatDateTime(situation.lastGateOutAt)}${purpose}`);
+  } else {
+    parts.push('Chưa từng vào bãi');
+  }
+  if (situation.openRepairStatus) parts.push(`Sửa chữa: ${REPAIR_STATUS_LABEL[situation.openRepairStatus]}`);
+  return parts.join(' · ');
 }
 
 // ---------- operating assignments (feedback 2: quan hệ khai thác) ----------
@@ -144,6 +213,35 @@ export const ASSIGNMENT_STATUS_LABEL: Record<OperatingAssignmentStatus, string> 
 export function partnerRolesText(partner: Pick<LineOperator, 'isOwner' | 'isOperator'>): string {
   const roles = [partner.isOwner ? 'Chủ sở hữu' : '', partner.isOperator ? 'Hãng khai thác' : ''];
   return roles.filter((r) => r).join(', ');
+}
+
+/*
+  Feedback 23/10 (Khai thác was hard to test): the confirmed relation a new period would clash with, so the
+  form can say which one before saving. Same rule as CheckNoConfirmedOverlapAsync: confirmed, and the two
+  periods share at least one day (a null end = open-ended). Null when there is no clash.
+*/
+export function confirmedOverlap(
+  assignments: readonly OperatingAssignment[],
+  validFrom: string,
+  validTo: string | null,
+): OperatingAssignment | null {
+  return (
+    assignments.find(
+      (a) =>
+        a.status === 'Confirmed' &&
+        (validTo === null || a.validFrom <= validTo) &&
+        (a.validTo === null || a.validTo >= validFrom),
+    ) ?? null
+  );
+}
+
+/*
+  Last day of the old relation when the container changes operator on `newFrom`: the day before.
+  Null when that day is before the old start (the old relation would then be cancelled, not ended).
+*/
+export function handoverEndDate(old: Pick<OperatingAssignment, 'validFrom'>, newFrom: string): string | null {
+  const lastDay = addDays(newFrom, -1);
+  return lastDay >= old.validFrom ? lastDay : null;
 }
 
 // Same rule as OperatingAssignment.CoversDate: confirmed and the date inside the period ("yyyy-MM-dd" compare)

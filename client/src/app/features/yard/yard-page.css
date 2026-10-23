@@ -252,3 +252,12 @@
     border-left: 3px dashed #b45309;
     background: #fffbeb;
   }
+
+/* Feedback 23/10: a block that does not take the picked container's type */
+.block-card.refuses {
+  opacity: 0.65;
+}
+
+.above-action {
+  margin-top: 8px;
+}

@@ -1,4 +1,5 @@
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
+using TechSpherex.CleanArchitecture.Application.Features.Containers.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
 namespace TechSpherex.CleanArchitecture.Application.Features.Containers.Get;
@@ -11,6 +12,8 @@ public sealed record GetContainerQuery(Guid Id) : IQuery<Result<ContainerRespons
     OwnerName: owner text as first recorded (the only owner field before 23/10/2026), kept for reconciliation.
     CurrentOperatorId/Code: line operator of the confirmed operating assignment that covers today (Vietnam date),
     null when there is none - gate-in is then refused until the relation is recorded and confirmed.
+    Situation: where the container is now (in the yard and where, last exit, open repair, outside repair).
+    Filled by Get and GetAll; last with a default so other callers can leave it out.
 */
 public sealed record ContainerResponse(
     Guid Id,
@@ -29,10 +32,11 @@ public sealed record ContainerResponse(
     string? OwnerCode,
     string? OwnerPartnerName,
     Guid? CurrentOperatorId,
-    string? CurrentOperatorCode)
+    string? CurrentOperatorCode,
+    ContainerSituation? Situation = null)
 {
     // owner = the loaded Owner navigation; currentOperator = operator of today's confirmed assignment
-    public static ContainerResponse From(Container c, LineOperator? currentOperator) => new(
+    public static ContainerResponse From(Container c, LineOperator? currentOperator, ContainerSituation? situation = null) => new(
         c.Id,
         c.ContainerNumber,
         c.IsoCode,
@@ -49,5 +53,6 @@ public sealed record ContainerResponse(
         c.Owner?.Code,
         c.Owner?.Name,
         currentOperator?.Id,
-        currentOperator?.Code);
+        currentOperator?.Code,
+        situation);
 }

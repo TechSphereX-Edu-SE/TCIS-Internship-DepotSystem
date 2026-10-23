@@ -37,9 +37,17 @@
         [attr.aria-selected]="i === activeIndex()"
         (mousedown)="onOptionMouseDown($event, item)"
       >
-        <span class="option-label">{{ itemLabel()(item) }}</span>
+        <span class="option-head">
+          <span class="option-label">{{ itemLabel()(item) }}</span>
+          @if (itemBadge()(item); as badge) {
+            <span class="chip option-badge" [class]="'chip-' + badge.tone">{{ badge.text }}</span>
+          }
+        </span>
         @if (itemDetail()(item); as detail) {
           <span class="option-detail">{{ detail }}</span>
+        }
+        @if (itemNote()(item); as note) {
+          <span class="option-detail option-note">{{ note }}</span>
         }
       </li>
     }

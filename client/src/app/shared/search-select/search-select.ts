@@ -13,7 +13,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { Observable, Subject, catchError, debounceTime, map, merge, of, switchMap } from 'rxjs';
-import { PagedResult } from '../../core/depot/depot-models';
+import { PagedResult, StatusBadge } from '../../core/depot/depot-models';
 
 // Loads one page of matches for the typed text; the API ranks exact match, then prefix, then the rest
 export type SearchPageLoader<T> = (term: string, page: number) => Observable<PagedResult<T>>;
@@ -85,6 +85,13 @@ export class SearchSelect<T> implements ControlValueAccessor {
   readonly itemLabel = input.required<(item: T) => string>();
   // Optional second line of each row (e.g. "40ft · Dry · MSC")
   readonly itemDetail = input<(item: T) => string>(() => '');
+  /*
+    Optional state of each row (feedback 23/10, gate-in): a coloured chip next to the label and a third
+    line, so the user sees before picking whether the row can be used (e.g. "Đang trong bãi · Tại A 01-1-1").
+    The chip also has text, so the state is not told by colour alone.
+  */
+  readonly itemBadge = input<(item: T) => StatusBadge | null>(() => null);
+  readonly itemNote = input<(item: T) => string>(() => '');
   // id of the <input>, so the page's <label for="..."> points at it
   readonly inputId = input.required<string>();
   readonly placeholder = input('Gõ để tìm…');

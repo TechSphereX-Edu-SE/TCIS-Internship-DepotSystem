@@ -18,6 +18,7 @@
       <!-- A button: choosing a card shows that block on the map (and makes it the move target) -->
       <button type="button"
               class="block-card"
+              [class.refuses]="!acceptsCurrent(block)"
               [class.active]="block.id === targetBlock()?.id"
               [attr.aria-pressed]="block.id === targetBlock()?.id"
               (click)="showBlock(block)">
@@ -30,6 +31,14 @@
         <span class="muted">{{ block.description ?? '' }}</span>
         <span class="muted small">{{ blockSize(block) }}</span>
         <span class="count">{{ block.containersInYard }} container trong bãi</span>
+        <!-- Feedback 23/10: with a container picked, whether this block takes its type -->
+        @if (current(); as c) {
+        @if (acceptsCurrent(block)) {
+        <span class="chip chip-green">Nhận {{ categoryLabel[c.category] }}</span>
+        } @else {
+        <span class="chip chip-grey">Không nhận {{ categoryLabel[c.category] }} · chỉ {{ categoriesText(block.allowedCategories) }}</span>
+        }
+        }
       </button>
       }
     </div>
@@ -115,11 +124,19 @@
         <label for="targetBlock">Block đích</label>
         <select id="targetBlock" formControlName="blockId">
           @for (block of blocks(); track block.id) {
-          <option [value]="block.id">
-            {{ block.code }} · {{ block.description ?? '' }}{{ block.isVirtual ? ' (block ảo, không cần bay/row/tier)' : '' }}
+          <option [value]="block.id" [disabled]="!acceptsCurrent(block)">
+            {{ block.code }} · {{ block.description ?? '' }}{{ block.isVirtual ? ' (block ảo, không cần bay/row/tier)' : '' }}{{
+              acceptsCurrent(block) ? '' : ' (không nhận loại này)'
+            }}
           </option>
           }
         </select>
+        @if (targetRefuses()) {
+        <span class="field-error">
+          Block {{ targetBlock()?.code }} chỉ nhận {{ categoriesText(targetBlock()!.allowedCategories) }},
+          không nhận {{ categoryLabel[c.category] }}. Chọn block khác.
+        </span>
+        }
       </div>
 
       @if (targetBlock()?.isVirtual) {
@@ -160,6 +177,12 @@
       <div class="alert alert-red" role="alert">
         <strong>Không thể đảo chuyển:</strong> {{ above.containerNumber }} đang xếp phía trên (tier {{ above.tier }}).
         Chuyển container đó trước.
+        <!-- Feedback 23/10: open the one on top directly, it is in the same row so the map stays put -->
+        <div class="above-action">
+          <button class="btn btn-secondary btn-small" type="button" (click)="pickAbove(above.containerNumber)">
+            Chọn {{ above.containerNumber }} để chuyển trước
+          </button>
+        </div>
       </div>
       } @else if (samePosition()) {
       <div class="alert alert-amber" role="status">
@@ -196,6 +219,88 @@
     </form>
   </div>
 
+  <!-- Feedback 23/10: the map comes right after the move card, so the picked container is in view -->
+  <!-- ================= Map / virtual block list ================= -->
+  <section class="card" aria-labelledby="map-title">
+    @if (targetBlock(); as block) {
+    <div class="map-header">
+      <h2 id="map-title">Sơ đồ Block {{ block.code }}{{ block.isVirtual ? '' : ' · Row ' + mapRow() }}</h2>
+      @if (mapAwayFromCurrent()) {
+      <button class="btn btn-secondary btn-small" type="button" (click)="showCurrentOnMap()">
+        Về vị trí của {{ current()?.containerNumber }}
+      </button>
+      }
+      @if (!block.isVirtual) {
+      <div class="row-picker">
+        <label for="mapRow" class="muted">Row đang xem</label>
+        <select id="mapRow" [value]="mapRow()" (change)="selectMapRow($any($event.target).value)">
+          @for (row of rowOptions(); track row) {
+          <option [value]="row" [selected]="row === mapRow()">Row {{ row }}</option>
+          }
+        </select>
+      </div>
+      }
+    </div>
+
+    @if (block.isVirtual) {
+    <!-- A virtual block has no positions: list its containers instead of a map -->
+    @if (mapContainers().length === 0) {
+    <p class="empty muted">Block {{ block.code }} đang trống.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Số container</th>
+            <th>Kích thước</th>
+            <th>Hãng</th>
+            <th>Tình trạng</th>
+            <th>Vào bãi</th>
+            <th><span class="visually-hidden">Chọn</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of mapContainers(); track item.visitId) {
+          <tr [class.current-row]="item.visitId === current()?.visitId">
+            <td class="mono">{{ item.containerNumber }}</td>
+            <td>{{ sizeLabel[item.size] }}</td>
+            <td>{{ item.lineOperatorCode }}</td>
+            <td>
+              @if (repairMarker(item); as marker) {
+              <span class="chip" [class]="markerChip[marker]">{{ markerLabel[marker] }}</span>
+              } @else {
+              <span class="chip chip-green">{{ conditionLabel[item.condition] }}</span>
+              }
+            </td>
+            <td>{{ item.gateInAt | date: 'dd/MM HH:mm' : '+0700' }}</td>
+            <td>
+              <button class="btn btn-secondary btn-small" type="button" (click)="pickContainer(item)"
+                      [attr.aria-label]="'Chọn ' + item.containerNumber">
+                Chọn
+              </button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+    } @else {
+    <p class="muted small">
+      Nhìn ngang: bay (cột) × tier (tầng). Bấm container để chọn{{ current() ? ', bấm ô trống để đặt vị trí mới' : '' }}.
+    </p>
+    <app-yard-map [block]="block"
+                  [containers]="mapContainers()"
+                  [selection]="mapSelection()"
+                  [movingVisitId]="current()?.visitId ?? null"
+                  [containersSelectable]="true"
+                  (pick)="pickOnMap($event)"
+                  (pickContainer)="pickContainer($event)" />
+    }
+    } @else {
+    <p class="muted">Chưa có block nào.</p>
+    }
+  </section>
   <!-- ================= Containers in the yard (feedback 5 + 8) ================= -->
   <form class="card filters-card" [formGroup]="filters" (ngSubmit)="applyFilters()" role="search" aria-label="Lọc container trong bãi">
     <div class="filters">
@@ -321,80 +426,4 @@
     }
   </section>
 
-  <!-- ================= Map / virtual block list ================= -->
-  <section class="card" aria-labelledby="map-title">
-    @if (targetBlock(); as block) {
-    <div class="map-header">
-      <h2 id="map-title">Sơ đồ Block {{ block.code }}{{ block.isVirtual ? '' : ' · Row ' + mapRow() }}</h2>
-      @if (!block.isVirtual) {
-      <div class="row-picker">
-        <label for="mapRow" class="muted">Row đang xem</label>
-        <select id="mapRow" [value]="mapRow()" (change)="selectMapRow($any($event.target).value)">
-          @for (row of rowOptions(); track row) {
-          <option [value]="row" [selected]="row === mapRow()">Row {{ row }}</option>
-          }
-        </select>
-      </div>
-      }
-    </div>
-
-    @if (block.isVirtual) {
-    <!-- A virtual block has no positions: list its containers instead of a map -->
-    @if (mapContainers().length === 0) {
-    <p class="empty muted">Block {{ block.code }} đang trống.</p>
-    } @else {
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Số container</th>
-            <th>Kích thước</th>
-            <th>Hãng</th>
-            <th>Tình trạng</th>
-            <th>Vào bãi</th>
-            <th><span class="visually-hidden">Chọn</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (item of mapContainers(); track item.visitId) {
-          <tr [class.current-row]="item.visitId === current()?.visitId">
-            <td class="mono">{{ item.containerNumber }}</td>
-            <td>{{ sizeLabel[item.size] }}</td>
-            <td>{{ item.lineOperatorCode }}</td>
-            <td>
-              @if (repairMarker(item); as marker) {
-              <span class="chip" [class]="markerChip[marker]">{{ markerLabel[marker] }}</span>
-              } @else {
-              <span class="chip chip-green">{{ conditionLabel[item.condition] }}</span>
-              }
-            </td>
-            <td>{{ item.gateInAt | date: 'dd/MM HH:mm' : '+0700' }}</td>
-            <td>
-              <button class="btn btn-secondary btn-small" type="button" (click)="pickContainer(item)"
-                      [attr.aria-label]="'Chọn ' + item.containerNumber">
-                Chọn
-              </button>
-            </td>
-          </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-    }
-    } @else {
-    <p class="muted small">
-      Nhìn ngang: bay (cột) × tier (tầng). Bấm container để chọn{{ current() ? ', bấm ô trống để đặt vị trí mới' : '' }}.
-    </p>
-    <app-yard-map [block]="block"
-                  [containers]="mapContainers()"
-                  [selection]="mapSelection()"
-                  [movingVisitId]="current()?.visitId ?? null"
-                  [containersSelectable]="true"
-                  (pick)="pickOnMap($event)"
-                  (pickContainer)="pickContainer($event)" />
-    }
-    } @else {
-    <p class="muted">Chưa có block nào.</p>
-    }
-  </section>
 </div>

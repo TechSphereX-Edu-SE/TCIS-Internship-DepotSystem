@@ -1,4 +1,9 @@
 import {
+  Container,
+  OperatingAssignment,
+  confirmedOverlap,
+  handoverEndDate,
+  ContainerSituation,
   DELIVERY_ORDER_STATUSES,
   DELIVERY_ORDER_STATUS_LABEL,
   DailyThroughput,
@@ -20,6 +25,7 @@ import {
   formatDate,
   formatDateTime,
   formatPosition,
+  gateInBadge,
   orderLineLabel,
   PHOTO_MAX_BYTES,
   REPAIR_STATUSES,
@@ -27,6 +33,7 @@ import {
   partnerRolesText,
   photoFileError,
   releasedSummary,
+  situationText,
   repairMarker,
   vietnamToday,
   formatMoney,
@@ -166,6 +173,19 @@ describe('partners and operating assignments', () => {
     expect(assignmentCovers({ ...period, status: 'Cancelled' }, '2026-10-15')).toBe(false);
   });
 
+  // Feedback 23/10: the form names the confirmed relation a new period clashes with, and the handover day
+  it('finds the confirmed relation a new period overlaps, and the day before as its last day', () => {
+    const cma = { id: 'a-1', operatorCode: 'CMA', status: 'Confirmed', validFrom: '2026-01-01', validTo: null } as OperatingAssignment;
+    const pending = { ...cma, id: 'a-2', status: 'Pending', validFrom: '2026-10-01' } as OperatingAssignment;
+
+    expect(confirmedOverlap([pending, cma], '2026-10-23', null)?.id).toBe('a-1');
+    expect(confirmedOverlap([{ ...cma, validTo: '2026-10-22' }], '2026-10-23', null)).toBeNull();
+    expect(confirmedOverlap([{ ...cma, validFrom: '2026-11-01' }], '2026-10-01', '2026-10-31')).toBeNull();
+    expect(handoverEndDate(cma, '2026-10-23')).toBe('2026-10-22');
+    // Ending before its own start is impossible: that relation would have to be cancelled instead
+    expect(handoverEndDate({ validFrom: '2026-10-23' }, '2026-10-23')).toBeNull();
+  });
+
   // Q4: the same limits as the API (RepairPhotoRules), checked before anything is uploaded
   it('accepts only JPG / PNG photos of at most 5 MB', () => {
     expect(photoFileError({ name: 'a.jpg', type: 'image/jpeg', size: 1000 })).toBeNull();
@@ -283,5 +303,47 @@ describe('containerFilterParams (catalog filters)', () => {
 
   it('"no operator today" and "not in the yard" are false flags', () => {
     expect(containerFilterParams({ ...none, operator: 'none', location: 'out' })).toEqual({ hasOperator: 'false', inYard: 'false' });
+  });
+});
+
+describe('container situation (gate-in dropdown, feedback 23/10)', () => {
+  const nowhere: ContainerSituation = {
+    inYard: false,
+    blockCode: null,
+    bay: null,
+    row: null,
+    tier: null,
+    gateInAt: null,
+    lastGateOutAt: null,
+    lastExitPurpose: null,
+    openRepairCaseId: null,
+    openRepairStatus: null,
+    outsideRepairFacility: null,
+    outsideRepairStatus: null,
+  };
+  const container = (situation: ContainerSituation | null, operatorId: string | null = 'op-1') =>
+    ({ currentOperatorId: operatorId, situation }) as Container;
+
+  it('says where the container is, then its open repair case', () => {
+    expect(situationText({ ...nowhere })).toBe('Chưa từng vào bãi');
+    expect(
+      situationText({ ...nowhere, inYard: true, blockCode: 'A', bay: 3, row: 2, tier: 1, openRepairStatus: 'InRepair', openRepairCaseId: 'c-1' }),
+    ).toBe('Tại A 03-2-1 · Sửa chữa: Đang sửa');
+    expect(situationText({ ...nowhere, inYard: true, blockCode: 'WAIT' })).toBe('Tại WAIT');
+    expect(situationText({ ...nowhere, lastGateOutAt: '2026-10-20T03:30:00Z', lastExitPurpose: 'EmptyRelease' })).toBe(
+      'Ra bãi 20/10/2026 10:30 (Cấp rỗng)',
+    );
+    expect(situationText({ ...nowhere, outsideRepairStatus: 'GatedOut', outsideRepairFacility: 'Xưởng Cát Lái' })).toBe(
+      'Ở xưởng Xưởng Cát Lái',
+    );
+    expect(situationText(null)).toBe('');
+  });
+
+  it('badge follows the gate-in checks: in the yard, no operator, back from outside repair, ready', () => {
+    expect(gateInBadge(container({ ...nowhere, inYard: true }, null))?.text).toBe('Đang trong bãi');
+    expect(gateInBadge(container({ ...nowhere }, null))?.tone).toBe('amber');
+    expect(gateInBadge(container({ ...nowhere, outsideRepairStatus: 'GatedOut' }))?.text).toBe('Về từ sửa ngoài');
+    expect(gateInBadge(container({ ...nowhere }))).toEqual({ text: 'Nhập được', tone: 'green' });
+    expect(gateInBadge(container(null))).toBeNull();
   });
 });

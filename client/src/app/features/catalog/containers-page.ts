@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable, map, startWith } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { checkContainerNumber, containerNumberError, isoCodeError, suggestIsoCode } from '../../core/depot/container-number';
@@ -21,8 +21,10 @@ import {
   SIZE_LABEL,
   UpdateContainerRequest,
   assignmentCovers,
+  confirmedOverlap,
   containerFilterParams,
   formatDate,
+  handoverEndDate,
   vietnamToday,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
@@ -82,6 +84,7 @@ export class ContainersPage {
   private readonly api = inject(MasterDataApi);
   private readonly repairs = inject(RepairApi);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
 
   protected readonly sizes: ContainerSize[] = ['Ft20', 'Ft40'];
@@ -145,6 +148,8 @@ export class ContainersPage {
   protected readonly assignmentSubmitted = signal(false);
   protected readonly assignmentSaving = signal(false);
   protected readonly assignmentApiError = signal<ApiError | null>(null);
+  // Opened from the gate-in page (?returnTo=gate-in): the relations card links back with the container picked
+  protected readonly returnToGateIn = signal(false);
 
   // Same rules as CreateOperatingAssignmentValidator; confirm = already checked against the contract
   protected readonly assignmentForm = inject(FormBuilder).nonNullable.group({
@@ -155,6 +160,32 @@ export class ContainersPage {
     note: ['', Validators.maxLength(500)],
     confirm: [true],
   });
+  private readonly assignmentValue = toSignal(
+    this.assignmentForm.valueChanges.pipe(
+      startWith(null),
+      map(() => this.assignmentForm.getRawValue()),
+    ),
+    { initialValue: this.assignmentForm.getRawValue() },
+  );
+
+  /*
+    Feedback 23/10: a confirmed relation that the new period would clash with (the API refuses it with
+    OperatingAssignment.Overlap). Shown before saving, with the one-step fix "end it the day before".
+    A pending relation (confirm unticked) is not checked: it is only checked when it gets confirmed.
+  */
+  protected readonly overlap = computed(() => {
+    const v = this.assignmentValue();
+    return v.confirm && v.validFrom ? confirmedOverlap(this.assignments(), v.validFrom, v.validTo || null) : null;
+  });
+  protected readonly handoverDate = computed(() => {
+    const clash = this.overlap();
+    const from = this.assignmentValue().validFrom;
+    return clash && from ? handoverEndDate(clash, from) : null;
+  });
+
+  // "Kết thúc" opens a date field in the row (was a prompt asking to type yyyy-MM-dd)
+  protected readonly endingId = signal<string | null>(null);
+  protected readonly endDate = new FormControl(vietnamToday(), { nonNullable: true, validators: Validators.required });
 
   protected readonly items = signal<Container[]>([]);
   protected readonly totalCount = signal(0);
@@ -212,12 +243,13 @@ export class ContainersPage {
   });
 
   constructor() {
-    this.load(1);
+    this.openFromLink();
     this.api.lineOperators('Owner').subscribe({ next: (list) => this.owners.set(list) });
     this.api.lineOperators('Operator').subscribe({ next: (list) => this.operators.set(list) });
   }
 
-  protected load(page: number): void {
+  // openRelationsFor: container number whose relations card opens once the page is loaded
+  protected load(page: number, openRelationsFor?: string): void {
     const { search, ...rest } = this.filters.getRawValue();
     const params = containerFilterParams(rest);
     this.filtered.set(Object.keys(params).length > 0);
@@ -228,9 +260,28 @@ export class ContainersPage {
         this.totalPages.set(Math.max(1, result.totalPages));
         this.page.set(page);
         this.listError.set(null);
+        const target = openRelationsFor && result.items.find((c) => c.containerNumber === openRelationsFor);
+        if (target) this.openRelations(target);
       },
       error: (err: unknown) => this.listError.set(toApiError(err).message),
     });
+  }
+
+  /*
+    Feedback 23/10: gate-in links here with "?relations=<number>&returnTo=gate-in" when a container has no
+    confirmed operator today. The list is searched for that number and its relations card opens, so the
+    clerk records and confirms the relation without looking for the row. Without the parameter: plain list.
+  */
+  private openFromLink(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const number = params.get('relations')?.trim().toUpperCase();
+    this.returnToGateIn.set(!!number && params.get('returnTo') === 'gate-in');
+    if (!number) {
+      this.load(1);
+      return;
+    }
+    this.search.setValue(number);
+    this.load(1, number);
   }
 
   protected clearFilters(): void {
@@ -366,6 +417,7 @@ export class ContainersPage {
 
   protected closeRelations(): void {
     this.relationsOf.set(null);
+    this.endingId.set(null);
     this.assignments.set([]);
   }
 
@@ -417,11 +469,39 @@ export class ContainersPage {
     this.runAssignmentAction(this.api.confirmAssignment(a.id), `Đã xác nhận ${a.operatorCode}`);
   }
 
+  // Opens the end date field of one row; today by default, never before the start of the relation
+  protected startEnding(a: OperatingAssignment): void {
+    const today = vietnamToday();
+    this.endDate.setValue(today >= a.validFrom ? today : a.validFrom);
+    this.endingId.set(a.id);
+  }
+
   // Last day included; a visit that already came in later keeps its basis, so the API may refuse
   protected endAssignment(a: OperatingAssignment): void {
-    const validTo = prompt(`Ngày cuối ${a.operatorCode} khai thác (yyyy-MM-dd):`, vietnamToday());
+    const validTo = this.endDate.value;
     if (!validTo) return;
-    this.runAssignmentAction(this.api.endAssignment(a.id, validTo.trim()), `Đã kết thúc ${a.operatorCode}`);
+    this.runAssignmentAction(this.api.endAssignment(a.id, validTo), `Đã kết thúc ${a.operatorCode}`, () =>
+      this.endingId.set(null),
+    );
+  }
+
+  /*
+    Change of operator in one step: end the clashing relation the day before the new period starts,
+    then save the new one. If the end is refused (e.g. a gate-in after that day used it), nothing is added.
+  */
+  protected endClashAndAdd(): void {
+    const clash = this.overlap();
+    const lastDay = this.handoverDate();
+    if (!clash || !lastDay) return;
+    this.api.endAssignment(clash.id, lastDay).subscribe({
+      next: () => {
+        this.toast.success(`Đã kết thúc ${clash.operatorCode} ngày ${formatDate(lastDay)}`);
+        // The list now has the shortened period, so the form no longer shows the clash
+        this.assignments.update((list) => list.map((a) => (a.id === clash.id ? { ...a, validTo: lastDay } : a)));
+        this.addAssignment();
+      },
+      error: (err: unknown) => this.assignmentApiError.set(toApiError(err)),
+    });
   }
 
   // Only for a relation recorded by mistake (none of its visits); the reason is kept
@@ -431,12 +511,13 @@ export class ContainersPage {
     this.runAssignmentAction(this.api.cancelAssignment(a.id, reason.trim()), `Đã huỷ ${a.operatorCode}`);
   }
 
-  private runAssignmentAction(request$: Observable<void>, message: string): void {
+  private runAssignmentAction(request$: Observable<void>, message: string, done?: () => void): void {
     const container = this.relationsOf();
     if (!container) return;
     request$.subscribe({
       next: () => {
         this.toast.success(message);
+        done?.();
         this.afterAssignmentChange(container);
       },
       error: (err: unknown) => this.toast.error(toApiError(err).message),

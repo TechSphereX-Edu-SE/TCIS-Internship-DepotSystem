@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { ApiError, toApiError } from '../../core/api/api-error';
 import {
@@ -22,6 +22,8 @@ import {
   YardContainer,
   YardRepairState,
   YardSearchFilter,
+  blockAccepts,
+  categoriesText,
   dwellDays,
   formatPosition,
   repairMarker,
@@ -43,7 +45,10 @@ import { SearchPageLoader, SearchSelect } from '../../shared/search-select/searc
 import { ToastService } from '../../shared/toast/toast-service';
 import { YardMap } from '../../shared/yard-map/yard-map';
 
-const PAGE_SIZE = 20;
+// Lookup dropdown pages (about 5 rows visible, the rest load while scrolling)
+const SEARCH_PAGE_SIZE = 20;
+// Rows of the list of containers in the yard (feedback 23/10: 20 was too long above the map)
+const LIST_PAGE_SIZE = 10;
 const REPAIR_STATES: YardRepairState[] = ['Abnormal', 'InRepair', 'AnyOpen', 'None'];
 
 // Chip of a repair mark in the lists: amber = chờ giám định, red = cần sửa / đang xử lý
@@ -74,6 +79,8 @@ export class YardPage {
   private readonly yard = inject(YardApi);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder).nonNullable;
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly sizeLabel = SIZE_LABEL;
   protected readonly categoryLabel = CATEGORY_LABEL;
@@ -88,10 +95,11 @@ export class YardPage {
   protected readonly formatPosition = formatPosition;
   protected readonly repairMarker = repairMarker;
   protected readonly dwellDays = dwellDays;
+  protected readonly categoriesText = categoriesText;
 
   // Lookup: pick a container in the yard (the dropdown never keeps half-typed text)
   protected readonly lookup = new FormControl<YardContainer | null>(null);
-  protected readonly loadLookup: SearchPageLoader<YardContainer> = (term, page) => this.yard.search(page, PAGE_SIZE, { search: term });
+  protected readonly loadLookup: SearchPageLoader<YardContainer> = (term, page) => this.yard.search(page, SEARCH_PAGE_SIZE, { search: term });
   protected readonly lookupKey = (c: YardContainer) => c.visitId;
   protected readonly lookupLabel = (c: YardContainer) => c.containerNumber;
   protected readonly lookupDetail = (c: YardContainer) => {
@@ -225,12 +233,37 @@ export class YardPage {
     return placementWarning(bay, tier, c.size, toPlaced(this.mapContainers(), c.visitId));
   });
 
+  /*
+    Feedback 23/10: which blocks take the picked container's type (same rule as Block.CheckAccepts,
+    409 Block.CategoryNotAllowed). The block cards say it, and in the target dropdown the other blocks
+    are disabled (kept in the list, so a block opened from its card still shows as the target, with the
+    reason). True for every block when none is picked.
+  */
+  protected readonly acceptsCurrent = (block: Block) => {
+    const c = this.current();
+    return !c || blockAccepts(block, c.category);
+  };
+  // A refusing block can still be shown on the map (block card), but not chosen as the target
+  protected readonly targetRefuses = computed(() => {
+    const block = this.targetBlock();
+    return !!block && !!this.current() && !this.acceptsCurrent(block);
+  });
+
+  // The map shows another block or row than the one the picked container stands in
+  protected readonly mapAwayFromCurrent = computed(() => {
+    const c = this.current();
+    const block = this.targetBlock();
+    if (!c || !block) return false;
+    return block.id !== c.blockId || (!block.isVirtual && c.row !== null && this.mapRow() !== c.row);
+  });
+
   // The API would reject these anyway, so the button stays disabled and the reason is shown instead
-  protected readonly blocked = computed(() => !!this.containerAbove() || this.samePosition());
+  protected readonly blocked = computed(() => !!this.containerAbove() || this.samePosition() || this.targetRefuses());
 
   constructor() {
     this.loadBlocks();
     this.loadPage(1);
+    this.openFromLink();
     this.masterData.lineOperators('Operator').subscribe({
       next: (operators) => this.operators.set(operators),
       error: (err: unknown) => this.listError.set(toApiError(err).message),
@@ -286,6 +319,20 @@ export class YardPage {
   // Clicking a container on the map, in a virtual block list or in the list = looking it up by number
   protected pickContainer(container: YardContainer): void {
     this.openContainer(container.containerNumber);
+  }
+
+  // Feedback 23/10: a container resting on the picked one is moved first, so open it in one click
+  protected pickAbove(containerNumber: string): void {
+    this.openContainer(containerNumber);
+  }
+
+  // Map back to the block and row of the picked container (after looking at another block)
+  protected showCurrentOnMap(): void {
+    const c = this.current();
+    if (!c) return;
+    this.moveForm.patchValue({ blockId: c.blockId, row: c.row ?? 1 });
+    this.applyBlockRules();
+    this.clearTarget();
   }
 
   // Block cards switch the block shown on the map (and the target of the move)
@@ -367,11 +414,28 @@ export class YardPage {
       : `${block.maxBays} bay × ${block.maxRows} row × ${block.maxTiers} tier`;
   }
 
+  /*
+    Feedback 23/10: gate-in links here with "?container=<number>" for a container already in the yard,
+    so it opens picked (its block and row on the map, ready to move) and the move card scrolls into view.
+    The parameter is removed afterwards; opening the page from the menu stays as before (nothing picked).
+  */
+  private openFromLink(): void {
+    const number = this.route.snapshot.queryParamMap.get('container')?.trim().toUpperCase();
+    if (!number) return;
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { container: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.openContainer(number, true);
+  }
+
   // Reads the position again (404 NotInYard when it left meanwhile) and opens it
-  private openContainer(containerNumber: string): void {
+  private openContainer(containerNumber: string, scrollToMove = false): void {
     this.searchError.set(null);
     this.yard.position(containerNumber).subscribe({
-      next: (position) => this.select(position),
+      next: (position) => {
+        this.select(position);
+        if (scrollToMove) {
+          setTimeout(() => document.getElementById('move-title')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
+        }
+      },
       error: (err: unknown) => {
         this.current.set(null);
         this.searchError.set(toApiError(err).message);
@@ -411,7 +475,7 @@ export class YardPage {
   }
 
   private loadPage(page: number): void {
-    this.yard.search(page, PAGE_SIZE, this.currentFilter()).subscribe({
+    this.yard.search(page, LIST_PAGE_SIZE, this.currentFilter()).subscribe({
       next: (result) => {
         this.items.set(result.items);
         this.totalCount.set(result.totalCount);
