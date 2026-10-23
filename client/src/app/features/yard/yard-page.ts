@@ -152,6 +152,9 @@ export class YardPage {
   // Bumped after a move so the map, the current row and the block counts reload
   private readonly refresh = signal(0);
 
+  // Block filter the page set itself for a virtual block (null = the user's own filter is untouched)
+  private autoBlockFilter: string | null = null;
+
   // Move form values as a signal, so computed() below reacts to typing
   private readonly value = toSignal(
     this.moveForm.valueChanges.pipe(
@@ -277,9 +280,9 @@ export class YardPage {
     toObservable(computed(() => ({ block: this.targetBlock(), row: this.mapRow(), tick: this.refresh() })))
       .pipe(
         switchMap(({ block, row }) => {
-          if (!block) return of([]);
-          const row$ = block.isVirtual ? this.yard.inYard(block.id) : this.yard.inYard(block.id, row);
-          return row$.pipe(catchError(() => of([])));
+          // A virtual block has no map: its containers are shown by the paged list below (feedback 23/10)
+          if (!block || block.isVirtual) return of([]);
+          return this.yard.inYard(block.id, row).pipe(catchError(() => of([])));
         }),
         takeUntilDestroyed(),
       )
@@ -297,8 +300,11 @@ export class YardPage {
       )
       .subscribe((containers) => this.currentRowContainers.set(containers));
 
-    // Virtual block: no Bay/Row/Tier. Physical block: fields enabled again
-    this.moveForm.controls.blockId.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.applyBlockRules());
+    // Virtual block: no Bay/Row/Tier (and the list shows its containers). Physical block: fields enabled again
+    this.moveForm.controls.blockId.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.applyBlockRules();
+      this.syncListWithVirtualBlock();
+    });
   }
 
   protected applyFilters(): void {
@@ -307,6 +313,7 @@ export class YardPage {
 
   protected clearFilters(): void {
     this.filters.reset();
+    this.autoBlockFilter = null;
     this.loadPage(1);
   }
 
@@ -317,6 +324,11 @@ export class YardPage {
   // Clicking a container on the map, in a virtual block list or in the list = looking it up by number
   protected pickContainer(container: YardContainer): void {
     this.openContainer(container.containerNumber);
+  }
+
+  // The containers of a virtual block are in the paged list (its block filter is set)
+  protected scrollToList(): void {
+    document.getElementById('list-title')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
   // Feedback 23/10: a container resting on the picked one is moved first, so open it in one click
@@ -491,6 +503,27 @@ export class YardPage {
     this.moveForm.patchValue({ blockId: position.blockId, row: position.row ?? 1 });
     this.applyBlockRules();
     this.clearTarget();
+  }
+
+  /*
+    Feedback 23/10: a virtual block (e.g. chờ giám định) has no map, and listing all its containers next to
+    the paged list showed the same containers twice, one list unpaged. Now the one paged list (15 rows)
+    shows them: showing a virtual block sets the list's block filter, visible in the filter form, and
+    showing a physical block again removes that filter if the page had set it (a filter the user chose stays).
+  */
+  private syncListWithVirtualBlock(): void {
+    const block = this.blocks().find((b) => b.id === this.moveForm.controls.blockId.value);
+    const blockFilter = this.filters.controls.blockId;
+    if (block?.isVirtual) {
+      if (blockFilter.value === block.id) return;
+      blockFilter.setValue(block.id);
+      this.autoBlockFilter = block.id;
+      this.loadPage(1);
+    } else if (this.autoBlockFilter && blockFilter.value === this.autoBlockFilter) {
+      blockFilter.setValue('');
+      this.autoBlockFilter = null;
+      this.loadPage(1);
+    }
   }
 
   private applyBlockRules(): void {

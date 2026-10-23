@@ -243,48 +243,11 @@
     </div>
 
     @if (block.isVirtual) {
-    <!-- A virtual block has no positions: list its containers instead of a map -->
-    @if (mapContainers().length === 0) {
-    <p class="empty muted">Block {{ block.code }} đang trống.</p>
-    } @else {
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Số container</th>
-            <th>Kích thước</th>
-            <th>Hãng</th>
-            <th>Tình trạng</th>
-            <th>Vào bãi</th>
-            <th><span class="visually-hidden">Chọn</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (item of mapContainers(); track item.visitId) {
-          <tr [class.current-row]="item.visitId === current()?.visitId">
-            <td class="mono">{{ item.containerNumber }}</td>
-            <td>{{ sizeLabel[item.size] }}</td>
-            <td>{{ item.lineOperatorCode }}</td>
-            <td>
-              @if (repairMarker(item); as marker) {
-              <span class="chip" [class]="markerChip[marker]">{{ markerLabel[marker] }}</span>
-              } @else {
-              <span class="chip chip-green">{{ conditionLabel[item.condition] }}</span>
-              }
-            </td>
-            <td>{{ item.gateInAt | date: 'dd/MM HH:mm' : '+0700' }}</td>
-            <td>
-              <button class="btn btn-secondary btn-small" type="button" (click)="pickContainer(item)"
-                      [attr.aria-label]="'Chọn ' + item.containerNumber">
-                Chọn
-              </button>
-            </td>
-          </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-    }
+    <!-- Feedback 23/10: no second list here; the paged list below is filtered on this block -->
+    <p class="muted">
+      Block ảo không có sơ đồ bay/row/tier. {{ block.containersInYard }} container của block {{ block.code }}
+      hiện ở <button class="link-button" type="button" (click)="scrollToList()">danh sách bên dưới</button> (đã lọc theo block này, 15 dòng mỗi trang). Bấm một dòng để chọn.
+    </p>
     } @else {
     <p class="muted small">
       Nhìn ngang: bay (cột) × tier (tầng). Bấm container để chọn{{ current() ? ', bấm ô trống để đặt vị trí mới' : '' }}.
