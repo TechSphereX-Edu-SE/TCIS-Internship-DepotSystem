@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  ExternalRepair,
+  ExternalRepairStatus,
   PagedResult,
   RecordedDamage,
   RepairAction,
@@ -10,6 +12,7 @@ import {
   RepairCaseSummary,
   RepairPhoto,
   ReportDamageRequest,
+  RequestExternalRepairRequest,
 } from './depot-models';
 
 // Inspection & repair cases (feedback 4): /api/repair-cases and /api/repair-photos
@@ -28,6 +31,8 @@ export class RepairApi {
     if (filter.containerId) params['containerId'] = filter.containerId;
     if (filter.reportedFrom) params['reportedFrom'] = filter.reportedFrom;
     if (filter.reportedTo) params['reportedTo'] = filter.reportedTo;
+    if (filter.external !== null && filter.external !== undefined) params['external'] = filter.external;
+    if (filter.facility?.trim()) params['facility'] = filter.facility.trim();
     return this.http.get<PagedResult<RepairCaseSummary>>(this.baseUrl, { params });
   }
 
@@ -51,6 +56,24 @@ export class RepairApi {
     body.append('file', file, file.name);
     if (findingId) body.append('findingId', findingId);
     return this.http.post<RepairPhoto>(`${this.baseUrl}/${caseId}/photos`, body);
+  }
+
+  // Returns the transfer id; 409 ExternalRepair.CaseNotApproved / AlreadyActive / NotInYard
+  requestExternal(caseId: string, request: RequestExternalRepairRequest): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`${this.baseUrl}/${caseId}/external-repair`, request);
+  }
+
+  // Newest request first; the gate-out page asks for status Requested (waiting to leave)
+  externalRepairs(status: ExternalRepairStatus | null, search = '', page = 1, pageSize = 20): Observable<PagedResult<ExternalRepair>> {
+    const params: Record<string, string | number> = { page, pageSize };
+    if (status) params['status'] = status;
+    if (search.trim()) params['search'] = search.trim();
+    return this.http.get<PagedResult<ExternalRepair>>('/api/external-repairs', { params });
+  }
+
+  // Only before the container leaves: 409 ExternalRepair.NotRequested otherwise
+  cancelExternal(id: string, reason: string): Observable<void> {
+    return this.http.post<void>(`/api/external-repairs/${id}/cancel`, { reason });
   }
 
   /*

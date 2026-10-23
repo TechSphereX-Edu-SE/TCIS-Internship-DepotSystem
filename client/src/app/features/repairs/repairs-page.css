@@ -192,3 +192,46 @@
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
+
+/* Coming from gate-out: message + link back on one line */
+.back-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+/* Outside repair transfers of the case, newest first */
+.transfers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+  .transfers li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+.transfer-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.external-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.add-external {
+  align-self: flex-start;
+}

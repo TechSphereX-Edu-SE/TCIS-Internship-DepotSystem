@@ -1,3 +1,48 @@
+/* Two kinds of gate-out: underlined tab buttons above the content */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+  .tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+
+  .tab:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+/* Label / value pairs of the outside repair request */
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+
+  .facts dt {
+    color: var(--muted);
+  }
+
+  .facts dd {
+    margin: 0;
+  }
+
 /* Form on the left, checks on the right (stacked on narrow screens) */
 .layout {
   display: grid;
@@ -119,15 +164,14 @@
 }
 
 .today {
-  min-width: 760px;
+  min-width: 900px;
 }
 
 .empty {
   padding: 16px 0;
 }
 
-/* Container numbers and plates are stored in upper case; show them the same way while typing */
-#containerNumber,
-#vehicleNo {
+/* Plates are stored in upper case; show them the same way while typing */
+.plate {
   text-transform: uppercase;
 }

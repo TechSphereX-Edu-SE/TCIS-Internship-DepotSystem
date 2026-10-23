@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { map, startWith } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { DeliveryOrderApi } from '../../core/depot/delivery-order-api';
@@ -9,14 +10,18 @@ import {
   CATEGORY_HINT,
   CATEGORY_LABEL,
   ContainerCategory,
+  ContainerSize,
   CreateDeliveryOrderRequest,
   Customer,
+  DELIVERY_ORDER_STATUSES,
+  DELIVERY_ORDER_STATUS_LABEL,
   DeliveryOrder,
+  DeliveryOrderStatus,
   LineOperator,
-  ORDER_STATUS_LABEL,
-  OrderStatus,
+  SIZE_LABEL,
+  canCancelOrder,
   formatDate,
-  orderStatus,
+  formatDateTime,
   releasedSummary,
   vietnamToday,
 } from '../../core/depot/depot-models';
@@ -25,20 +30,33 @@ import { Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
 
 
-// Chip colour per status (mockup 05): open green, done indigo, expired grey
-const STATUS_CHIP: Record<OrderStatus, string> = { open: 'chip-green', done: 'chip-indigo', expired: 'chip-grey' };
+// Chip colour per status (mockup 05 + feedback 6): usable ones green / amber, finished indigo, the rest grey / red
+const STATUS_CHIP: Record<DeliveryOrderStatus, string> = {
+  NotStarted: 'chip-green',
+  InProgress: 'chip-amber',
+  Completed: 'chip-indigo',
+  Expired: 'chip-grey',
+  Cancelled: 'chip-red',
+};
+
+const SIZES: ContainerSize[] = ['Ft20', 'Ft40'];
 
 const PAGE_SIZE = 20;
+
+// "Dry|Ft20": one line per type and size (Q1)
+const lineKey = (category: ContainerCategory, size: ContainerSize) => `${category}|${size}`;
 
 /*
   Spec section 3: delivery orders (lệnh giao container rỗng) of the line operators.
   Mockup 05: the list of orders with released / ordered per type and a status, then the create form.
   The form has the fields of CreateDeliveryOrderCommand; the same rules as the validator are checked
   here so the user sees them next to the fields, the API still checks everything.
+  Feedback 6 / Q1 / Q7: lines by type + size, status computed by the API (Chưa giao, Đang giao, Đã giao đủ,
+  Hết hạn, Đã huỷ), filters, and cancel with a reason while nothing has been released.
 */
 @Component({
   selector: 'app-delivery-orders-page',
-  imports: [ReactiveFormsModule, Pager],
+  imports: [ReactiveFormsModule, RouterLink, Pager],
   templateUrl: './delivery-orders-page.html',
   styleUrl: './delivery-orders-page.css',
 })
@@ -50,11 +68,24 @@ export class DeliveryOrdersPage {
 
   protected readonly categoryLabel = CATEGORY_LABEL;
   protected readonly categoryHint = CATEGORY_HINT;
-  protected readonly statusLabel = ORDER_STATUS_LABEL;
+  protected readonly sizeLabel = SIZE_LABEL;
+  protected readonly sizes = SIZES;
+  protected readonly categories = CATEGORIES;
+  protected readonly statuses = DELIVERY_ORDER_STATUSES;
+  protected readonly statusLabel = DELIVERY_ORDER_STATUS_LABEL;
   protected readonly statusChip = STATUS_CHIP;
-  protected readonly orderStatus = orderStatus;
   protected readonly releasedSummary = releasedSummary;
+  protected readonly canCancel = canCancelOrder;
   protected readonly formatDate = formatDate;
+  protected readonly formatDateTime = formatDateTime;
+
+  // List filters: they apply on "Lọc" (and on Enter in the search box), not on every key press
+  protected readonly filterForm = this.fb.group({
+    search: [''],
+    status: ['' as DeliveryOrderStatus | ''],
+    operatorId: [''],
+  });
+  protected readonly cancellingId = signal<string | null>(null);
 
   // An expiry date before today (Vietnam) is rejected by the API (DeliveryOrder.AlreadyExpired)
   protected readonly today = vietnamToday();
@@ -66,7 +97,7 @@ export class DeliveryOrdersPage {
     customerId: ['', Validators.required],
     expiryDate: [this.today, Validators.required],
     vesselVoyage: ['', [Validators.required, Validators.maxLength(50)]],
-    lines: this.fb.array([this.newLine('Dry')]),
+    lines: this.fb.array([this.newLine('Dry', 'Ft20')]),
   });
 
   protected readonly orders = signal<DeliveryOrder[]>([]);
@@ -89,13 +120,19 @@ export class DeliveryOrdersPage {
     { initialValue: this.form.getRawValue() },
   );
 
-  // Each type only once (DeliveryOrder.DuplicateLine): a line offers its own type plus the unused ones
-  protected readonly lineOptions = computed(() => {
-    const picked = this.value().lines.map((l) => l.category);
-    return picked.map((own) => CATEGORIES.filter((c) => c === own || !picked.includes(c)));
+  // Indexes of lines whose type + size is already used by an earlier line (DeliveryOrder.DuplicateLine)
+  protected readonly duplicateLines = computed(() => {
+    const seen = new Set<string>();
+    const duplicates = new Set<number>();
+    this.value().lines.forEach((l, i) => {
+      const key = lineKey(l.category, l.size);
+      if (seen.has(key)) duplicates.add(i);
+      seen.add(key);
+    });
+    return duplicates;
   });
 
-  protected readonly canAddLine = computed(() => this.value().lines.length < CATEGORIES.length);
+  protected readonly canAddLine = computed(() => this.value().lines.length < CATEGORIES.length * SIZES.length);
 
   protected readonly expiryInPast = computed(() => {
     const expiry = this.value().expiryDate;
@@ -117,10 +154,15 @@ export class DeliveryOrdersPage {
   }
 
   protected addLine(): void {
-    // Start the new line on the first type not used yet
-    const picked = this.form.getRawValue().lines.map((l) => l.category);
-    const next = CATEGORIES.find((c) => !picked.includes(c));
-    if (next) this.form.controls.lines.push(this.newLine(next));
+    // Start the new line on the first type + size not used yet (20ft before 40ft)
+    const picked = new Set(this.form.getRawValue().lines.map((l) => lineKey(l.category, l.size)));
+    for (const category of CATEGORIES) {
+      const size = SIZES.find((s) => !picked.has(lineKey(category, s)));
+      if (size) {
+        this.form.controls.lines.push(this.newLine(category, size));
+        return;
+      }
+    }
   }
 
   protected removeLine(index: number): void {
@@ -132,11 +174,44 @@ export class DeliveryOrdersPage {
     if (page >= 1 && page <= this.totalPages()) this.loadPage(page);
   }
 
+  protected applyFilters(): void {
+    this.loadPage(1);
+  }
+
+  protected clearFilters(): void {
+    this.filterForm.reset();
+    this.loadPage(1);
+  }
+
+  /*
+    Q7: cancel needs a reason and is refused once a container left under the order (409 HasReleases).
+    prompt() keeps it to one step, as for "Báo hư" on the container catalog.
+  */
+  protected cancel(order: DeliveryOrder): void {
+    const reason = prompt(`Lý do huỷ lệnh ${order.orderNumber}:`)?.trim();
+    if (!reason) return;
+
+    this.cancellingId.set(order.id);
+    this.api.cancel(order.id, reason).subscribe({
+      next: () => {
+        this.toast.success(`Đã huỷ lệnh ${order.orderNumber}`);
+        this.cancellingId.set(null);
+        this.loadPage(this.page());
+      },
+      error: (err: unknown) => {
+        this.toast.error(toApiError(err).message);
+        this.cancellingId.set(null);
+        // The order may have changed meanwhile (e.g. a release): show its current state
+        this.loadPage(this.page());
+      },
+    });
+  }
+
   protected submit(): void {
     this.submitted.set(true);
     this.apiError.set(null);
     this.form.markAllAsTouched();
-    if (this.form.invalid || this.expiryInPast()) return;
+    if (this.form.invalid || this.expiryInPast() || this.duplicateLines().size > 0) return;
 
     const v = this.form.getRawValue();
     const request: CreateDeliveryOrderRequest = {
@@ -145,7 +220,7 @@ export class DeliveryOrdersPage {
       customerId: v.customerId,
       expiryDate: v.expiryDate,
       vesselVoyage: v.vesselVoyage.trim(),
-      lines: v.lines.map((l) => ({ category: l.category, quantity: Number(l.quantity) })),
+      lines: v.lines.map((l) => ({ category: l.category, size: l.size, quantity: Number(l.quantity) })),
     };
 
     this.submitting.set(true);
@@ -164,11 +239,11 @@ export class DeliveryOrdersPage {
     });
   }
 
-  // "Làm lại": empty form with one Dry line; the operator stays because orders often come in batches
+  // "Làm lại": empty form with one Dry 20ft line; the operator stays because orders often come in batches
   protected resetForm(): void {
     const { lineOperatorId } = this.form.getRawValue();
     this.form.controls.lines.clear();
-    this.form.controls.lines.push(this.newLine('Dry'));
+    this.form.controls.lines.push(this.newLine('Dry', 'Ft20'));
     this.form.reset({ lineOperatorId, expiryDate: this.today });
     this.submitted.set(false);
     this.apiError.set(null);
@@ -185,15 +260,17 @@ export class DeliveryOrdersPage {
     return control.invalid && (control.touched || this.submitted());
   }
 
-  private newLine(category: ContainerCategory) {
+  private newLine(category: ContainerCategory, size: ContainerSize) {
     return this.fb.group({
       category: [category],
+      size: [size],
       quantity: [1, [Validators.required, Validators.min(1), Validators.pattern(/^\d+$/)]],
     });
   }
 
   private loadPage(page: number): void {
-    this.api.list(page, PAGE_SIZE).subscribe({
+    const f = this.filterForm.getRawValue();
+    this.api.list(page, PAGE_SIZE, { search: f.search, status: f.status || null, operatorId: f.operatorId || null }).subscribe({
       next: (result) => {
         this.orders.set(result.items);
         this.totalCount.set(result.totalCount);

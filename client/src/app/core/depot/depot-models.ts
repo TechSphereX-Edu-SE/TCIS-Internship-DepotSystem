@@ -195,6 +195,9 @@ export interface DailyGateOut {
   orderLineRemaining: number | null;
   vehicleNo: string | null;
   gateOutAt: string;
+  // EmptyRelease = cấp rỗng under an order; ExternalRepair = chuyển sửa ngoài (no order, repairFacility set)
+  exitPurpose: GateOutPurpose | null;
+  repairFacility: string | null;
 }
 
 export interface DailyVisits {
@@ -224,8 +227,10 @@ export interface GateInResult {
   row: number | null;
   tier: number | null;
   gateInAt: string;
-  // Set when the container came in Damaged: the repair case (Chờ giám định) the damage went into
+  // Set when the container came in Damaged, or came back from outside repair: the repair case it belongs to
   repairCaseId: string | null;
+  // True when this gate-in closed a transfer to an outside repair facility (the case still needs acceptance)
+  returnedFromRepair: boolean;
 }
 
 // POST /api/container-visits/move (MoveContainerCommand); the response is a ContainerPosition
@@ -243,9 +248,11 @@ export interface Customer {
   createdAt: string;
 }
 
-// GET /api/delivery-orders(/{id}): quantity ordered, released at gate-out and still available per type
+// GET /api/delivery-orders(/{id}): quantity ordered, released at gate-out and still available per type + size
 export interface DeliveryOrderLine {
   category: ContainerCategory;
+  // Q1: one line per type and size; null only on lines created before sizes existed (both sizes)
+  size: ContainerSize | null;
   quantity: number;
   releasedQuantity: number;
   remainingQuantity: number;
@@ -266,6 +273,18 @@ export interface DeliveryOrder {
   vesselVoyage: string;
   lines: DeliveryOrderLine[];
   createdAt: string;
+  // Computed by the API (feedback 6): Chưa giao / Đang giao / Đã giao đủ / Hết hạn / Đã huỷ
+  status: DeliveryOrderStatus;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+}
+
+// Filters of GET /api/delivery-orders; usable = only orders a container can still leave under
+export interface DeliveryOrderFilter {
+  search?: string;
+  status?: DeliveryOrderStatus | null;
+  usable?: boolean;
+  operatorId?: string | null;
 }
 
 // POST /api/delivery-orders (CreateDeliveryOrderCommand)
@@ -275,7 +294,7 @@ export interface CreateDeliveryOrderRequest {
   customerId: string;
   expiryDate: string;
   vesselVoyage: string;
-  lines: { category: ContainerCategory; quantity: number }[];
+  lines: { category: ContainerCategory; size: ContainerSize; quantity: number }[];
 }
 
 export interface CreateDeliveryOrderResult {
@@ -295,8 +314,64 @@ export interface GateOutResult {
   containerNumber: string;
   orderNumber: string;
   category: ContainerCategory;
-  // Containers of this type still allowed under the order after this release
+  // Containers of this type and size still allowed under the order after this release
   remainingQuantity: number;
+  vehicleNo: string;
+  gateOutAt: string;
+  size: ContainerSize;
+}
+
+// Why a container of the order cannot leave yet; null = it can
+export type GateOutBlockReason = 'RepairCase' | 'Damaged' | 'ContainerAbove';
+
+export const GATE_OUT_BLOCK_LABEL: Record<GateOutBlockReason, string> = {
+  RepairCase: 'Đang có hồ sơ giám định/sửa chữa',
+  Damaged: 'Đang hư hỏng',
+  ContainerAbove: 'Có container xếp phía trên',
+};
+
+/*
+  GET /api/container-visits/gate-out-candidates?deliveryOrderId= (feedback 6): containers in the yard of the
+  order's line operator whose type and size the order still needs. Blocked ones are listed too, with the reason.
+*/
+export interface GateOutCandidate {
+  visitId: string;
+  containerId: string;
+  containerNumber: string;
+  isoCode: string;
+  size: ContainerSize;
+  category: ContainerCategory;
+  blockCode: string;
+  bay: number | null;
+  row: number | null;
+  tier: number | null;
+  condition: ContainerCondition;
+  gateInAt: string;
+  blockReason: GateOutBlockReason | null;
+  repairCaseId: string | null;
+  repairStatus: RepairCaseStatus | null;
+  aboveContainerNumber: string | null;
+  eligible: boolean;
+}
+
+// Why a container left the yard: cấp rỗng under an order, or chuyển sửa ngoài
+export type GateOutPurpose = 'EmptyRelease' | 'ExternalRepair';
+
+export const GATE_OUT_PURPOSE_LABEL: Record<GateOutPurpose, string> = {
+  EmptyRelease: 'Cấp rỗng',
+  ExternalRepair: 'Chuyển sửa ngoài',
+};
+
+// POST /api/container-visits/gate-out-repair
+export interface GateOutForRepairRequest {
+  transferId: string;
+  vehicleNo: string;
+}
+
+export interface GateOutForRepairResult {
+  visitId: string;
+  containerNumber: string;
+  facility: string;
   vehicleNo: string;
   gateOutAt: string;
 }
@@ -518,23 +593,34 @@ export function dailyTotals(from: string, to: string, rows: readonly DailyThroug
 }
 
 /*
-  Status shown for a delivery order (mockup 05):
-    - done: every line fully released (checked first: a finished order is not "expired" in practice)
-    - expired: today (Vietnam) is after the expiry date
-    - open: still usable at gate-out
+  Status of a delivery order, computed by the API (feedback 6). Precedence: Cancelled, then Completed
+  (every line fully released), then Expired, then NotStarted (nothing released) / InProgress.
 */
-export type OrderStatus = 'open' | 'done' | 'expired';
+export type DeliveryOrderStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Expired' | 'Cancelled';
 
-export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = { open: 'Còn hạn', done: 'Đã giao đủ', expired: 'Hết hạn' };
+export const DELIVERY_ORDER_STATUSES: DeliveryOrderStatus[] = ['NotStarted', 'InProgress', 'Completed', 'Expired', 'Cancelled'];
 
-export function orderStatus(order: DeliveryOrder): OrderStatus {
-  if (order.lines.every((l) => l.remainingQuantity === 0)) return 'done';
-  return order.isExpired ? 'expired' : 'open';
+export const DELIVERY_ORDER_STATUS_LABEL: Record<DeliveryOrderStatus, string> = {
+  NotStarted: 'Chưa giao',
+  InProgress: 'Đang giao',
+  Completed: 'Đã giao đủ',
+  Expired: 'Hết hạn',
+  Cancelled: 'Đã huỷ',
+};
+
+// "Dry 20ft"; a line without size (created before Q1) covers both sizes
+export function orderLineLabel(line: Pick<DeliveryOrderLine, 'category' | 'size'>): string {
+  return `${CATEGORY_LABEL[line.category]} ${line.size ? SIZE_LABEL[line.size] : '20/40ft'}`;
 }
 
-// "Dry 0/2 · Reefer 1/1" = released / ordered per type, as in the order list
-export function releasedSummary(order: DeliveryOrder): string {
-  return order.lines.map((l) => `${CATEGORY_LABEL[l.category]} ${l.releasedQuantity}/${l.quantity}`).join(' · ');
+// "Dry 20ft 0/2 · Reefer 40ft 1/1" = released / ordered per line, as in the order list
+export function releasedSummary(order: Pick<DeliveryOrder, 'lines'>): string {
+  return order.lines.map((l) => `${orderLineLabel(l)} ${l.releasedQuantity}/${l.quantity}`).join(' · ');
+}
+
+// Q7: an order can be cancelled only while nothing has been released under it
+export function canCancelOrder(order: Pick<DeliveryOrder, 'status' | 'lines'>): boolean {
+  return order.status !== 'Cancelled' && order.lines.every((l) => l.releasedQuantity === 0);
 }
 
 // ---------- inspection & repair (feedback 3, 4, 8; Q4, Q6) ----------
@@ -563,7 +649,15 @@ export type RepairAction =
 // Where a damage was seen: gate-in, the yard / move screen, the container catalog, or an inspection
 export type RepairFindingSource = 'GateIn' | 'Yard' | 'Catalog' | 'Inspection';
 
-export type RepairEventKind = 'Opened' | 'FindingAdded' | RepairAction;
+// External* events record the outside repair; they do not change the case status
+export type RepairEventKind =
+  | 'Opened'
+  | 'FindingAdded'
+  | RepairAction
+  | 'ExternalRequested'
+  | 'ExternalCancelled'
+  | 'SentForExternalRepair'
+  | 'ReturnedFromExternalRepair';
 
 export const REPAIR_STATUS_LABEL: Record<RepairCaseStatus, string> = {
   AwaitingInspection: 'Chờ giám định',
@@ -606,6 +700,10 @@ export const REPAIR_EVENT_LABEL: Record<RepairEventKind, string> = {
   CompleteRepair: 'Sửa xong',
   AcceptPassed: 'Nghiệm thu đạt',
   AcceptRejected: 'Nghiệm thu không đạt, sửa lại',
+  ExternalRequested: 'Yêu cầu chuyển sửa ngoài',
+  ExternalCancelled: 'Huỷ yêu cầu sửa ngoài',
+  SentForExternalRepair: 'Xuất bãi đi sửa ngoài',
+  ReturnedFromExternalRepair: 'Về bãi sau sửa ngoài',
 };
 
 export const FINDING_SOURCE_LABEL: Record<RepairFindingSource, string> = {
@@ -636,6 +734,9 @@ export interface RepairCaseSummary {
   bay: number | null;
   row: number | null;
   tier: number | null;
+  // The outside repair in progress (Requested or GatedOut), if any
+  externalStatus: ExternalRepairStatus | null;
+  externalFacility: string | null;
 }
 
 export interface RepairFinding {
@@ -692,6 +793,9 @@ export interface RepairCaseDetail {
   findings: RepairFinding[];
   photos: RepairPhoto[];
   history: RepairCaseEvent[];
+  // True when an outside repair can be requested now (case approved or in repair, in the yard, none active)
+  canRequestExternal: boolean;
+  transfers: ExternalRepair[];
 }
 
 // Filters of GET /api/repair-cases; open: true = not Passed yet, false = Passed only
@@ -703,6 +807,9 @@ export interface RepairCaseFilter {
   containerId?: string | null;
   reportedFrom?: string | null;
   reportedTo?: string | null;
+  // true = only cases with an outside repair in progress; facility = part of the facility name
+  external?: boolean | null;
+  facility?: string | null;
 }
 
 // POST /api/repair-cases/report (source GateIn is refused: gate-in reports with the gate-in itself)
@@ -729,4 +836,52 @@ export function photoFileError(file: Pick<File, 'type' | 'size' | 'name'>): stri
   if (file.size > PHOTO_MAX_BYTES) return `${file.name}: ảnh tối đa 5 MB.`;
   if (file.size === 0) return `${file.name}: file rỗng.`;
   return null;
+}
+
+// ---------- outside repair (feedback 4: sửa ngoài) ----------
+
+/*
+  Requested on the repair page -> GatedOut (confirmed on the gate-out page, no delivery order)
+  -> Returned (new gate-in); or Cancelled before it leaves. The repair case stays open throughout.
+*/
+export type ExternalRepairStatus = 'Requested' | 'Cancelled' | 'GatedOut' | 'Returned';
+
+export const EXTERNAL_REPAIR_STATUS_LABEL: Record<ExternalRepairStatus, string> = {
+  Requested: 'Chờ xuất đi sửa',
+  Cancelled: 'Đã huỷ',
+  GatedOut: 'Đang sửa ngoài',
+  Returned: 'Đã về bãi',
+};
+
+// blockCode..tier = where the container is now (null when it is at the facility)
+export interface ExternalRepair {
+  id: string;
+  repairCaseId: string;
+  caseStatus: RepairCaseStatus;
+  containerId: string;
+  containerNumber: string;
+  isoCode: string;
+  size: ContainerSize;
+  category: ContainerCategory;
+  status: ExternalRepairStatus;
+  facility: string;
+  reason: string;
+  reference: string;
+  requestedAt: string;
+  requestedBy: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  gatedOutAt: string | null;
+  returnedAt: string | null;
+  blockCode: string | null;
+  bay: number | null;
+  row: number | null;
+  tier: number | null;
+}
+
+// POST /api/repair-cases/{id}/external-repair; reference = the line operator's approval / work order number
+export interface RequestExternalRepairRequest {
+  facility: string;
+  reason: string;
+  reference: string;
 }

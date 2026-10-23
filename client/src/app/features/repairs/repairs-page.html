@@ -10,6 +10,13 @@
   <div class="alert alert-red" role="alert">{{ message }}</div>
   }
 
+  @if (backOrderId(); as orderId) {
+  <div class="alert alert-amber back-bar">
+    <span>Bạn đến từ màn Xuất bãi. Khi hồ sơ đạt, quay lại để xuất container theo lệnh.</span>
+    <a class="btn btn-secondary btn-small" routerLink="/gate-out" [queryParams]="{ orderId }">← Quay lại Xuất bãi</a>
+  </div>
+  }
+
   <!-- ================= Filters ================= -->
   <form class="card filters-card" [formGroup]="filters" (ngSubmit)="search()" role="search" aria-label="Lọc hồ sơ sửa chữa">
     <div class="filters">
@@ -36,7 +43,18 @@
           }
         </select>
       </div>
+      <div class="field">
+        <label for="external">Sửa ngoài</label>
+        <select id="external" formControlName="external">
+          <option value="">Tất cả</option>
+          <option value="yes">Đang sửa ngoài / chờ xuất đi sửa</option>
+        </select>
+      </div>
       @if (moreFilters()) {
+      <div class="field">
+        <label for="facility">Nơi sửa ngoài</label>
+        <input id="facility" formControlName="facility" placeholder="Một phần tên xưởng" autocomplete="off" />
+      </div>
       <div class="field">
         <label for="reportedFrom">Báo hư từ ngày</label>
         <input id="reportedFrom" type="date" formControlName="reportedFrom" />
@@ -87,7 +105,12 @@
                 </button>
                 <div class="muted small">{{ sizeLabel[item.size] }} {{ categoryLabel[item.category] }}</div>
               </td>
-              <td><span class="chip" [class]="statusChip[item.status]">{{ statusLabel[item.status] }}</span></td>
+              <td>
+                <span class="chip" [class]="statusChip[item.status]">{{ statusLabel[item.status] }}</span>
+                @if (item.externalStatus) {
+                <div class="muted small">{{ externalLabel[item.externalStatus] }} · {{ item.externalFacility }}</div>
+                }
+              </td>
               <td>
                 <span class="finding-text">{{ item.latestFinding }}</span>
                 <div class="muted small">
@@ -168,6 +191,80 @@
       } @else {
       <div class="alert alert-green">
         Hồ sơ đã đạt. Container hết bị chặn sửa chữa và được xuất bãi bình thường. Hư hỏng mới sẽ mở hồ sơ mới.
+      </div>
+      }
+
+      <!-- Outside repair (feedback 4): request here, the container leaves from the gate-out page -->
+      @if (d.transfers.length > 0 || d.canRequestExternal) {
+      <div class="block">
+        <h3>Sửa ngoài</h3>
+        @if (d.transfers.length > 0) {
+        <ul class="transfers">
+          @for (t of d.transfers; track t.id) {
+          <li>
+            <div class="transfer-head">
+              <span class="chip" [class]="externalChip[t.status]">{{ externalLabel[t.status] }}</span>
+              <span>{{ t.facility }} · <span class="mono">{{ t.reference }}</span></span>
+            </div>
+            <span>{{ t.reason }}</span>
+            <span class="muted small">
+              Yêu cầu {{ formatDateTime(t.requestedAt) }}{{ t.requestedBy ? ' · ' + t.requestedBy : '' }}
+              @if (t.gatedOutAt) { · ra bãi {{ formatDateTime(t.gatedOutAt) }} }
+              @if (t.returnedAt) { · về bãi {{ formatDateTime(t.returnedAt) }} }
+              @if (t.cancelledAt) { · huỷ {{ formatDateTime(t.cancelledAt) }}: {{ t.cancelReason }} }
+            </span>
+            @if (t.status === 'Requested') {
+            <div class="actions">
+              <a class="btn btn-primary btn-small" routerLink="/gate-out" [queryParams]="{ tab: 'repair' }">Xác nhận xe ra ở Xuất bãi</a>
+              <button class="btn btn-secondary btn-small" type="button" (click)="cancelExternal(t)">Huỷ yêu cầu</button>
+            </div>
+            }
+            @if (t.status === 'GatedOut') {
+            <span class="muted small">Khi container về, nhập bãi như bình thường: lượt vào được nối với yêu cầu này, sau đó nghiệm thu tại đây.</span>
+            }
+          </li>
+          }
+        </ul>
+        }
+
+        @if (d.canRequestExternal) {
+        @if (!externalOpen()) {
+        <button class="btn btn-secondary add-external" type="button" (click)="externalOpen.set(true)">Chuyển sửa ngoài…</button>
+        } @else {
+        <form class="external-form" [formGroup]="externalForm" (ngSubmit)="requestExternal()" novalidate>
+          <div class="field" [class.has-error]="externalInvalid('facility')">
+            <label for="externalFacility">Nơi sửa</label>
+            <input id="externalFacility" formControlName="facility" maxlength="200" placeholder="VD: Xưởng sửa chữa Cát Lái" />
+            @if (externalInvalid('facility')) {
+            <span class="field-error">Nhập nơi sửa (tối đa 200 ký tự).</span>
+            }
+          </div>
+          <div class="field" [class.has-error]="externalInvalid('reason')">
+            <label for="externalReason">Lý do sửa ngoài</label>
+            <input id="externalReason" formControlName="reason" maxlength="500" placeholder="VD: Cần hàn vách, bãi không có thiết bị" />
+            @if (externalInvalid('reason')) {
+            <span class="field-error">Nhập lý do (tối đa 500 ký tự).</span>
+            }
+          </div>
+          <div class="field" [class.has-error]="externalInvalid('reference')">
+            <label for="externalReference">Số phê duyệt / lệnh sửa của hãng</label>
+            <input id="externalReference" class="mono" formControlName="reference" maxlength="100" placeholder="VD: HMM-RP-2026-042" />
+            @if (externalInvalid('reference')) {
+            <span class="field-error">Nhập số phê duyệt (tối đa 100 ký tự).</span>
+            }
+          </div>
+          @if (externalError(); as error) {
+          <div class="alert alert-red" role="alert"><strong>Không yêu cầu được ({{ error.status }}):</strong> {{ error.message }}</div>
+          }
+          <div class="actions">
+            <button class="btn btn-primary" type="submit" [disabled]="requestingExternal()">
+              {{ requestingExternal() ? 'Đang lưu…' : 'Yêu cầu chuyển sửa ngoài' }}
+            </button>
+            <button class="btn btn-secondary" type="button" (click)="resetExternalForm()">Huỷ</button>
+          </div>
+        </form>
+        }
+        }
       </div>
       }
 

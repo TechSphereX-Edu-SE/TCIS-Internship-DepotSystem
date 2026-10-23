@@ -1,12 +1,15 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, concatMap, from, map, of, toArray } from 'rxjs';
 import { ApiError, toApiError } from '../../core/api/api-error';
 import {
   CATEGORY_LABEL,
   CONDITION_LABEL,
+  EXTERNAL_REPAIR_STATUS_LABEL,
+  ExternalRepair,
+  ExternalRepairStatus,
   FINDING_SOURCE_LABEL,
   LineOperator,
   REPAIR_ACTIONS_NEEDING_NOTE,
@@ -41,6 +44,14 @@ const STATUS_CHIP: Record<RepairCaseStatus, string> = {
   Passed: 'chip-green',
 };
 
+// Outside repair: waiting to leave / at the facility = amber, back = green, cancelled = grey
+const EXTERNAL_CHIP: Record<ExternalRepairStatus, string> = {
+  Requested: 'chip-amber',
+  GatedOut: 'chip-amber',
+  Returned: 'chip-green',
+  Cancelled: 'chip-grey',
+};
+
 // Status dropdown: "open" (every status but Đạt) is the default, the work still to do
 type StatusChoice = 'open' | 'all' | RepairCaseStatus;
 
@@ -59,12 +70,14 @@ const PRIMARY_ACTIONS: readonly RepairAction[] = [
     - Right: the selected case: findings, photos, history and the next steps the API allows
       (allowedActions), so the screen never offers a step the API would refuse.
   The selected case is in the URL (?caseId=), so gate-in, gate-out and the container catalog can link
-  straight to it and a reload keeps it open.
+  straight to it and a reload keeps it open. ?backOrderId= (from gate-out) shows a link back to that order.
+  Feedback 4 (sửa ngoài): an approved case can be sent to an outside facility; the container then leaves
+  from the gate-out page without an order and the case stays open until it comes back and passes.
   Passed (Đạt) only lifts the repair block; the container stays where it is and leaves through gate-out.
 */
 @Component({
   selector: 'app-repairs-page',
-  imports: [ReactiveFormsModule, Pager],
+  imports: [ReactiveFormsModule, RouterLink, Pager],
   templateUrl: './repairs-page.html',
   styleUrl: './repairs-page.css',
 })
@@ -86,6 +99,8 @@ export class RepairsPage {
   protected readonly categoryLabel = CATEGORY_LABEL;
   protected readonly conditionLabel = CONDITION_LABEL;
   protected readonly formatDateTime = formatDateTime;
+  protected readonly externalLabel = EXTERNAL_REPAIR_STATUS_LABEL;
+  protected readonly externalChip = EXTERNAL_CHIP;
 
   // Main filters, plus the "Lọc thêm" dates (Vietnam calendar days, both included)
   protected readonly filters = this.fb.group({
@@ -94,6 +109,9 @@ export class RepairsPage {
     operatorId: [''],
     reportedFrom: [''],
     reportedTo: [''],
+    // '' = all, 'yes' = only cases with an outside repair in progress
+    external: [''],
+    facility: [''],
   });
   protected readonly moreFilters = signal(false);
 
@@ -105,6 +123,18 @@ export class RepairsPage {
   });
   // Photos go to the whole case, or to one finding when picked
   protected readonly photoFindingId = this.fb.control('');
+  // Outside repair request (RequestExternalRepairCommand); reference = approval / work order of the operator
+  protected readonly externalForm = this.fb.group({
+    facility: ['', [Validators.required, Validators.maxLength(200)]],
+    reason: ['', [Validators.required, Validators.maxLength(500)]],
+    reference: ['', [Validators.required, Validators.maxLength(100)]],
+  });
+  protected readonly externalOpen = signal(false);
+  protected readonly externalSubmitted = signal(false);
+  protected readonly requestingExternal = signal(false);
+  protected readonly externalError = signal<ApiError | null>(null);
+  // Order the clerk came from on the gate-out page (link back once the case is done)
+  protected readonly backOrderId = signal<string | null>(null);
 
   protected readonly items = signal<RepairCaseSummary[]>([]);
   protected readonly totalCount = signal(0);
@@ -147,12 +177,11 @@ export class RepairsPage {
     });
 
     // The URL decides which case is open (links from other screens, reload, back button)
-    this.route.queryParamMap
-      .pipe(
-        map((params) => params.get('caseId')),
-        takeUntilDestroyed(),
-      )
-      .subscribe((id) => this.openCase(id));
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      this.backOrderId.set(params.get('backOrderId'));
+      const id = params.get('caseId');
+      if (id !== this.selectedId() || !id) this.openCase(id);
+    });
 
     inject(DestroyRef).onDestroy(() => this.revokePhotos());
   }
@@ -170,12 +199,79 @@ export class RepairsPage {
     if (page >= 1 && page <= this.totalPages()) this.loadPage(page);
   }
 
+  // merge keeps ?backOrderId= while the clerk looks at other cases
   protected select(item: RepairCaseSummary): void {
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { caseId: item.id }, replaceUrl: true });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { caseId: item.id },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   protected closeDetail(): void {
-    void this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { caseId: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  // Feedback 4: send the container to an outside facility; it leaves later from the gate-out page
+  protected requestExternal(): void {
+    const current = this.detail();
+    this.externalSubmitted.set(true);
+    this.externalForm.markAllAsTouched();
+    if (!current || this.externalForm.invalid || this.requestingExternal()) return;
+
+    const v = this.externalForm.getRawValue();
+    this.requestingExternal.set(true);
+    this.externalError.set(null);
+    this.api
+      .requestExternal(current.id, { facility: v.facility.trim(), reason: v.reason.trim(), reference: v.reference.trim() })
+      .subscribe({
+        next: () => {
+          this.toast.success(`${current.containerNumber}: đã yêu cầu chuyển sửa ngoài, xác nhận xe ra ở màn Xuất bãi`);
+          this.resetExternalForm();
+          this.requestingExternal.set(false);
+          this.reload(current.id);
+        },
+        error: (err: unknown) => {
+          this.externalError.set(toApiError(err));
+          this.requestingExternal.set(false);
+        },
+      });
+  }
+
+  // Only before the container leaves (409 ExternalRepair.NotRequested otherwise)
+  protected cancelExternal(transfer: ExternalRepair): void {
+    const current = this.detail();
+    const reason = prompt(`Lý do huỷ yêu cầu sửa ngoài ${transfer.containerNumber}:`)?.trim();
+    if (!current || !reason) return;
+
+    this.api.cancelExternal(transfer.id, reason).subscribe({
+      next: () => {
+        this.toast.success('Đã huỷ yêu cầu sửa ngoài');
+        this.reload(current.id);
+      },
+      error: (err: unknown) => {
+        this.toast.error(toApiError(err).message);
+        this.reload(current.id);
+      },
+    });
+  }
+
+  protected resetExternalForm(): void {
+    this.externalForm.reset();
+    this.externalSubmitted.set(false);
+    this.externalError.set(null);
+    this.externalOpen.set(false);
+  }
+
+  protected externalInvalid(name: 'facility' | 'reason' | 'reference'): boolean {
+    const control = this.externalForm.controls[name];
+    return control.invalid && (control.touched || this.externalSubmitted());
   }
 
   protected needsNote(action: RepairAction): boolean {
@@ -296,6 +392,7 @@ export class RepairsPage {
     this.findingError.set(null);
     this.noteMissing.set(false);
     this.photoErrors.set([]);
+    this.resetExternalForm();
     if (!id) {
       this.detail.set(null);
       this.revokePhotos();
@@ -360,6 +457,8 @@ export class RepairsPage {
       operatorId: v.operatorId || null,
       reportedFrom: v.reportedFrom || null,
       reportedTo: v.reportedTo || null,
+      external: v.external === 'yes' ? true : null,
+      facility: v.facility || null,
     };
   }
 

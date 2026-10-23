@@ -46,10 +46,14 @@ type Lookup =
   | { kind: 'ready'; container: Container }
   | { kind: 'error'; message: string };
 
-// Banner after a Damaged gate-in: the repair case the damage went into, and how the photos went
+/*
+  Banner after a gate-in linked to a repair case: a Damaged gate-in (the case the damage went into,
+  and how the photos went), or a container back from outside repair (returned = true, still to be accepted).
+*/
 interface GateInRepair {
   caseId: string;
   containerNumber: string;
+  returned: boolean;
   photosUploaded: number;
   photoErrors: string[];
 }
@@ -302,7 +306,9 @@ export class GateInPage {
         this.toast.success(
           `Đã nhập ${result.containerNumber} vào ${formatPosition(result.blockCode, result.bay, result.row, result.tier)}`,
         );
-        if (result.repairCaseId) this.uploadDamagePhotos(result.repairCaseId, result.containerNumber, photos);
+        if (result.repairCaseId) {
+          this.uploadDamagePhotos(result.repairCaseId, result.containerNumber, result.returnedFromRepair, photos);
+        }
         this.resetForNext();
         this.refreshMap.update((n) => n + 1);
         this.loadToday();
@@ -351,8 +357,8 @@ export class GateInPage {
     The gate-in is already saved, so a failed photo does not undo it: the banner lists what failed
     and the clerk can add the photo again from the repair page. Uploaded one after the other.
   */
-  private uploadDamagePhotos(caseId: string, containerNumber: string, photos: File[]): void {
-    const banner: GateInRepair = { caseId, containerNumber, photosUploaded: 0, photoErrors: [] };
+  private uploadDamagePhotos(caseId: string, containerNumber: string, returned: boolean, photos: File[]): void {
+    const banner: GateInRepair = { caseId, containerNumber, returned, photosUploaded: 0, photoErrors: [] };
     this.lastRepair.set(banner);
     if (photos.length === 0) return;
 

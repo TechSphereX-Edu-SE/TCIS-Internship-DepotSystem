@@ -6,9 +6,13 @@ import {
   DailyVisits,
   GateInRequest,
   GateInResult,
+  GateOutCandidate,
+  GateOutForRepairRequest,
+  GateOutForRepairResult,
   GateOutRequest,
   GateOutResult,
   MoveRequest,
+  PagedResult,
   YardContainer,
 } from './depot-models';
 
@@ -27,9 +31,24 @@ export class YardApi {
     return this.http.post<ContainerPosition>(`${this.baseUrl}/move`, request);
   }
 
-  // 409 ContainerDamaged / ContainerAbove / WrongLineOperator / Expired / TypeNotAllowed / QuantityExceeded
+  // 409 RepairCaseOpen / ContainerAbove / WrongLineOperator / Cancelled / Expired / TypeNotAllowed / QuantityExceeded
   gateOut(request: GateOutRequest): Observable<GateOutResult> {
     return this.http.post<GateOutResult>(`${this.baseUrl}/gate-out`, request);
+  }
+
+  // Exit of a container requested for outside repair: no order; 409 ExternalRepair.NotRequested / ContainerAbove
+  gateOutForRepair(request: GateOutForRepairRequest): Observable<GateOutForRepairResult> {
+    return this.http.post<GateOutForRepairResult>(`${this.baseUrl}/gate-out-repair`, request);
+  }
+
+  /*
+    Containers that match the order (operator, type, size still open): those that can leave first.
+    409 DeliveryOrder.Cancelled / Expired when the order can no longer be used.
+  */
+  gateOutCandidates(deliveryOrderId: string, search: string, page = 1, pageSize = 20): Observable<PagedResult<GateOutCandidate>> {
+    const params: Record<string, string | number> = { deliveryOrderId, page, pageSize };
+    if (search.trim()) params['search'] = search.trim();
+    return this.http.get<PagedResult<GateOutCandidate>>(`${this.baseUrl}/gate-out-candidates`, { params });
   }
 
   // 404 ContainerVisit.NotInYard when the container exists but is not in the yard

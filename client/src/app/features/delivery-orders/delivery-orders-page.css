@@ -10,7 +10,37 @@
 
 /* Wide table: scrolls inside its box on narrow screens instead of squeezing the columns */
 .orders {
-  min-width: 880px;
+  min-width: 1040px;
+}
+
+/* Filters on one line on wide screens, wrapping below */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin: 12px 0 16px;
+}
+
+  .filters .field {
+    min-width: 180px;
+  }
+
+.filter-actions,
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.row-actions {
+  justify-content: flex-end;
+}
+
+/* Reason and time of a cancelled order, under its chip */
+.cancel-note {
+  margin-top: 4px;
+  max-width: 220px;
 }
 
 .form {
@@ -46,7 +76,7 @@
 
 .line {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 44px;
   gap: 12px;
   align-items: start;
 }

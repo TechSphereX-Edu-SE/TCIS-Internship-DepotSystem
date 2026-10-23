@@ -14,8 +14,13 @@
   @if (lastRepair(); as repair) {
   <div class="alert alert-amber repair-banner" role="status">
     <span>
+      @if (repair.returned) {
+      {{ repair.containerNumber }} về bãi sau sửa ngoài: hồ sơ vẫn mở, container chưa xuất được cho đến khi nghiệm thu đạt
+      @if (repair.photosUploaded > 0) { (đã thêm {{ repair.photosUploaded }} ảnh) }.
+      } @else {
       {{ repair.containerNumber }} vào bãi tình trạng Hư hỏng: đã ghi vào hồ sơ giám định
       @if (repair.photosUploaded > 0) { kèm {{ repair.photosUploaded }} ảnh }.
+      }
       <a [routerLink]="['/repairs']" [queryParams]="{ caseId: repair.caseId }">Mở hồ sơ</a>
     </span>
     <button class="link-button" type="button" (click)="lastRepair.set(null)" aria-label="Đóng thông báo">Đóng</button>

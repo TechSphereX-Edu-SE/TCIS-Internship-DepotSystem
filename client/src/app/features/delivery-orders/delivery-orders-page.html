@@ -17,8 +17,38 @@
       <span class="muted">{{ totalCount() }} lệnh</span>
     </div>
 
+    <!-- Filters (feedback 6): number or customer, status, line operator -->
+    <form class="filters" [formGroup]="filterForm" (ngSubmit)="applyFilters()" aria-label="Lọc lệnh giao">
+      <div class="field">
+        <label for="orderSearch">Số lệnh / khách hàng</label>
+        <input id="orderSearch" formControlName="search" placeholder="VD: DO-003" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="orderStatus">Trạng thái</label>
+        <select id="orderStatus" formControlName="status">
+          <option value="">Tất cả</option>
+          @for (status of statuses; track status) {
+          <option [value]="status">{{ statusLabel[status] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="orderOperator">Hãng khai thác</label>
+        <select id="orderOperator" formControlName="operatorId">
+          <option value="">Tất cả</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }}</option>
+          }
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">Lọc</button>
+        <button class="btn btn-secondary" type="button" (click)="clearFilters()">Bỏ lọc</button>
+      </div>
+    </form>
+
     @if (orders().length === 0) {
-    <p class="empty muted">Chưa có lệnh giao nào. Tạo lệnh ở form bên dưới.</p>
+    <p class="empty muted">Không có lệnh giao nào phù hợp. Tạo lệnh ở form bên dưới.</p>
     } @else {
     <div class="table-wrap">
       <table class="table orders">
@@ -31,6 +61,7 @@
             <th>Chuyến tàu xuất</th>
             <th>Đã giao / số lượng</th>
             <th>Trạng thái</th>
+            <th><span class="visually-hidden">Thao tác</span></th>
           </tr>
         </thead>
         <tbody>
@@ -43,8 +74,23 @@
             <td>{{ order.vesselVoyage }}</td>
             <td>{{ releasedSummary(order) }}</td>
             <td>
-              @let status = orderStatus(order);
-              <span class="chip" [class]="statusChip[status]">{{ statusLabel[status] }}</span>
+              <span class="chip" [class]="statusChip[order.status]">{{ statusLabel[order.status] }}</span>
+              @if (order.status === 'Cancelled') {
+              <div class="cancel-note muted small">{{ order.cancelReason }} · {{ formatDateTime(order.cancelledAt!) }}</div>
+              }
+            </td>
+            <td class="row-actions">
+              @if (order.status === 'NotStarted' || order.status === 'InProgress') {
+              <a class="btn btn-secondary btn-small" routerLink="/gate-out" [queryParams]="{ orderId: order.id }">Xuất bãi</a>
+              }
+              @if (canCancel(order)) {
+              <button class="btn btn-secondary btn-small"
+                      type="button"
+                      [disabled]="cancellingId() === order.id"
+                      (click)="cancel(order)">
+                Huỷ lệnh
+              </button>
+              }
             </td>
           </tr>
           }
@@ -114,15 +160,26 @@
     </div>
 
     <fieldset class="lines" formArrayName="lines">
-      <legend>Số lượng container mỗi loại</legend>
+      <legend>Số lượng container theo loại và kích thước</legend>
 
       @for (line of form.controls.lines.controls; track line; let i = $index) {
       <div class="line" [formGroupName]="i">
-        <div class="field">
+        <div class="field" [class.has-error]="duplicateLines().has(i)">
           <label [for]="'lineType' + i" class="small-label">Loại container</label>
           <select [id]="'lineType' + i" formControlName="category">
-            @for (category of lineOptions()[i]; track category) {
+            @for (category of categories; track category) {
             <option [value]="category">{{ categoryLabel[category] }} · {{ categoryHint[category] }}</option>
+            }
+          </select>
+          @if (duplicateLines().has(i)) {
+          <span class="field-error">Loại và kích thước này đã có ở dòng trên.</span>
+          }
+        </div>
+        <div class="field" [class.has-error]="duplicateLines().has(i)">
+          <label [for]="'lineSize' + i" class="small-label">Kích thước</label>
+          <select [id]="'lineSize' + i" formControlName="size">
+            @for (size of sizes; track size) {
+            <option [value]="size">{{ sizeLabel[size] }}</option>
             }
           </select>
         </div>
@@ -136,7 +193,7 @@
         <button class="btn btn-secondary icon-btn"
                 type="button"
                 [disabled]="form.controls.lines.length === 1"
-                [attr.aria-label]="'Xoá dòng ' + categoryLabel[line.controls.category.value]"
+                [attr.aria-label]="'Xoá dòng ' + categoryLabel[line.controls.category.value] + ' ' + sizeLabel[line.controls.size.value]"
                 (click)="removeLine(i)">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
             <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5"></path>
@@ -146,9 +203,9 @@
       }
 
       @if (canAddLine()) {
-      <button class="btn add-line" type="button" (click)="addLine()">+ Thêm loại container</button>
+      <button class="btn add-line" type="button" (click)="addLine()">+ Thêm dòng</button>
       }
-      <p class="muted small">Mỗi loại chỉ một dòng, số lượng ≥ 1. 7 loại theo Phụ lục II: Dry, Reefer, Open Top, Flat Rack, Bunker, Ventilated, Specialized.</p>
+      <p class="muted small">Mỗi cặp loại + kích thước chỉ một dòng, số lượng ≥ 1 (VD: Dry 20ft × 3, Dry 40ft × 2). 7 loại theo Phụ lục II.</p>
     </fieldset>
 
     @if (apiError(); as error) {

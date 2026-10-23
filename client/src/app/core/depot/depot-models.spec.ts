@@ -1,6 +1,10 @@
 import {
+  DELIVERY_ORDER_STATUSES,
+  DELIVERY_ORDER_STATUS_LABEL,
   DailyThroughput,
   DeliveryOrder,
+  DeliveryOrderLine,
+  canCancelOrder,
   addDays,
   assignmentCovers,
   blockAccepts,
@@ -11,7 +15,7 @@ import {
   formatDate,
   formatDateTime,
   formatPosition,
-  orderStatus,
+  orderLineLabel,
   PHOTO_MAX_BYTES,
   REPAIR_STATUSES,
   REPAIR_STATUS_LABEL,
@@ -68,35 +72,46 @@ it('formats an instant in Vietnam time', () => {
   expect(formatDateTime('2026-10-21T18:00:00Z')).toBe('22/10/2026 01:00');
 });
 
-describe('delivery order status and summary', () => {
-  const order = (isExpired: boolean, lines: [number, number][]) =>
+describe('delivery order lines and cancel', () => {
+  // lines: [category, size, quantity, released]
+  const order = (status: DeliveryOrder['status'], lines: [DeliveryOrderLine['category'], DeliveryOrderLine['size'], number, number][]) =>
     ({
-      isExpired,
-      lines: lines.map(([quantity, released], i) => ({
-        category: i === 0 ? 'Dry' : 'Reefer',
+      status,
+      lines: lines.map(([category, size, quantity, released]) => ({
+        category,
+        size,
         quantity,
         releasedQuantity: released,
         remainingQuantity: quantity - released,
       })),
     }) as DeliveryOrder;
 
-  it('is open while a line has quantity left and the order has not expired', () => {
-    expect(orderStatus(order(false, [[2, 0], [1, 1]]))).toBe('open');
+  it('names a line by type and size; a line from before sizes covers both', () => {
+    expect(orderLineLabel({ category: 'Dry', size: 'Ft40' })).toBe('Dry 40ft');
+    expect(orderLineLabel({ category: 'Reefer', size: null })).toBe('Reefer 20/40ft');
   });
 
-  it('is done when every line is fully released, even after the expiry date', () => {
-    expect(orderStatus(order(false, [[1, 1]]))).toBe('done');
-    expect(orderStatus(order(true, [[1, 1]]))).toBe('done');
+  it('summarises released / ordered per line', () => {
+    expect(releasedSummary(order('InProgress', [['Dry', 'Ft20', 2, 0], ['Dry', 'Ft40', 1, 1]]))).toBe('Dry 20ft 0/2 · Dry 40ft 1/1');
   });
 
-  it('is expired when quantity is left but the expiry date has passed', () => {
-    expect(orderStatus(order(true, [[3, 1]]))).toBe('expired');
+  it('can cancel only an order with nothing released (Q7)', () => {
+    expect(canCancelOrder(order('NotStarted', [['Dry', 'Ft20', 2, 0]]))).toBe(true);
+    expect(canCancelOrder(order('Expired', [['Dry', 'Ft20', 2, 0]]))).toBe(true);
+    expect(canCancelOrder(order('InProgress', [['Dry', 'Ft20', 2, 1]]))).toBe(false);
+    expect(canCancelOrder(order('Cancelled', [['Dry', 'Ft20', 2, 0]]))).toBe(false);
   });
 
-  it('summarises released / ordered per type', () => {
-    expect(releasedSummary(order(false, [[2, 0], [1, 1]]))).toBe('Dry 0/2 · Reefer 1/1');
+  it('labels every status in Vietnamese', () => {
+    expect(DELIVERY_ORDER_STATUSES.map((s) => DELIVERY_ORDER_STATUS_LABEL[s])).toEqual([
+      'Chưa giao',
+      'Đang giao',
+      'Đã giao đủ',
+      'Hết hạn',
+      'Đã huỷ',
+    ]);
   });
-  
+
   it('adds days across month and year ends', () => {
     expect(addDays('2026-10-31', 1)).toBe('2026-11-01');
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
