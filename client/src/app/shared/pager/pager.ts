@@ -1,6 +1,12 @@
 import { Component, input, output } from '@angular/core';
 
 /*
+  Rows per page of every paged list (feedback 23/10: "trang nào có list hiển thị thì hiện 15").
+  One constant so all lists stay the same; search dropdowns keep their own page size for scrolling.
+*/
+export const LIST_PAGE_SIZE = 15;
+
+/*
   "Trang trước · Trang x / y · Trang sau" under a paged table (PagedResult of the API).
   Hidden when everything fits on one page. The page decides what to load; this only emits the page wanted.
 */

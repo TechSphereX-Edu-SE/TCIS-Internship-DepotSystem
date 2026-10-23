@@ -29,7 +29,7 @@ import {
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { RepairApi } from '../../core/depot/repair-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { SearchPageLoader, SearchSelect } from '../../shared/search-select/search-select';
 import { ToastService } from '../../shared/toast/toast-service';
 
@@ -52,9 +52,6 @@ function ownerOf(container: Container): LineOperator | null {
     createdAt: '',
   };
 }
-
-// 10 rows per page (feedback 23/10: 20 made the list too long next to the form)
-const PAGE_SIZE = 10;
 
 // Whole kilograms above 0
 const weightValidators = [Validators.required, Validators.min(1), Validators.pattern(/^\d+$/)];
@@ -253,7 +250,7 @@ export class ContainersPage {
     const { search, ...rest } = this.filters.getRawValue();
     const params = containerFilterParams(rest);
     this.filtered.set(Object.keys(params).length > 0);
-    this.api.containerPage(search, page, PAGE_SIZE, null, params).subscribe({
+    this.api.containerPage(search, page, LIST_PAGE_SIZE, null, params).subscribe({
       next: (result) => {
         this.items.set(result.items);
         this.totalCount.set(result.totalCount);

@@ -5,10 +5,8 @@ import { Observable } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { LineOperator, PartnerRole, partnerRolesText } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
-
-const PAGE_SIZE = 20;
 
 // Same pattern as PartnerRules.TaxCodePattern: 10 digits, optionally "-" and a 3-digit branch number
 const TAX_CODE_PATTERN = /^\s*\d{10}(-\d{3})?\s*$/;
@@ -66,7 +64,7 @@ export class LineOperatorsPage {
   }
 
   protected load(page: number): void {
-    this.api.lineOperatorPage(page, PAGE_SIZE, '', this.roleFilter() || undefined).subscribe({
+    this.api.lineOperatorPage(page, LIST_PAGE_SIZE, '', this.roleFilter() || undefined).subscribe({
       next: (result) => {
         this.items.set(result.items);
         this.totalCount.set(result.totalCount);

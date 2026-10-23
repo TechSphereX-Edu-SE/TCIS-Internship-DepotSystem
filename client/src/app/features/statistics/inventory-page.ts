@@ -30,13 +30,11 @@ import {
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { StatisticsApi } from '../../core/depot/statistics-api';
 import { YardApi } from '../../core/depot/yard-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { PagedDetails } from '../../shared/paged-details/paged-details';
 
 // Same default and range as GetYardInventoryQuery / its validator
 const DEFAULT_LONG_STAY_DAYS = 10;
-const DETAIL_PAGE_SIZE = 20;
-
 // Chip of a repair mark: amber = chờ giám định, red = cần sửa / đang xử lý (same as the yard page)
 const MARKER_CHIP = { abnormal: 'chip-amber', repair: 'chip-red' } as const;
 
@@ -107,7 +105,7 @@ export class InventoryPage {
 
   // Rows of each opened line operator (key = line operator id)
   protected readonly details = new PagedDetails<YardContainer>((operatorId, page) =>
-    this.yard.search(page, DETAIL_PAGE_SIZE, { ...this.applied(), operatorId, sort: this.sort() }),
+    this.yard.search(page, LIST_PAGE_SIZE, { ...this.applied(), operatorId, sort: this.sort() }),
   );
 
   // "0–9 ngày" / "≥ 10 ngày": labels follow the split day the API actually used

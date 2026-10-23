@@ -12,10 +12,8 @@ import {
   categoriesText,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
-
-const PAGE_SIZE = 20;
 
 // Same as Block.MinTiers: tiers stack "from 2 to many" (spec section 1)
 const MIN_TIERS = 2;
@@ -150,7 +148,7 @@ export class BlocksPage {
   }
 
   protected load(page: number): void {
-    this.api.blockPage(page, PAGE_SIZE).subscribe({
+    this.api.blockPage(page, LIST_PAGE_SIZE).subscribe({
       next: (result) => {
         this.items.set(result.items);
         this.totalCount.set(result.totalCount);

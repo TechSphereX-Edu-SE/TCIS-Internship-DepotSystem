@@ -37,11 +37,9 @@ import {
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { RepairApi } from '../../core/depot/repair-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
 import { RepairEstimatePanel } from './repair-estimate-panel';
-
-const PAGE_SIZE = 20;
 
 // Chip colour per status: waiting for someone = amber, repair under way = indigo, closed = green
 const STATUS_CHIP: Record<RepairCaseStatus, string> = {
@@ -493,7 +491,7 @@ export class RepairsPage {
   }
 
   private loadPage(page: number): void {
-    this.api.list(page, PAGE_SIZE, this.currentFilter()).subscribe({
+    this.api.list(page, LIST_PAGE_SIZE, this.currentFilter()).subscribe({
       next: (result) => {
         this.items.set(result.items);
         this.totalCount.set(result.totalCount);

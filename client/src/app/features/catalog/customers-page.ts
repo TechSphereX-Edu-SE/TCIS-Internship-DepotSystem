@@ -5,10 +5,8 @@ import { Observable } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { Customer } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
-
-const PAGE_SIZE = 20;
 
 /*
   Spec section 3: customers of the delivery orders (tax code + name).
@@ -49,7 +47,7 @@ export class CustomersPage {
 
   // The search applies from page 1; paging keeps the same search
   protected load(page: number): void {
-    this.api.customerPage(this.search.value, page, PAGE_SIZE).subscribe({
+    this.api.customerPage(this.search.value, page, LIST_PAGE_SIZE).subscribe({
       next: (result) => {
         this.items.set(result.items);
         this.totalCount.set(result.totalCount);

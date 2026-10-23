@@ -31,7 +31,7 @@ import {
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { StatisticsApi } from '../../core/depot/statistics-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { PagedDetails } from '../../shared/paged-details/paged-details';
 
 // Tallest bar in px; the other bars are scaled to the busiest day
@@ -39,8 +39,6 @@ const BAR_MAX_HEIGHT = 200;
 
 // The page opens on the last 7 days (today included), enough to see a week of work at a glance
 const DEFAULT_DAYS = 7;
-const DETAIL_PAGE_SIZE = 20;
-
 // Dates and filters of the totals on screen; the detail tabs load with exactly these
 interface AppliedThroughput {
   from: string;
@@ -104,7 +102,7 @@ export class ThroughputPage {
   protected readonly details = new PagedDetails<VisitHistoryRow>((key, page) => {
     const [lineOperatorId, kind] = key.split('|') as [string, ThroughputEventKind];
     const { from, to, filter } = this.applied()!;
-    return this.api.throughputEvents(kind, from, to, { ...filter, lineOperatorId }, page, DETAIL_PAGE_SIZE);
+    return this.api.throughputEvents(kind, from, to, { ...filter, lineOperatorId }, page, LIST_PAGE_SIZE);
   });
 
   protected readonly operators = signal<LineOperator[]>([]);

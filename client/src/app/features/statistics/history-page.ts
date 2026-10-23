@@ -35,9 +35,7 @@ import {
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { YardApi } from '../../core/depot/yard-api';
-import { Pager } from '../../shared/pager/pager';
-
-const PAGE_SIZE = 20;
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 
 /*
   Feedback 7 + 8: Lịch sử container, one row per visit (open or closed).
@@ -184,7 +182,7 @@ export class HistoryPage {
 
   private loadPage(page: number): void {
     this.loading.set(true);
-    this.yard.history(page, PAGE_SIZE, this.applied).subscribe({
+    this.yard.history(page, LIST_PAGE_SIZE, this.applied).subscribe({
       next: (result) => {
         this.rows.set(result.items);
         this.totalCount.set(result.totalCount);

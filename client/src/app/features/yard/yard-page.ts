@@ -40,15 +40,13 @@ import {
   toPlaced,
   validateSlot,
 } from '../../core/depot/yard-rules';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { SearchPageLoader, SearchSelect } from '../../shared/search-select/search-select';
 import { ToastService } from '../../shared/toast/toast-service';
 import { YardMap } from '../../shared/yard-map/yard-map';
 
 // Lookup dropdown pages (about 5 rows visible, the rest load while scrolling)
 const SEARCH_PAGE_SIZE = 20;
-// Rows of the list of containers in the yard (feedback 23/10: 20 was too long above the map)
-const LIST_PAGE_SIZE = 10;
 const REPAIR_STATES: YardRepairState[] = ['Abnormal', 'InRepair', 'AnyOpen', 'None'];
 
 // Chip of a repair mark in the lists: amber = chờ giám định, red = cần sửa / đang xử lý

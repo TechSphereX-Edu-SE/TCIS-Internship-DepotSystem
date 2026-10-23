@@ -26,7 +26,7 @@ import {
   vietnamToday,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
-import { Pager } from '../../shared/pager/pager';
+import { LIST_PAGE_SIZE, Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
 
 
@@ -40,8 +40,6 @@ const STATUS_CHIP: Record<DeliveryOrderStatus, string> = {
 };
 
 const SIZES: ContainerSize[] = ['Ft20', 'Ft40'];
-
-const PAGE_SIZE = 20;
 
 // "Dry|Ft20": one line per type and size (Q1)
 const lineKey = (category: ContainerCategory, size: ContainerSize) => `${category}|${size}`;
@@ -270,7 +268,7 @@ export class DeliveryOrdersPage {
 
   private loadPage(page: number): void {
     const f = this.filterForm.getRawValue();
-    this.api.list(page, PAGE_SIZE, { search: f.search, status: f.status || null, operatorId: f.operatorId || null }).subscribe({
+    this.api.list(page, LIST_PAGE_SIZE, { search: f.search, status: f.status || null, operatorId: f.operatorId || null }).subscribe({
       next: (result) => {
         this.orders.set(result.items);
         this.totalCount.set(result.totalCount);
