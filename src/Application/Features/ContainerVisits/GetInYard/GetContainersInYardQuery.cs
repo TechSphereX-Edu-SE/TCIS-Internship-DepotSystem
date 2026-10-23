@@ -10,7 +10,10 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Get
 public sealed record GetContainersInYardQuery(Guid? BlockId = null, int? Row = null)
     : IQuery<Result<IReadOnlyList<YardContainerResponse>>>;
 
-// One container in the yard with its position; Bay/Row/Tier are null in a virtual block
+/*
+    One container in the yard with its position; Bay/Row/Tier are null in a virtual block.
+    RepairCaseId / RepairStatus / RepairNote: its open repair case, for the markers of the map (feedback 5).
+*/
 public sealed record YardContainerResponse(
     Guid VisitId,
     Guid ContainerId,
@@ -25,4 +28,7 @@ public sealed record YardContainerResponse(
     int? Bay,
     int? Row,
     int? Tier,
-    DateTimeOffset GateInAt);
+    DateTimeOffset GateInAt,
+    Guid? RepairCaseId,
+    RepairCaseStatus? RepairStatus,
+    string? RepairNote);

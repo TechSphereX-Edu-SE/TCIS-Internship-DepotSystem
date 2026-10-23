@@ -32,10 +32,7 @@ public sealed class GetContainerPositionQueryHandler(IAppDbContext dbContext)
         var position = await dbContext.ContainerVisits
             .AsNoTracking()
             .Where(v => v.ContainerId == containerId && v.GateOutAt == null)
-            .Select(v => new ContainerPositionResponse(
-                v.Id, v.ContainerId, v.Container.ContainerNumber, v.Container.Size,
-                v.LineOperator.Code, v.BlockId, v.Block.Code, v.Block.IsVirtual,
-                v.Bay, v.Row, v.Tier, v.GateInAt))
+            .Select(YardProjections.ToPosition(dbContext))
             .FirstOrDefaultAsync(cancellationToken);
 
         return position is null

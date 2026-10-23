@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
@@ -7,7 +8,8 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Mov
 /*
     Moves a container that is in the yard.
     Order of checks:
-      1. The container exists and is in the yard (404), the target block exists (404).
+      1. The container exists and is in the yard (404), the target block exists (404),
+         and it is still where the screen saw it (409 PositionChanged, when the screen sent it).
       2. The target is not the current position (400).
       3. Nothing is stacked on the container (409) - otherwise the one above would float.
       4. The target block takes this container type (409) - domain (Block.CheckAccepts), same as gate-in.
@@ -26,6 +28,13 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
         if (visit is null)
             return Result.Failure<ContainerPositionResponse>(
                 await dbContext.NotInYardErrorAsync(command.ContainerId, cancellationToken));
+
+        if (command.FromBlockId is not null &&
+            (visit.BlockId != command.FromBlockId || visit.Bay != command.FromBay ||
+             visit.Row != command.FromRow || visit.Tier != command.FromTier))
+            return Result.Failure<ContainerPositionResponse>(Error.Conflict("ContainerVisit.PositionChanged",
+                $"Container {visit.Container.ContainerNumber} was moved meanwhile; it is now in block " +
+                $"{visit.Block.Code} {visit.Bay}-{visit.Row}-{visit.Tier}. Check the new position first."));
 
         var target = await dbContext.Blocks.FindAsync([command.BlockId], cancellationToken);
         if (target is null)
@@ -66,9 +75,11 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new ContainerPositionResponse(
-            visit.Id, visit.ContainerId, visit.Container.ContainerNumber, visit.Container.Size,
-            visit.LineOperator.Code, target.Id, target.Code, target.IsVirtual,
-            visit.Bay, visit.Row, visit.Tier, visit.GateInAt));
+        // Same shape as the position lookup, with the repair marker (the move does not change the case)
+        var moved = await dbContext.ContainerVisits.AsNoTracking()
+            .Where(v => v.Id == visit.Id)
+            .Select(YardProjections.ToPosition(dbContext))
+            .FirstAsync(cancellationToken);
+        return Result.Success(moved);
     }
 }

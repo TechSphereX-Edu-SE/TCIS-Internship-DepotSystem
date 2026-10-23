@@ -1,3 +1,4 @@
+using FluentValidation;
 using TechSpherex.CleanArchitecture.Api.Extensions;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
@@ -6,10 +7,12 @@ using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOut
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetGateOutCandidates;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetPosition;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Move;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.SearchYard;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetDaily;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetInYard;
 using TechSpherex.CleanArchitecture.Domain.Common;
+using TechSpherex.CleanArchitecture.Domain.Enums;
 
 namespace TechSpherex.CleanArchitecture.Api.Endpoints;
 
@@ -53,6 +56,10 @@ public static class ContainerVisitEndpoints
         group.MapGet("/in-yard", GetInYard)
             .WithName("GetContainersInYard")
             .WithSummary("List containers in the yard, optionally by block and row (yard map)");
+
+        group.MapGet("/yard-search", SearchYard)
+            .WithName("SearchYardContainers")
+            .WithSummary("Search containers in the yard with filters, one page at a time (Vị trí & đảo chuyển)");
 
         group.MapGet("/daily", GetDaily)
             .WithName("GetDailyVisits")
@@ -129,6 +136,33 @@ public static class ContainerVisitEndpoints
         CancellationToken cancellationToken)
     {
         var result = await handler.HandleAsync(new GetContainersInYardQuery(blockId, row), cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    // Every filter is optional; repair = None | Abnormal | InRepair | AnyOpen
+    private static async Task<IResult> SearchYard(
+        string? search,
+        Guid? blockId,
+        ContainerCategory? category,
+        ContainerSize? size,
+        Guid? operatorId,
+        YardRepairState? repair,
+        int? minDwellDays,
+        int? maxDwellDays,
+        int? page,
+        int? pageSize,
+        IValidator<SearchYardContainersQuery> validator,
+        IQueryHandler<SearchYardContainersQuery, Result<PagedResult<YardContainerResponse>>> handler,
+        CancellationToken cancellationToken)
+    {
+        // Query string values are validated as a query object (the validation filter only reads the body)
+        var query = new SearchYardContainersQuery(search, blockId, category, size, operatorId, repair,
+            minDwellDays, maxDwellDays, page ?? 1, pageSize ?? 20);
+        var validation = await validator.ValidateAsync(query, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
 

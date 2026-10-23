@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetInYard;
 
@@ -24,11 +25,7 @@ public sealed class GetContainersInYardQueryHandler(IAppDbContext dbContext)
             .ThenBy(v => v.Row)
             .ThenBy(v => v.Bay)
             .ThenBy(v => v.Tier)
-            .Select(v => new YardContainerResponse(
-                v.Id, v.ContainerId, v.Container.ContainerNumber, v.Container.IsoCode,
-                v.Container.Size, v.Container.Category, v.Container.Condition,
-                v.LineOperator.Code, v.BlockId, v.Block.Code,
-                v.Bay, v.Row, v.Tier, v.GateInAt))
+            .Select(YardProjections.ToYardContainer(dbContext))
             .ToListAsync(cancellationToken);
 
         return Result.Success<IReadOnlyList<YardContainerResponse>>(containers);
