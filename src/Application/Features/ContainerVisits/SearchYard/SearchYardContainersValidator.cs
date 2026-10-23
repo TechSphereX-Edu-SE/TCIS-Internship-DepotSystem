@@ -1,4 +1,5 @@
 using FluentValidation;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.SearchYard;
 
 public sealed class SearchYardContainersValidator : AbstractValidator<SearchYardContainersQuery>
@@ -7,14 +8,8 @@ public sealed class SearchYardContainersValidator : AbstractValidator<SearchYard
     {
         RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
         RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
-        RuleFor(x => x.Category).IsInEnum();
-        RuleFor(x => x.Size).IsInEnum();
-        RuleFor(x => x.Repair).IsInEnum();
-        RuleFor(x => x.MinDwellDays).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.MaxDwellDays).GreaterThanOrEqualTo(0);
-        // "From 10 to 5 days" would always be empty: report it instead of answering nothing
-        RuleFor(x => x.MaxDwellDays)
-            .GreaterThanOrEqualTo(x => x.MinDwellDays!.Value)
-            .When(x => x.MinDwellDays is not null && x.MaxDwellDays is not null);
+        RuleFor(x => x.Sort).IsInEnum();
+        // Same filter rules as the yard inventory report
+        Include(new YardVisitFilterValidator());
     }
 }

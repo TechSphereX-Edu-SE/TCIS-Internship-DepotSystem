@@ -21,6 +21,15 @@ public sealed class ContainerVisit : AuditableEntity
     */
     public Guid? OperatingAssignmentId { get; private set; }
 
+    /*
+        Owner of the container at gate-in (feedback 7: chủ sở hữu lịch sử). Copied once from the container,
+        so a later owner change does not rewrite past visits. Null for visits recorded before 23/10/2026
+        and when the container had no reconciled owner yet: the history then says "không có dữ liệu"
+        instead of showing today's owner.
+    */
+    public Guid? OwnerId { get; private set; }
+    public LineOperator? Owner { get; private set; }
+
     // Current yard position (Bay/Row/Tier are null for a virtual block)
     public Guid BlockId { get; private set; }
     public Block Block { get; private set; } = default!;
@@ -101,6 +110,7 @@ public sealed class ContainerVisit : AuditableEntity
             ContainerId = container.Id,
             LineOperatorId = lineOperatorId,
             OperatingAssignmentId = basis?.Id,
+            OwnerId = container.OwnerId,
             BlockId = block.Id,
             Bay = bay,
             Row = row,

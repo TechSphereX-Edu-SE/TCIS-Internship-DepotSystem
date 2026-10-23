@@ -9,7 +9,7 @@ namespace TechSpherex.CleanArchitecture.Application.Features.Blocks.Delete;
       1. The block exists (404) and is not archived yet (409, domain).
       2. No container is in this block now (409) - only this block, the rest of the depot does not matter.
          Containers are never moved or deleted automatically.
-      3. A block used by any visit (current block or block at gate-in) is archived: old visits keep
+      3. A block used by any visit (current block, block at gate-in or a recorded move) is archived: old visits keep
          showing its code, and it disappears from the gate-in / move dropdowns. Otherwise it is removed.
     A gate-in or move into this block at the same moment changes the block row (PlacementVersion),
     so one of the two saves fails with a concurrency conflict (409) instead of leaving a container
@@ -32,8 +32,11 @@ public sealed class DeleteBlockCommandHandler(IAppDbContext dbContext, TimeProvi
             return Result.Failure<DeleteBlockResponse>(Error.Conflict("Block.HasContainers",
                 $"{inBlock} container(s) are in block {block.Code}. Move them out before deleting it."));
 
+        // A block a container only passed through (moved in, then out) is history too (ContainerMoves)
         var hasHistory = await dbContext.ContainerVisits.AnyAsync(
-            v => v.BlockId == block.Id || v.GateInBlockId == block.Id, cancellationToken);
+                v => v.BlockId == block.Id || v.GateInBlockId == block.Id, cancellationToken) ||
+            await dbContext.ContainerMoves.AnyAsync(
+                m => m.FromBlockId == block.Id || m.ToBlockId == block.Id, cancellationToken);
 
         if (hasHistory)
         {

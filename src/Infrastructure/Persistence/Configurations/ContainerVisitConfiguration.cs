@@ -51,6 +51,10 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
         builder.HasOne<OperatingAssignment>().WithMany()
             .HasForeignKey(v => v.OperatingAssignmentId).OnDelete(DeleteBehavior.Restrict);
 
+        // Owner at gate-in (history); null on older visits and when the container had no owner yet
+        builder.HasOne(v => v.Owner).WithMany()
+            .HasForeignKey(v => v.OwnerId).OnDelete(DeleteBehavior.Restrict);
+
         // Legacy A/B/C grade: nullable, only older visits have one
         builder.Property(v => v.Grade).HasConversion<string>().HasMaxLength(5);
         builder.Property(v => v.ConditionIn).HasConversion<string>().HasMaxLength(20);
@@ -75,5 +79,9 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
         // Support statistics by line operator and by day
         builder.HasIndex(v => new { v.LineOperatorId, v.GateInAt });
         builder.HasIndex(v => new { v.LineOperatorId, v.GateOutAt });
+
+        // History searches by period without a line operator (feedback 7: Nhập theo giờ vào, Xuất theo giờ ra)
+        builder.HasIndex(v => v.GateInAt);
+        builder.HasIndex(v => v.GateOutAt);
     }
 }

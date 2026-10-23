@@ -20,5 +20,6 @@ public interface IAppDbContext
     DbSet<RepairCaseEvent> RepairCaseEvents { get; }
     DbSet<RepairPhoto> RepairPhotos { get; }
     DbSet<ExternalRepairTransfer> ExternalRepairTransfers { get; }
+    DbSet<ContainerMove> ContainerMoves { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

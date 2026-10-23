@@ -4,6 +4,7 @@ using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetInYa
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetPosition;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Move;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.SearchYard;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Act;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
@@ -140,7 +141,7 @@ public sealed class YardSearchAndMarkerTests
         var seed = await SeedAsync(dbContext);
         var damaged = await GateInAsync(dbContext, seed, "MSCU1234566", 1, Now, condition: ContainerCondition.Damaged);
         var containerId = dbContext.Containers.Single().Id;
-        var handler = new MoveContainerCommandHandler(dbContext);
+        var handler = new MoveContainerCommandHandler(dbContext, new FixedTimeProvider(Now));
 
         // Seen at A 1-1-1, then someone moved it to A 3-1-1
         await handler.HandleAsync(new MoveContainerCommand(containerId, seed.A.Id, 3, 1, 1), TestContext.Current.CancellationToken);

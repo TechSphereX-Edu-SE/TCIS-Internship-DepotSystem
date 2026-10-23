@@ -378,6 +378,74 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ContainerMove", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("FromBay")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("FromBlockId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("FromRow")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FromTier")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("MovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MovedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int?>("ToBay")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ToBlockId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ToRow")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ToTier")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("VisitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromBlockId");
+
+                    b.HasIndex("ToBlockId");
+
+                    b.HasIndex("VisitId", "MovedAt");
+
+                    b.ToTable("ContainerMoves", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ContainerMoves_FromPosition", "(\"FromBay\" IS NULL AND \"FromRow\" IS NULL AND \"FromTier\" IS NULL) OR (\"FromBay\" >= 1 AND \"FromRow\" >= 1 AND \"FromTier\" >= 1)");
+
+                            t.HasCheckConstraint("CK_ContainerMoves_ToPosition", "(\"ToBay\" IS NULL AND \"ToRow\" IS NULL AND \"ToTier\" IS NULL) OR (\"ToBay\" >= 1 AND \"ToRow\" >= 1 AND \"ToTier\" >= 1)");
+                        });
+                });
+
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -458,6 +526,9 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("OperatingAssignmentId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("Row")
                         .HasColumnType("integer");
 
@@ -478,9 +549,15 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeliveryOrderId");
 
+                    b.HasIndex("GateInAt");
+
                     b.HasIndex("GateInBlockId");
 
+                    b.HasIndex("GateOutAt");
+
                     b.HasIndex("OperatingAssignmentId");
+
+                    b.HasIndex("OwnerId");
 
                     b.HasIndex("LineOperatorId", "GateInAt");
 
@@ -1142,6 +1219,27 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ContainerMove", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Block", null)
+                        .WithMany()
+                        .HasForeignKey("FromBlockId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Block", null)
+                        .WithMany()
+                        .HasForeignKey("ToBlockId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", null)
+                        .WithMany()
+                        .HasForeignKey("VisitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", b =>
                 {
                     b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Block", "Block")
@@ -1177,6 +1275,11 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OperatingAssignmentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.LineOperator", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Block");
 
                     b.Navigation("Container");
@@ -1186,6 +1289,8 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Navigation("GateInBlock");
 
                     b.Navigation("LineOperator");
+
+                    b.Navigation("Owner");
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.DeliveryOrder", b =>

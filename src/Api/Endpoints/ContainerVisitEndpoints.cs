@@ -11,6 +11,7 @@ using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.SearchY
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetDaily;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetInYard;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.History;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Enums;
 
@@ -60,6 +61,18 @@ public static class ContainerVisitEndpoints
         group.MapGet("/yard-search", SearchYard)
             .WithName("SearchYardContainers")
             .WithSummary("Search containers in the yard with filters, one page at a time (Vị trí & đảo chuyển)");
+
+        group.MapGet("/history", SearchHistory)
+            .WithName("SearchVisitHistory")
+            .WithSummary("Every visit, open or closed, one row per visit (Lịch sử container)");
+
+        group.MapGet("/history/{visitId:guid}", GetVisitHistory)
+            .WithName("GetVisitHistory")
+            .WithSummary("One visit with its gate-in/out, moves, repair cases and stored documents");
+
+        group.MapGet("/history/containers/{containerId:guid}", GetContainerVisitSummary)
+            .WithName("GetContainerVisitSummary")
+            .WithSummary("Visit counts, presence and dwell days of one container");
 
         group.MapGet("/daily", GetDaily)
             .WithName("GetDailyVisits")
@@ -151,18 +164,68 @@ public static class ContainerVisitEndpoints
         int? maxDwellDays,
         int? page,
         int? pageSize,
+        DateOnly? gateInFrom,
+        DateOnly? gateInTo,
+        YardSort? sort,
         IValidator<SearchYardContainersQuery> validator,
         IQueryHandler<SearchYardContainersQuery, Result<PagedResult<YardContainerResponse>>> handler,
         CancellationToken cancellationToken)
     {
         // Query string values are validated as a query object (the validation filter only reads the body)
         var query = new SearchYardContainersQuery(search, blockId, category, size, operatorId, repair,
-            minDwellDays, maxDwellDays, page ?? 1, pageSize ?? 20);
+            minDwellDays, maxDwellDays, page ?? 1, pageSize ?? 20, gateInFrom, gateInTo, sort ?? YardSort.Position);
         var validation = await validator.ValidateAsync(query, cancellationToken);
         if (!validation.IsValid)
             return Results.ValidationProblem(validation.ToDictionary());
 
         var result = await handler.HandleAsync(query, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    // Feedback 7 + 8: all filters optional; from/to are Vietnam dates, the event says which time they apply to
+    private static async Task<IResult> SearchHistory(
+        string? search,
+        Guid? containerId,
+        Guid? operatorId,
+        DateOnly? from,
+        DateOnly? to,
+        VisitHistoryEvent? @event,
+        ContainerCategory? category,
+        ContainerSize? size,
+        VisitState? state,
+        GateOutPurpose? purpose,
+        int? page,
+        int? pageSize,
+        IValidator<SearchVisitHistoryQuery> validator,
+        IQueryHandler<SearchVisitHistoryQuery, Result<PagedResult<VisitHistoryRow>>> handler,
+        CancellationToken cancellationToken)
+    {
+        // Query string values are validated as a query object (the validation filter only reads the body)
+        var query = new SearchVisitHistoryQuery(search, containerId, operatorId, from, to,
+            @event ?? VisitHistoryEvent.Any, category, size, state, purpose, page ?? 1, pageSize ?? 20);
+        var validation = await validator.ValidateAsync(query, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(query, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> GetVisitHistory(
+        Guid visitId,
+        IQueryHandler<GetVisitHistoryQuery, Result<VisitHistoryDetail>> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(new GetVisitHistoryQuery(visitId), cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> GetContainerVisitSummary(
+        Guid containerId,
+        IQueryHandler<GetContainerVisitSummaryQuery, Result<ContainerVisitSummary>> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(new GetContainerVisitSummaryQuery(containerId), cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
 

@@ -43,7 +43,7 @@ public sealed class MoveContainerCommandHandlerTests
 
     private static Task<Result<ContainerPositionResponse>> MoveAsync(
         AppDbContext dbContext, Container container, Block block, int? bay, int? row, int? tier) =>
-        new MoveContainerCommandHandler(dbContext).HandleAsync(
+        new MoveContainerCommandHandler(dbContext, TimeProvider.System).HandleAsync(
             new MoveContainerCommand(container.Id, block.Id, bay, row, tier), TestContext.Current.CancellationToken);
 
     [Fact]
@@ -171,7 +171,7 @@ public sealed class MoveContainerCommandHandlerTests
         var seed = await SeedAsync(dbContext);
 
         var notInYard = await MoveAsync(dbContext, seed.X20, seed.Physical, 1, 1, 1);
-        var unknown = await new MoveContainerCommandHandler(dbContext).HandleAsync(
+        var unknown = await new MoveContainerCommandHandler(dbContext, TimeProvider.System).HandleAsync(
             new MoveContainerCommand(Guid.NewGuid(), seed.Physical.Id, 1, 1, 1), TestContext.Current.CancellationToken);
 
         notInYard.Error!.Code.Should().Be("ContainerVisit.NotInYard");

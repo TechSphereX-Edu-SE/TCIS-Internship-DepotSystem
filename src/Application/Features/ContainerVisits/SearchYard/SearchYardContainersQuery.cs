@@ -1,5 +1,6 @@
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GetInYard;
+using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.SearchYard;
@@ -9,8 +10,11 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Sea
     Only open visits are listed, in a physical or a virtual block; a container that is only in the catalog,
     has left, or is at an outside repair facility has no open visit, so it never shows up.
       - Search: part of the container number; exact match first, then prefix, then the rest.
-      - Main filters: block, type, size. More: line operator of the visit, repair state, dwell days (from / to).
-    Without a search the rows follow the yard: block, row, bay, tier.
+      - Main filters: block, type, size. More: line operator of the visit, repair state, dwell days (from / to),
+        gate-in dates (feedback 8, Tồn bãi).
+    Without a search the rows follow Sort: the yard order (block, row, bay, tier) by default; the yard inventory
+    detail uses Oldest (longest stay first) or Newest (feedback 7).
+    The filters are shared with the yard inventory report (IYardVisitFilter), so its totals match these rows.
 */
 public sealed record SearchYardContainersQuery(
     string? Search = null,
@@ -22,20 +26,16 @@ public sealed record SearchYardContainersQuery(
     int? MinDwellDays = null,
     int? MaxDwellDays = null,
     int Page = 1,
-    int PageSize = 20)
-    : IQuery<Result<PagedResult<YardContainerResponse>>>;
+    int PageSize = 20,
+    DateOnly? GateInFrom = null,
+    DateOnly? GateInTo = null,
+    YardSort Sort = YardSort.Position)
+    : IQuery<Result<PagedResult<YardContainerResponse>>>, IYardVisitFilter;
 
-/*
-    Repair state of a container in the yard (feedback 5 keeps the two marks apart):
-      None       - no open repair case
-      Abnormal   - có bất thường, chờ giám định (case AwaitingInspection)
-      InRepair   - đã xác định cần sửa / đang xử lý (every other open status)
-      AnyOpen    - Abnormal or InRepair
-*/
-public enum YardRepairState
+// Row order when there is no search text
+public enum YardSort
 {
-    None,
-    Abnormal,
-    InRepair,
-    AnyOpen
+    Position,
+    Oldest,
+    Newest
 }

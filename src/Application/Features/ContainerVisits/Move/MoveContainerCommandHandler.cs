@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
+using TechSpherex.CleanArchitecture.Application.Abstractions.Identity;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
+using TechSpherex.CleanArchitecture.Domain.Entities;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Move;
 
 /*
@@ -16,9 +18,11 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Mov
       5. The target fits the block and the container size (400) - domain (Block.ValidateSlot).
       6. The target is free and supported (409) - same rules as gate-in, ignoring the container
          itself so its current place neither blocks nor supports the new one.
-    Only then the domain moves the visit (ContainerVisit.MoveTo) and it is saved.
+    Only then the domain moves the visit (ContainerVisit.MoveTo) and it is saved together with a
+    ContainerMove row (feedback 7: the visit history lists every move with its time and user).
 */
-public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
+public sealed class MoveContainerCommandHandler(
+    IAppDbContext dbContext, TimeProvider timeProvider, ICurrentUser? currentUser = null)
     : ICommandHandler<MoveContainerCommand, Result<ContainerPositionResponse>>
 {
     public async Task<Result<ContainerPositionResponse>> HandleAsync(
@@ -69,9 +73,17 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
                 return Result.Failure<ContainerPositionResponse>(placement.Error!);
         }
 
+        // Kept before MoveTo changes the visit, for the history row
+        var from = (visit.BlockId, visit.Bay, visit.Row, visit.Tier);
+
         var move = visit.MoveTo(target, command.Bay, command.Row, command.Tier, visit.Container.Size);
         if (move.IsFailure)
             return Result.Failure<ContainerPositionResponse>(move.Error!);
+
+        // Same save as the visit: a move is either recorded with its history row or not at all
+        dbContext.ContainerMoves.Add(ContainerMove.Record(
+            visit.Id, from, (target.Id, command.Bay, command.Row, command.Tier),
+            timeProvider.GetUtcNow(), currentUser?.Email));
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
