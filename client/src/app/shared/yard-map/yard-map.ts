@@ -62,7 +62,7 @@ export class YardMap {
           area: this.gridArea(footprint(c.bay!, c.size)[0], is40 ? 2 : 1, c.tier!),
           label: is40 ? c.containerNumber : `${c.containerNumber.slice(0, 4)}…${c.containerNumber.slice(-3)}`,
           sub: is40 ? `40' · bay ${pad(c.bay!)}` : "20'",
-          title: `${c.containerNumber} · ${c.isoCode} · ${c.lineOperatorCode} · Phân loại ${c.grade}`,
+          title: `${c.containerNumber} · ${c.isoCode} · ${c.lineOperatorCode}`,
         };
       }),
   );

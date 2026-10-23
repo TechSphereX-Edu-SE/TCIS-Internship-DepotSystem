@@ -15,55 +15,79 @@
     <form class="card form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <h2>Thông tin vào bãi</h2>
 
-      <div class="field" [class.has-error]="numberError() || lookup().kind === 'notFound'">
-        <label for="containerNumber">Số container</label>
-        <input id="containerNumber" class="mono" formControlName="containerNumber" placeholder="VD: MSCU1234566" maxlength="11" autocomplete="off" />
+      <!-- Feedback 3: pick from the catalog (search + scroll), never a free-typed number -->
+      <div class="field" [class.has-error]="containerError()">
+        <label for="container">Số container</label>
+        <app-search-select
+          formControlName="container"
+          inputId="container"
+          placeholder="Gõ số container, VD: MSCU1234566"
+          [load]="loadContainers"
+          [itemKey]="containerKey"
+          [itemLabel]="containerLabel"
+          [itemDetail]="containerDetail"
+          [invalid]="!!containerError()"
+        />
 
         @if (lookup().kind === 'checking') {
-        <span class="muted hint">Đang kiểm tra…</span>
+        <span class="muted hint">Đang kiểm tra vị trí trong bãi…</span>
         }
-        @if (numberError(); as message) {
+        @if (containerError(); as message) {
         <span class="field-error">{{ message }}</span>
-        }
-        @if (lookup().kind === 'notFound') {
-        <span class="field-error">
-          Container chưa có trong danh mục. <a routerLink="/catalog/containers">Thêm ở Danh mục · Container</a>
-        </span>
         }
         @if (ready(); as state) {
         <div class="lookup">
-          <span class="chip chip-green">Hợp lệ · check digit {{ state.checkDigit }}</span>
+          <span class="chip chip-green">Chưa ở trong bãi</span>
           <span class="muted">
-            {{ state.container.isoCode }} · {{ sizeLabel[state.container.size] }} · {{ categoryLabel[state.container.category] }}
-            · Chủ sở hữu {{ state.container.ownerName }} · {{ conditionLabel[state.container.condition] }}
+            {{ state.container.containerNumber }} · {{ state.container.isoCode }} · {{ sizeLabel[state.container.size] }}
+            · {{ categoryLabel[state.container.category] }} · Chủ sở hữu {{ state.container.ownerName }}
+            · {{ conditionLabel[state.container.condition] }}
           </span>
         </div>
         }
+        <span class="muted hint">
+          Không thấy container? Hồ sơ phải có trước khi nhập bãi:
+          <a routerLink="/catalog/containers">thêm ở Danh mục · Container</a>.
+        </span>
       </div>
 
       <div class="grid-2">
-        <div class="field" [class.has-error]="invalid('lineOperatorId')">
-          <label for="lineOperatorId">Hãng khai thác</label>
-          <select id="lineOperatorId" formControlName="lineOperatorId">
-            <option value="" disabled>Chọn hãng</option>
-            @for (operator of operators(); track operator.id) {
-            <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
-            }
-          </select>
-          @if (invalid('lineOperatorId')) {
-          <span class="field-error">Chọn hãng khai thác.</span>
+        <div class="field" [class.has-error]="invalid('lineOperator')">
+          <label for="lineOperator">Hãng khai thác</label>
+          <app-search-select
+            formControlName="lineOperator"
+            inputId="lineOperator"
+            placeholder="Gõ mã hoặc tên hãng"
+            [load]="loadOperators"
+            [itemKey]="operatorKey"
+            [itemLabel]="operatorLabel"
+            [itemDetail]="operatorDetail"
+            [invalid]="invalid('lineOperator')"
+          />
+          @if (invalid('lineOperator')) {
+          <span class="field-error">Chọn hãng khai thác trong danh sách.</span>
           }
         </div>
 
-        <div class="field">
+        <!-- Feedback 3: only blocks whose list of types contains the container's type -->
+        <div class="field" [class.has-error]="invalid('blockId')">
           <label for="blockId">Block</label>
           <select id="blockId" formControlName="blockId">
-            @for (block of blocks(); track block.id) {
+            <option value="" disabled>Chọn block</option>
+            @for (block of blockOptions(); track block.id) {
             <option [value]="block.id">
-              {{ block.code }} · {{ block.description ?? '' }}{{ block.isVirtual ? ' (block ảo)' : '' }}
+              {{ block.code }} · {{ categoriesText(block.allowedCategories) }}{{ block.isVirtual ? ' (block ảo)' : '' }}
             </option>
             }
           </select>
+          @if (container() && blockOptions().length === 0) {
+          <span class="field-error">
+            Chưa có block nào nhận loại {{ categoryLabel[container()!.category] }}.
+            <a routerLink="/catalog/blocks">Cấu hình ở Danh mục · Block</a>
+          </span>
+          } @else if (invalid('blockId')) {
+          <span class="field-error">Chọn block phù hợp với loại container.</span>
+          }
         </div>
       </div>
 
@@ -105,27 +129,13 @@
       </fieldset>
       }
 
-      <div class="grade-condition">
-        <fieldset class="group">
-          <legend>Phân loại</legend>
-          <div class="segmented">
-            @for (grade of grades; track grade) {
-            <label class="segment">
-              <input type="radio" formControlName="grade" [value]="grade" />
-              <span>{{ grade }}</span>
-            </label>
-            }
-          </div>
-        </fieldset>
-
-        <fieldset class="group">
-          <legend>Tình trạng</legend>
-          <div class="radios">
-            <label class="radio"><input type="radio" formControlName="condition" value="Normal" /> Bình thường</label>
-            <label class="radio"><input type="radio" formControlName="condition" value="Damaged" /> Hư hỏng</label>
-          </div>
-        </fieldset>
-      </div>
+      <fieldset class="group">
+        <legend>Tình trạng</legend>
+        <div class="radios">
+          <label class="radio"><input type="radio" formControlName="condition" value="Normal" /> Bình thường</label>
+          <label class="radio"><input type="radio" formControlName="condition" value="Damaged" /> Hư hỏng</label>
+        </div>
+      </fieldset>
 
       @if (form.controls.condition.value === 'Damaged') {
       <div class="field" [class.has-error]="invalid('conditionNote')">
@@ -209,8 +219,8 @@
             <th>Số container</th>
             <th>Loại</th>
             <th>Hãng</th>
-            <th>Vị trí</th>
-            <th>Phân loại</th>
+            <th>Block lúc nhập</th>
+            <th>Vị trí hiện tại</th>
             <th>Xe vào</th>
           </tr>
         </thead>
@@ -221,8 +231,11 @@
             <td class="mono">{{ visit.containerNumber }}</td>
             <td>{{ visit.isoCode }} · {{ sizeLabel[visit.size] }} {{ categoryLabel[visit.category] }}</td>
             <td>{{ visit.lineOperatorCode }}</td>
+            <!-- Q3 (23/10): the block at gate-in; "—" for visits recorded before it was stored -->
+            <td class="mono">
+              {{ visit.gateInBlockCode ? formatPosition(visit.gateInBlockCode, visit.gateInBay, visit.gateInRow, visit.gateInTier) : '—' }}
+            </td>
             <td class="mono">{{ formatPosition(visit.blockCode, visit.bay, visit.row, visit.tier) }}</td>
-            <td>{{ visit.grade }}</td>
             <td class="mono">{{ visit.vehicleNo }}</td>
           </tr>
           }

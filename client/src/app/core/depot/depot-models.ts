@@ -2,7 +2,6 @@
 
 export type ContainerSize = 'Ft20' | 'Ft40';
 export type ContainerCategory = 'Dry' | 'Reefer' | 'OpenTop' | 'FlatRack' | 'Bunker' | 'Ventilated' | 'Specialized';
-export type ContainerGrade = 'A' | 'B' | 'C';
 export type ContainerCondition = 'Normal' | 'Damaged';
 
 // Domain/Common/PagedResult
@@ -32,6 +31,8 @@ export interface Block {
   maxBays: number | null;
   maxRows: number | null;
   maxTiers: number | null;
+  // Container types the block takes (feedback 3); gate-in and move only offer blocks that take the type
+  allowedCategories: ContainerCategory[];
   containersInYard: number;
   createdAt: string;
 }
@@ -82,7 +83,6 @@ export interface YardContainer {
   bay: number | null;
   row: number | null;
   tier: number | null;
-  grade: ContainerGrade;
   gateInAt: string;
 }
 
@@ -98,7 +98,11 @@ export interface DailyGateIn {
   bay: number | null;
   row: number | null;
   tier: number | null;
-  grade: ContainerGrade;
+  // Where the container was put at gate-in; null for visits recorded before this was stored
+  gateInBlockCode: string | null;
+  gateInBay: number | null;
+  gateInRow: number | null;
+  gateInTier: number | null;
   vehicleNo: string;
   gateInAt: string;
 }
@@ -131,7 +135,6 @@ export interface GateInRequest {
   bay: number | null;
   row: number | null;
   tier: number | null;
-  grade: ContainerGrade;
   condition: ContainerCondition;
   conditionNote: string | null;
   vehicleNo: string;
@@ -279,7 +282,7 @@ export interface CreateCustomerRequest {
   name: string;
 }
 
-// POST /api/blocks: physical block = all three sizes, virtual block = none
+// POST /api/blocks: physical block = all three sizes, virtual block = none; at least one container type
 export interface CreateBlockRequest {
   code: string;
   description: string | null;
@@ -287,6 +290,7 @@ export interface CreateBlockRequest {
   maxBays: number | null;
   maxRows: number | null;
   maxTiers: number | null;
+  allowedCategories: ContainerCategory[];
 }
 
 // PUT /api/blocks/{id}/size (physical blocks only; 409 when a container would be left outside)
@@ -341,6 +345,19 @@ export const CATEGORY_HINT: Record<ContainerCategory, string> = {
 };
 
 export const CONDITION_LABEL: Record<ContainerCondition, string> = { Normal: 'Bình thường', Damaged: 'Hư hỏng' };
+
+// Same check as Block.CheckAccepts on the API: the block's list of types, never its name or description
+export function blockAccepts(block: Pick<Block, 'allowedCategories'>, category: ContainerCategory): boolean {
+  return block.allowedCategories.includes(category);
+}
+
+// "Dry, Open Top" in the enum order; "Tất cả loại" when the block takes every type
+export function categoriesText(categories: readonly ContainerCategory[]): string {
+  if (CATEGORIES.every((c) => categories.includes(c))) return 'Tất cả loại';
+  return CATEGORIES.filter((c) => categories.includes(c))
+    .map((c) => CATEGORY_LABEL[c])
+    .join(', ');
+}
 
 // "A 04-1-1" for a physical block, just "WAIT" for a virtual block (same style as the mockups)
 export function formatPosition(blockCode: string, bay: number | null, row: number | null, tier: number | null): string {

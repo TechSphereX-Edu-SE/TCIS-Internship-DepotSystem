@@ -3,7 +3,7 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { map, startWith } from 'rxjs';
 import { ApiError, toApiError } from '../../core/api/api-error';
-import { Block } from '../../core/depot/depot-models';
+import { Block, CATEGORIES, CATEGORY_HINT, CATEGORY_LABEL, ContainerCategory, categoriesText } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { Pager } from '../../shared/pager/pager';
 import { ToastService } from '../../shared/toast/toast-service';
@@ -21,6 +21,7 @@ const sizeValidators = (min: number) => [Validators.required, Validators.min(min
   odd bays hold 20ft, even bays 40ft); a virtual block (e.g. WAIT for repair) has no positions.
   The API has no update for code or description, only a resize of a physical block, so the form
   has two modes: create a block, or resize the block picked in the list.
+  Each block lists the container types it takes (feedback 3); gate-in and move check that list.
 */
 @Component({
   selector: 'app-blocks-page',
@@ -42,7 +43,17 @@ export class BlocksPage {
     maxBays: new FormControl<number | null>(null, sizeValidators(1)),
     maxRows: new FormControl<number | null>(null, sizeValidators(1)),
     maxTiers: new FormControl<number | null>(null, sizeValidators(MIN_TIERS)),
+    // Feedback 3: the types this block takes; at least one (same rule as CreateBlockValidator)
+    allowedCategories: new FormControl<ContainerCategory[]>([], {
+      nonNullable: true,
+      validators: (control) => (control.value.length === 0 ? { required: true } : null),
+    }),
   });
+
+  protected readonly categories = CATEGORIES;
+  protected readonly categoryLabel = CATEGORY_LABEL;
+  protected readonly categoryHint = CATEGORY_HINT;
+  protected readonly categoriesText = categoriesText;
 
   // Same rules as ResizeBlockValidator
   protected readonly resizeForm = this.fb.group({
@@ -128,7 +139,7 @@ export class BlocksPage {
   // Back to "create" mode
   protected cancel(): void {
     this.resizing.set(null);
-    this.createForm.reset({ isVirtual: false });
+    this.createForm.reset({ isVirtual: false, allowedCategories: [] });
     this.submitted.set(false);
     this.apiError.set(null);
   }
@@ -141,7 +152,18 @@ export class BlocksPage {
     else this.saveCreate();
   }
 
-  protected invalid(form: 'create' | 'resize', name: 'code' | 'description' | 'maxBays' | 'maxRows' | 'maxTiers'): boolean {
+  // Ticks or unticks one type; the list is kept in enum order so the request is stable
+  protected toggleCategory(category: ContainerCategory, checked: boolean): void {
+    const control = this.createForm.controls.allowedCategories;
+    const next = checked ? [...control.value, category] : control.value.filter((c) => c !== category);
+    control.setValue(CATEGORIES.filter((c) => next.includes(c)));
+    control.markAsTouched();
+  }
+
+  protected invalid(
+    form: 'create' | 'resize',
+    name: 'code' | 'description' | 'maxBays' | 'maxRows' | 'maxTiers' | 'allowedCategories',
+  ): boolean {
     // Typed as AbstractControl: the two forms have different value types
     const control: AbstractControl | null = form === 'create' ? this.createForm.get(name) : this.resizeForm.get(name);
     return !!control && control.enabled && control.invalid && (control.touched || this.submitted());
@@ -162,6 +184,7 @@ export class BlocksPage {
         maxBays: v.isVirtual ? null : Number(v.maxBays),
         maxRows: v.isVirtual ? null : Number(v.maxRows),
         maxTiers: v.isVirtual ? null : Number(v.maxTiers),
+        allowedCategories: v.allowedCategories,
       })
       .subscribe({
         next: () => this.done(`Đã thêm block ${code}`),

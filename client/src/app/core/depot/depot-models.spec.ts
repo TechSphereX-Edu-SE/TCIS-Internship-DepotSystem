@@ -2,6 +2,8 @@ import {
   DailyThroughput,
   DeliveryOrder,
   addDays,
+  blockAccepts,
+  categoriesText,
   dailyTotals,
   daysInRange,
   dwellDays,
@@ -14,6 +16,19 @@ import {
 } from './depot-models';
 
 describe('depot display helpers', () => {
+  it('checks a block by its list of types, not by its name', () => {
+    // A block named "khu khô" that only takes Reefer still refuses Dry
+    expect(blockAccepts({ allowedCategories: ['Reefer'] }, 'Reefer')).toBe(true);
+    expect(blockAccepts({ allowedCategories: ['Reefer'] }, 'Dry')).toBe(false);
+  });
+
+  it('lists block types in enum order, or "Tất cả loại" for every type', () => {
+    expect(categoriesText(['OpenTop', 'Dry'])).toBe('Dry, Open Top');
+    expect(
+      categoriesText(['Dry', 'Reefer', 'OpenTop', 'FlatRack', 'Bunker', 'Ventilated', 'Specialized']),
+    ).toBe('Tất cả loại');
+  });
+
   it('formats a physical position with a 2-digit bay, a virtual block by its code', () => {
     expect(formatPosition('A', 4, 1, 1)).toBe('A 04-1-1');
     expect(formatPosition('WAIT', null, null, null)).toBe('WAIT');

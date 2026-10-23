@@ -50,57 +50,6 @@
   gap: 12px;
 }
 
-.grade-condition {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-}
-
-/* Phones: grade and condition on two rows, so "Hư hỏng" is not cut at the edge */
-@media (max-width: 600px) {
-  .grade-condition {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
-}
-
-/* Grade A/B/C as segmented buttons; the real radio input stays for keyboard and screen readers */
-.segmented {
-  display: flex;
-  gap: 8px;
-}
-
-.segment input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.segment span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 52px;
-  height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--input-border);
-  border-radius: 6px;
-  background: var(--surface);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.segment input:checked + span {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
-}
-
-.segment input:focus-visible + span {
-  outline: 3px solid rgb(29 78 216 / 35%);
-  outline-offset: 2px;
-}
-
 .radios {
   display: flex;
   gap: 20px;
@@ -165,8 +114,7 @@
   padding: 16px 0;
 }
 
-/* Container numbers and plates are stored in upper case; show them the same way while typing */
-#containerNumber,
+/* Plates are stored in upper case; show them the same way while typing */
 #vehicleNo {
   text-transform: uppercase;
 }

@@ -3,43 +3,48 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Observable, catchError, concat, debounceTime, distinctUntilChanged, map, of, startWith, switchMap, throwError } from 'rxjs';
+import { Observable, catchError, concat, map, of, startWith, switchMap } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
-import { checkContainerNumber, containerNumberError, normalizeContainerNumber } from '../../core/depot/container-number';
 import {
   Block,
   CATEGORY_LABEL,
   CONDITION_LABEL,
   Container,
   ContainerCondition,
-  ContainerGrade,
   ContainerPosition,
   DailyGateIn,
   GateInRequest,
   LineOperator,
   SIZE_LABEL,
   YardContainer,
+  blockAccepts,
+  categoriesText,
   formatPosition,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { YardApi } from '../../core/depot/yard-api';
 import { SlotErrors, bayForClick, hasSlotErrors, placementWarning, toPlaced, validateSlot } from '../../core/depot/yard-rules';
+import { SearchSelect, SearchPageLoader } from '../../shared/search-select/search-select';
 import { ToastService } from '../../shared/toast/toast-service';
 import { YardMap } from '../../shared/yard-map/yard-map';
 
-// Result of checking the typed container number (locally, then against the API)
+// Rows asked per page by the search dropdowns (about 5 are visible, the rest load while scrolling)
+const SEARCH_PAGE_SIZE = 20;
+
+/*
+  State of the selected container: only catalog containers can be picked (feedback 3),
+  so the number is always valid; what is left to check is whether it is already in the yard.
+*/
 type Lookup =
   | { kind: 'idle' }
   | { kind: 'checking' }
-  | { kind: 'invalid'; message: string }
-  | { kind: 'notFound'; number: string }
   | { kind: 'inYard'; container: Container; position: ContainerPosition }
-  | { kind: 'ready'; container: Container; checkDigit: string }
+  | { kind: 'ready'; container: Container }
   | { kind: 'error'; message: string };
 
 @Component({
   selector: 'app-gate-in-page',
-  imports: [ReactiveFormsModule, DatePipe, RouterLink, YardMap],
+  imports: [ReactiveFormsModule, DatePipe, RouterLink, YardMap, SearchSelect],
   templateUrl: './gate-in-page.html',
   styleUrl: './gate-in-page.css',
 })
@@ -52,23 +57,39 @@ export class GateInPage {
   protected readonly categoryLabel = CATEGORY_LABEL;
   protected readonly conditionLabel = CONDITION_LABEL;
   protected readonly formatPosition = formatPosition;
-  protected readonly grades: ContainerGrade[] = ['A', 'B', 'C'];
+  protected readonly categoriesText = categoriesText;
 
-  // Same fields as GateInCommand; Bay/Row/Tier are disabled for a virtual block
+  /*
+    Same fields as GateInCommand; Bay/Row/Tier are disabled for a virtual block.
+    Container and line operator hold the picked row (or null): the dropdowns never keep typed text.
+    The A/B/C grade is gone (feedback 3: it was only a placeholder label, not a quality rule).
+  */
   protected readonly form = inject(FormBuilder).nonNullable.group({
-    containerNumber: ['', Validators.required],
-    lineOperatorId: ['', Validators.required],
+    container: new FormControl<Container | null>(null, Validators.required),
+    lineOperator: new FormControl<LineOperator | null>(null, Validators.required),
     blockId: ['', Validators.required],
     bay: new FormControl<number | null>(null),
     row: new FormControl<number | null>(1),
     tier: new FormControl<number | null>(null),
-    grade: ['A' as ContainerGrade],
     condition: ['Normal' as ContainerCondition],
     conditionNote: ['', Validators.maxLength(500)],
     vehicleNo: ['', [Validators.required, Validators.maxLength(20)]],
   });
 
-  protected readonly operators = signal<LineOperator[]>([]);
+  // Search loaders for the two dropdowns; the API ranks exact match, then prefix, then the rest
+  protected readonly loadContainers: SearchPageLoader<Container> = (term, page) =>
+    this.masterData.containerPage(term, page, SEARCH_PAGE_SIZE);
+  protected readonly loadOperators: SearchPageLoader<LineOperator> = (term, page) =>
+    this.masterData.lineOperatorPage(page, SEARCH_PAGE_SIZE, term);
+
+  protected readonly containerKey = (c: Container) => c.id;
+  protected readonly containerLabel = (c: Container) => c.containerNumber;
+  protected readonly containerDetail = (c: Container) =>
+    `${c.isoCode} · ${SIZE_LABEL[c.size]} · ${CATEGORY_LABEL[c.category]} · ${c.ownerName}`;
+  protected readonly operatorKey = (o: LineOperator) => o.id;
+  protected readonly operatorLabel = (o: LineOperator) => o.code;
+  protected readonly operatorDetail = (o: LineOperator) => o.name;
+
   protected readonly blocks = signal<Block[]>([]);
   protected readonly lookup = signal<Lookup>({ kind: 'idle' });
   protected readonly mapContainers = signal<YardContainer[]>([]);
@@ -90,37 +111,43 @@ export class GateInPage {
   // Bumped after a gate-in so the map reloads even if block and row did not change
   private readonly refreshMap = signal(0);
 
-  protected readonly selectedBlock = computed(() => this.blocks().find((b) => b.id === this.value().blockId) ?? null);
-  protected readonly physicalBlocks = computed(() => this.blocks().filter((b) => !b.isVirtual));
+  protected readonly container = computed(() => this.value().container);
 
-  protected readonly container = computed(() => {
-    const state = this.lookup();
-    return state.kind === 'ready' || state.kind === 'inYard' ? state.container : null;
+  /*
+    Feedback 3: the block dropdown only offers blocks whose list of types contains the container's
+    type (one block can take several types). Before a container is picked every block is listed.
+  */
+  protected readonly blockOptions = computed(() => {
+    const container = this.container();
+    return container ? this.blocks().filter((b) => blockAccepts(b, container.category)) : this.blocks();
   });
+
+  protected readonly selectedBlock = computed(
+    () => this.blockOptions().find((b) => b.id === this.value().blockId) ?? null,
+  );
 
   protected readonly ready = computed(() => {
     const state = this.lookup();
     return state.kind === 'ready' ? state : null;
   });
 
-  // Message under the container number field (null when there is nothing to report)
-  protected readonly numberError = computed(() => {
+  // Message under the container field (null when there is nothing to report)
+  protected readonly containerError = computed(() => {
     const state = this.lookup();
     switch (state.kind) {
-      case 'invalid':
       case 'error':
         return state.message;
       case 'inYard':
         return `Container đang ở trong bãi tại ${this.positionText(state.position)}.`;
       case 'idle':
-        return this.submitted() ? 'Nhập đủ 11 ký tự số container.' : null;
+        return this.submitted() ? 'Chọn container trong danh sách.' : null;
       default:
         return null;
     }
   });
 
   // The API would reject these anyway, so the button stays disabled
-  protected readonly blocked = computed(() => ['invalid', 'inYard', 'notFound'].includes(this.lookup().kind));
+  protected readonly blocked = computed(() => ['inYard', 'checking'].includes(this.lookup().kind));
 
   // Row shown on the map = row typed in the form (when it is inside the block), otherwise row 1
   protected readonly mapRow = computed(() => {
@@ -154,16 +181,19 @@ export class GateInPage {
   });
 
   constructor() {
-    this.loadMasterData();
+    this.loadBlocks();
     this.loadToday();
 
-    // Check the number locally first, then look it up in the catalog and in the yard
-    this.form.controls.containerNumber.valueChanges
+    /*
+      A picked container is checked against the yard (open visit -> blocked, with its position).
+      Feedback 3: changing the container re-checks the block, because the new type may not fit it.
+    */
+    this.form.controls.container.valueChanges
       .pipe(
-        map(normalizeContainerNumber),
-        debounceTime(300),
-        distinctUntilChanged(),
-        switchMap((number) => this.checkNumber(number)),
+        switchMap((container) => {
+          this.dropBlockIfNotAccepted(container);
+          return container ? this.checkInYard(container) : of<Lookup>({ kind: 'idle' });
+        }),
         takeUntilDestroyed(),
       )
       .subscribe((state) => this.applyLookup(state));
@@ -201,19 +231,18 @@ export class GateInPage {
     const state = this.lookup();
     const block = this.selectedBlock();
     const errors = this.positionErrors();
-    if (state.kind !== 'ready' || !block || this.form.invalid || hasSlotErrors(errors)) {
+    const v = this.form.getRawValue();
+    if (state.kind !== 'ready' || !block || !v.lineOperator || this.form.invalid || hasSlotErrors(errors)) {
       return;
     }
 
-    const v = this.form.getRawValue();
     const request: GateInRequest = {
       containerId: state.container.id,
-      lineOperatorId: v.lineOperatorId,
-      blockId: v.blockId,
+      lineOperatorId: v.lineOperator.id,
+      blockId: block.id,
       bay: block.isVirtual ? null : v.bay,
       row: block.isVirtual ? null : v.row,
       tier: block.isVirtual ? null : v.tier,
-      grade: v.grade,
       condition: v.condition,
       // The API only keeps a note for a damaged container
       conditionNote: v.condition === 'Damaged' ? v.conditionNote.trim() || null : null,
@@ -229,6 +258,7 @@ export class GateInPage {
         this.resetForNext();
         this.refreshMap.update((n) => n + 1);
         this.loadToday();
+        this.loadBlocks();
         this.submitting.set(false);
       },
       error: (err: unknown) => {
@@ -249,54 +279,43 @@ export class GateInPage {
   }
 
   // Red border + message for a plain required/length rule or a matching API validation error
-  protected invalid(name: 'lineOperatorId' | 'vehicleNo' | 'conditionNote'): boolean {
+  protected invalid(name: 'lineOperator' | 'blockId' | 'vehicleNo' | 'conditionNote'): boolean {
     const control = this.form.controls[name];
-    return (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), name);
+    const apiField = name === 'lineOperator' ? 'lineOperatorId' : name;
+    return (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), apiField);
   }
 
   protected positionText(position: ContainerPosition): string {
     return formatPosition(position.blockCode, position.bay, position.row, position.tier);
   }
 
-  private checkNumber(number: string): Observable<Lookup> {
-    // Wait for the full 11 characters before judging the number
-    if (number.length < 11) return of<Lookup>({ kind: 'idle' });
-
-    const check = checkContainerNumber(number);
-    if (!check.valid) return of<Lookup>({ kind: 'invalid', message: containerNumberError(check)! });
-
-    const lookup$ = this.masterData.findContainer(number).pipe(
-      switchMap((container): Observable<Lookup> => {
-        if (!container) return of<Lookup>({ kind: 'notFound', number });
-        // In the yard already -> position found; 404 NotInYard -> ready for gate-in
-        return this.yard.position(number).pipe(
-          map((position): Lookup => ({ kind: 'inYard', container, position })),
-          catchError((err: unknown) =>
-            toApiError(err).code === 'ContainerVisit.NotInYard'
-              ? of<Lookup>({ kind: 'ready', container, checkDigit: check.checkDigit })
-              : throwError(() => err),
-          ),
+  // In the yard already -> position found; 404 NotInYard -> ready for gate-in
+  private checkInYard(container: Container): Observable<Lookup> {
+    const lookup$ = this.yard.position(container.containerNumber).pipe(
+      map((position): Lookup => ({ kind: 'inYard', container, position })),
+      catchError((err: unknown) => {
+        const error = toApiError(err);
+        return of<Lookup>(
+          error.code === 'ContainerVisit.NotInYard' ? { kind: 'ready', container } : { kind: 'error', message: error.message },
         );
       }),
-      catchError((err: unknown) => of<Lookup>({ kind: 'error', message: toApiError(err).message })),
     );
-
     return concat(of<Lookup>({ kind: 'checking' }), lookup$);
   }
 
   private applyLookup(state: Lookup): void {
     this.lookup.set(state);
-    if (state.kind !== 'ready') return;
+    // Start from the condition recorded on the container; the gate check may change it.
+    // The line operator is NOT guessed from the owner or the number prefix (feedback 2).
+    if (state.kind === 'ready') this.form.controls.condition.setValue(state.container.condition);
+  }
 
-    // Suggest the operator whose code starts the owner name (MSC -> MSC, "CMA CGM" -> CMA); the user can change it
-    if (!this.form.controls.lineOperatorId.value) {
-      const owner = state.container.ownerName.trim().split(/\s+/)[0]?.toUpperCase();
-      const operator = this.operators().find((o) => o.code.toUpperCase() === owner);
-      if (operator) this.form.controls.lineOperatorId.setValue(operator.id);
+  // Feedback 1: a filter change drops a choice that no longer fits (the user picks a block again)
+  private dropBlockIfNotAccepted(container: Container | null): void {
+    const block = this.blocks().find((b) => b.id === this.form.controls.blockId.value);
+    if (container && block && !blockAccepts(block, container.category)) {
+      this.form.controls.blockId.setValue('');
     }
-
-    // Start from the condition recorded on the container; the gate check may change it
-    this.form.controls.condition.setValue(state.container.condition);
   }
 
   private applyBlockRules(): void {
@@ -314,11 +333,8 @@ export class GateInPage {
     }
   }
 
-  private loadMasterData(): void {
-    this.masterData.lineOperators().subscribe({
-      next: (operators) => this.operators.set(operators),
-      error: (err: unknown) => this.loadError.set(toApiError(err).message),
-    });
+  // Also reloaded after a gate-in, so the container count of a virtual block stays current
+  private loadBlocks(): void {
     this.masterData.blocks().subscribe({
       next: (blocks) => {
         this.blocks.set(blocks);

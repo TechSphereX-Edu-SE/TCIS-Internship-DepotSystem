@@ -60,8 +60,9 @@ export class MasterDataApi {
 
   // ---------- catalog screens: one page of a list, create / update ----------
 
-  lineOperatorPage(page: number, pageSize: number): Observable<PagedResult<LineOperator>> {
-    return this.page<LineOperator>('/api/line-operators', page, pageSize);
+  // search: part of the code or the name (exact code first, then codes starting with the text)
+  lineOperatorPage(page: number, pageSize: number, search = ''): Observable<PagedResult<LineOperator>> {
+    return this.page<LineOperator>('/api/line-operators', page, pageSize, search);
   }
 
   // 201 with { id, code, name }; 409 LineOperator.Duplicate when the code exists

@@ -28,6 +28,7 @@
               <th>Mã</th>
               <th>Loại</th>
               <th>Mô tả</th>
+              <th>Nhận loại</th>
               <th>Kích thước</th>
               <th class="num">Trong bãi</th>
               <th><span class="visually-hidden">Thao tác</span></th>
@@ -43,6 +44,7 @@
                 </span>
               </td>
               <td>{{ block.description ?? '—' }}</td>
+              <td>{{ categoriesText(block.allowedCategories) }}</td>
               <td>{{ sizeText(block) }}</td>
               <td class="num">{{ block.containersInYard }}</td>
               <td>
@@ -118,6 +120,26 @@
         <label for="description">Mô tả <span class="muted">(không bắt buộc)</span></label>
         <input id="description" formControlName="description" placeholder="VD: Khu container khô" maxlength="200" />
       </div>
+
+      <!-- Feedback 3: the list of types is what gate-in checks, not the name or description -->
+      <fieldset class="category-picker" [class.has-error]="invalid('create', 'allowedCategories')">
+        <legend>Loại container được nhận</legend>
+        <div class="category-options">
+          @for (category of categories; track category) {
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [checked]="createForm.controls.allowedCategories.value.includes(category)"
+              (change)="toggleCategory(category, $any($event.target).checked)"
+            />
+            {{ categoryLabel[category] }} <span class="muted">({{ categoryHint[category] }})</span>
+          </label>
+          }
+        </div>
+        @if (invalid('create', 'allowedCategories')) {
+        <span class="field-error">Chọn ít nhất một loại container.</span>
+        }
+      </fieldset>
 
       <label class="checkbox">
         <input type="checkbox" formControlName="isVirtual" />
