@@ -1,5 +1,5 @@
 import { Component, computed, input, output } from '@angular/core';
-import { Block, ContainerSize, YardContainer } from '../../core/depot/depot-models';
+import { Block, ContainerSize, REPAIR_MARKER_LABEL, YardContainer, repairMarker } from '../../core/depot/depot-models';
 import { findOverlap, footprint, isSupported, toPlaced } from '../../core/depot/yard-rules';
 
 // Position chosen in the form, drawn on the map (bay may be odd or even depending on the size)
@@ -14,6 +14,9 @@ export interface MapSelection {
   A 40ft container in even bay b is drawn over the columns of bays b-1 and b+1.
   Clicking an empty cell emits the odd bay and tier; the page turns it into a bay for the container size.
   Used by gate-in (pick a free cell) and by move (also pick a container, and show the one being moved).
+  Feedback 5: a container with an open repair case gets a badge and a border (not colour alone), and the
+  legend explains them: "GĐ" dashed = bất thường, chờ giám định; "SC" solid = cần sửa / đang xử lý.
+  The badge sits inside the box, so the footprint and size stay readable.
 */
 @Component({
   selector: 'app-yard-map',
@@ -53,16 +56,20 @@ export class YardMap {
       .filter((c) => c.bay !== null && c.tier !== null)
       .map((c) => {
         const is40 = c.size === 'Ft40';
+        const marker = repairMarker(c);
         return {
           container: c,
           visitId: c.visitId,
           is40,
-          damaged: c.condition === 'Damaged',
+          marker,
+          badge: marker === 'abnormal' ? 'GĐ' : marker === 'repair' ? 'SC' : null,
           moving: c.visitId === this.movingVisitId(),
           area: this.gridArea(footprint(c.bay!, c.size)[0], is40 ? 2 : 1, c.tier!),
           label: is40 ? c.containerNumber : `${c.containerNumber.slice(0, 4)}…${c.containerNumber.slice(-3)}`,
           sub: is40 ? `40' · bay ${pad(c.bay!)}` : "20'",
-          title: `${c.containerNumber} · ${c.isoCode} · ${c.lineOperatorCode}`,
+          title:
+            `${c.containerNumber} · ${c.isoCode} · ${c.lineOperatorCode}` +
+            (marker ? ` · ${REPAIR_MARKER_LABEL[marker]}${c.repairNote ? `: ${c.repairNote}` : ''}` : ''),
         };
       }),
   );

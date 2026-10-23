@@ -30,20 +30,33 @@
     <button type="button"
             class="cell box selectable"
             [class.ft40]="box.is40"
-            [class.damaged]="box.damaged"
+            [class.abnormal]="box.marker === 'abnormal'"
+            [class.repair]="box.marker === 'repair'"
             [class.moving]="box.moving"
             [style.grid-area]="box.area"
             [title]="box.title"
-            [attr.aria-label]="'Chọn container ' + box.container.containerNumber"
+            [attr.aria-label]="'Chọn container ' + box.title"
             [attr.aria-pressed]="box.moving"
             (click)="pickContainer.emit(box.container)">
       <span class="label">{{ box.label }}</span>
       <span class="sub">{{ box.sub }}</span>
+      @if (box.badge) {
+      <span class="badge" aria-hidden="true">{{ box.badge }}</span>
+      }
     </button>
     } @else {
-    <div class="cell box" [class.ft40]="box.is40" [class.damaged]="box.damaged" [class.moving]="box.moving" [style.grid-area]="box.area" [title]="box.title">
+    <div class="cell box"
+         [class.ft40]="box.is40"
+         [class.abnormal]="box.marker === 'abnormal'"
+         [class.repair]="box.marker === 'repair'"
+         [class.moving]="box.moving"
+         [style.grid-area]="box.area"
+         [title]="box.title">
       <span class="label">{{ box.label }}</span>
       <span class="sub">{{ box.sub }}</span>
+      @if (box.badge) {
+      <span class="badge" aria-hidden="true">{{ box.badge }}</span>
+      }
     </div>
     }
     }
@@ -65,6 +78,7 @@
   }
 
   <span><i class="swatch selected"></i>Vị trí đang chọn</span>
-  <span><i class="swatch damaged"></i>Hư hỏng</span>
+  <span><i class="swatch abnormal">GĐ</i>Bất thường – chờ giám định</span>
+  <span><i class="swatch repair">SC</i>Cần sửa / đang xử lý</span>
   <span><i class="swatch empty"></i>Trống (bấm để chọn)</span>
 </div>

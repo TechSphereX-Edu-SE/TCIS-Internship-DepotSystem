@@ -54,6 +54,7 @@ const MESSAGES: Record<string, string> = {
   'ContainerVisit.NoSupportBelow': 'Không có container đỡ bên dưới.',
   'ContainerVisit.NotInYard': 'Container không ở trong bãi.',
   'ContainerVisit.RepairCaseOpen': 'Container có hồ sơ giám định/sửa chữa chưa đạt, chưa xuất bãi được.',
+  'ContainerVisit.PositionChanged': 'Container vừa được chuyển chỗ khác. Đã tải lại vị trí mới, kiểm tra rồi thử lại.',
   'ContainerVisit.OperatorMismatch': 'Hãng khai thác khác với quan hệ khai thác đã xác nhận của container.',
   'ContainerVisit.SamePosition': 'Vị trí mới trùng vị trí hiện tại.',
   'ContainerVisit.SlotOccupied': 'Vị trí đã có container.',

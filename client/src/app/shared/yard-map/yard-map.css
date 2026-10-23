@@ -85,8 +85,37 @@
     color: #9a3412;
   }
 
-  .box.damaged {
+  /* Repair marks (feedback 5): border style + badge, so they do not rely on colour alone */
+  .box {
+    position: relative;
+  }
+
+  .box.abnormal {
+    border: 2px dashed #b45309;
+  }
+
+  .box.repair {
     border: 2px solid var(--danger);
+  }
+
+  .box .badge {
+    position: absolute;
+    top: 1px;
+    right: 2px;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #fff;
+  }
+
+  .box.abnormal .badge {
+    background: #b45309;
+  }
+
+  .box.repair .badge {
+    background: var(--danger);
   }
 
   /* Move screen: containers are buttons (reset the browser button look, keep the box look) */
@@ -172,8 +201,25 @@
     border: 2px solid var(--focus);
   }
 
-  .swatch.damaged {
-    background: #fff;
+  /* Legend swatches carry the same badge text as the boxes */
+  .swatch.abnormal,
+  .swatch.repair {
+    width: auto;
+    height: auto;
+    padding: 0 3px;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .swatch.abnormal {
+    background: #b45309;
+    border: 2px dashed #b45309;
+  }
+
+  .swatch.repair {
+    background: var(--danger);
     border: 2px solid var(--danger);
   }
 

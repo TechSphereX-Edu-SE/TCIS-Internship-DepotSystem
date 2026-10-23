@@ -22,6 +22,7 @@ import {
   partnerRolesText,
   photoFileError,
   releasedSummary,
+  repairMarker,
   vietnamToday,
 } from './depot-models';
 
@@ -176,5 +177,19 @@ describe('partners and operating assignments', () => {
       'Chờ nghiệm thu',
       'Đạt',
     ]);
+  });
+});
+
+describe('yard repair markers (feedback 5)', () => {
+  it('tells "chờ giám định" apart from "cần sửa / đang xử lý"', () => {
+    expect(repairMarker({ repairStatus: 'AwaitingInspection', condition: 'Damaged' })).toBe('abnormal');
+    expect(repairMarker({ repairStatus: 'AwaitingEstimateApproval', condition: 'Damaged' })).toBe('repair');
+    expect(repairMarker({ repairStatus: 'AwaitingAcceptance', condition: 'Damaged' })).toBe('repair');
+  });
+
+  it('has no marker without an open case, except for old Damaged data', () => {
+    expect(repairMarker({ repairStatus: null, condition: 'Normal' })).toBeNull();
+    expect(repairMarker({ repairStatus: 'Passed', condition: 'Normal' })).toBeNull();
+    expect(repairMarker({ repairStatus: null, condition: 'Damaged' })).toBe('abnormal');
   });
 });

@@ -2,18 +2,29 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { ApiError, toApiError } from '../../core/api/api-error';
-import { checkContainerNumber, containerNumberError, normalizeContainerNumber } from '../../core/depot/container-number';
 import {
   Block,
+  CATEGORIES,
+  CATEGORY_LABEL,
   CONDITION_LABEL,
+  ContainerCategory,
   ContainerPosition,
+  ContainerSize,
+  LineOperator,
   MoveRequest,
+  REPAIR_MARKER_LABEL,
+  REPAIR_STATUS_LABEL,
   SIZE_LABEL,
+  YARD_REPAIR_STATE_LABEL,
   YardContainer,
+  YardRepairState,
+  YardSearchFilter,
   dwellDays,
   formatPosition,
+  repairMarker,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
 import { YardApi } from '../../core/depot/yard-api';
@@ -27,21 +38,34 @@ import {
   toPlaced,
   validateSlot,
 } from '../../core/depot/yard-rules';
+import { Pager } from '../../shared/pager/pager';
+import { SearchPageLoader, SearchSelect } from '../../shared/search-select/search-select';
 import { ToastService } from '../../shared/toast/toast-service';
 import { YardMap } from '../../shared/yard-map/yard-map';
 
+const PAGE_SIZE = 20;
+const REPAIR_STATES: YardRepairState[] = ['Abnormal', 'InRepair', 'AnyOpen', 'None'];
+
+// Chip of a repair mark in the lists: amber = chờ giám định, red = cần sửa / đang xử lý
+const MARKER_CHIP = { abnormal: 'chip-amber', repair: 'chip-red' } as const;
+
 /*
   Spec section 3: "current position in the yard" and re-stacking (đảo chuyển).
-  One screen, three parts (mockup 03):
+  One screen (mockup 03 + feedback 5 / 8):
     - block cards: what is in each block, and which block the map shows
-    - lookup: find a container by number (or click it on the map / in a virtual block list)
-    - move: target block + Bay/Row/Tier, with the same checks as the API shown before submitting
+    - lookup: a search dropdown of the containers in the yard (catalog-only, gone and outside-repair
+      containers have no open visit, so they never show up); picking one opens its block and row
+    - list: the containers in the yard with filters (number, block, type, size; more: operator,
+      repair state, dwell days), filtered and paged by the API
+    - move: target block + Bay/Row/Tier, with the same checks as the API shown before submitting;
+      the move sends where the container was seen, so a container moved meanwhile is not moved blindly
+  Repair marks: "chờ giám định" and "cần sửa / đang xử lý" are shown apart, on the map and in the lists.
   The API has the final say (POST /api/container-visits/move); the local checks only avoid
   sending requests that are sure to fail and explain why in Vietnamese.
 */
 @Component({
   selector: 'app-yard-page',
-  imports: [ReactiveFormsModule, DatePipe, YardMap],
+  imports: [ReactiveFormsModule, DatePipe, RouterLink, YardMap, SearchSelect, Pager],
   templateUrl: './yard-page.html',
   styleUrl: './yard-page.css',
 })
@@ -52,11 +76,50 @@ export class YardPage {
   private readonly fb = inject(FormBuilder).nonNullable;
 
   protected readonly sizeLabel = SIZE_LABEL;
+  protected readonly categoryLabel = CATEGORY_LABEL;
   protected readonly conditionLabel = CONDITION_LABEL;
+  protected readonly repairStatusLabel = REPAIR_STATUS_LABEL;
+  protected readonly markerLabel = REPAIR_MARKER_LABEL;
+  protected readonly markerChip = MARKER_CHIP;
+  protected readonly repairStateLabel = YARD_REPAIR_STATE_LABEL;
+  protected readonly repairStates = REPAIR_STATES;
+  protected readonly categories = CATEGORIES;
+  protected readonly sizes: ContainerSize[] = ['Ft20', 'Ft40'];
   protected readonly formatPosition = formatPosition;
+  protected readonly repairMarker = repairMarker;
+  protected readonly dwellDays = dwellDays;
 
-  // Lookup by container number (what yard staff read on the box)
-  protected readonly searchForm = this.fb.group({ containerNumber: ['', Validators.required] });
+  // Lookup: pick a container in the yard (the dropdown never keeps half-typed text)
+  protected readonly lookup = new FormControl<YardContainer | null>(null);
+  protected readonly loadLookup: SearchPageLoader<YardContainer> = (term, page) => this.yard.search(page, PAGE_SIZE, { search: term });
+  protected readonly lookupKey = (c: YardContainer) => c.visitId;
+  protected readonly lookupLabel = (c: YardContainer) => c.containerNumber;
+  protected readonly lookupDetail = (c: YardContainer) => {
+    const marker = repairMarker(c);
+    return (
+      `${SIZE_LABEL[c.size]} ${CATEGORY_LABEL[c.category]} · ${formatPosition(c.blockCode, c.bay, c.row, c.tier)} · ` +
+      (marker ? REPAIR_MARKER_LABEL[marker] : CONDITION_LABEL[c.condition])
+    );
+  };
+
+  // List filters (feedback 8): main ones always visible, the others under "Lọc thêm"
+  protected readonly filters = this.fb.group({
+    search: [''],
+    blockId: [''],
+    category: ['' as ContainerCategory | ''],
+    size: ['' as ContainerSize | ''],
+    operatorId: [''],
+    repair: ['' as YardRepairState | ''],
+    minDwellDays: new FormControl<number | null>(null),
+    maxDwellDays: new FormControl<number | null>(null),
+  });
+  protected readonly moreFilters = signal(false);
+  protected readonly operators = signal<LineOperator[]>([]);
+  protected readonly items = signal<YardContainer[]>([]);
+  protected readonly totalCount = signal(0);
+  protected readonly page = signal(1);
+  protected readonly totalPages = signal(1);
+  protected readonly listError = signal<string | null>(null);
 
   // Same fields as MoveContainerCommand (containerId comes from the container found).
   // blockId is also the block the map shows, so picking a target and looking at it are one action.
@@ -71,7 +134,6 @@ export class YardPage {
   protected readonly loadError = signal<string | null>(null);
   // Container being looked at / moved (response of GET position or POST move)
   protected readonly current = signal<ContainerPosition | null>(null);
-  protected readonly searching = signal(false);
   protected readonly searchError = signal<string | null>(null);
   // Containers of the row where the current container stands, to know if one rests on it
   protected readonly currentRowContainers = signal<YardContainer[]>([]);
@@ -124,6 +186,11 @@ export class YardPage {
     return c ? dwellDays(c.gateInAt) : 0;
   });
 
+  protected readonly currentMarker = computed(() => {
+    const c = this.current();
+    return c ? repairMarker(c) : null;
+  });
+
   // Same check as YardPlacement.CheckNothingAboveAsync: the box on top would be left floating
   protected readonly containerAbove = computed(() => {
     const c = this.current();
@@ -163,6 +230,16 @@ export class YardPage {
 
   constructor() {
     this.loadBlocks();
+    this.loadPage(1);
+    this.masterData.lineOperators('Operator').subscribe({
+      next: (operators) => this.operators.set(operators),
+      error: (err: unknown) => this.listError.set(toApiError(err).message),
+    });
+
+    // A container picked in the lookup: open it (its position is read again, it may have moved)
+    this.lookup.valueChanges.pipe(takeUntilDestroyed()).subscribe((item) => {
+      if (item) this.openContainer(item.containerNumber);
+    });
 
     // Map / list of the target block: one row of a physical block, the whole virtual block.
     // Reloads when the block or row changes, or after a move.
@@ -193,37 +270,22 @@ export class YardPage {
     this.moveForm.controls.blockId.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.applyBlockRules());
   }
 
-  protected search(): void {
-    const number = normalizeContainerNumber(this.searchForm.controls.containerNumber.value);
-    this.searchForm.controls.containerNumber.setValue(number);
-
-    // Check the format locally first so a typo does not cost a request
-    const check = checkContainerNumber(number);
-    if (!check.valid) {
-      this.searchError.set(containerNumberError(check));
-      return;
-    }
-
-    this.searching.set(true);
-    this.searchError.set(null);
-    this.yard.position(number).subscribe({
-      next: (position) => {
-        this.select(position);
-        this.searching.set(false);
-      },
-      error: (err: unknown) => {
-        // 404 Container.NotFound / ContainerVisit.NotInYard come with their Vietnamese text
-        this.current.set(null);
-        this.searchError.set(toApiError(err).message);
-        this.searching.set(false);
-      },
-    });
+  protected applyFilters(): void {
+    this.loadPage(1);
   }
 
-  // Clicking a container on the map or in a virtual block list = looking it up by number
+  protected clearFilters(): void {
+    this.filters.reset();
+    this.loadPage(1);
+  }
+
+  protected goToPage(page: number): void {
+    if (page >= 1 && page <= this.totalPages()) this.loadPage(page);
+  }
+
+  // Clicking a container on the map, in a virtual block list or in the list = looking it up by number
   protected pickContainer(container: YardContainer): void {
-    this.searchForm.controls.containerNumber.setValue(container.containerNumber);
-    this.search();
+    this.openContainer(container.containerNumber);
   }
 
   // Block cards switch the block shown on the map (and the target of the move)
@@ -258,6 +320,11 @@ export class YardPage {
       bay: block.isVirtual ? null : v.bay,
       row: block.isVirtual ? null : v.row,
       tier: block.isVirtual ? null : v.tier,
+      // Where the clerk saw it: 409 PositionChanged if someone moved it meanwhile
+      fromBlockId: c.blockId,
+      fromBay: c.bay,
+      fromRow: c.row,
+      fromTier: c.tier,
     };
 
     const from = this.positionText(c);
@@ -270,11 +337,15 @@ export class YardPage {
         this.clearTarget();
         this.refresh.update((n) => n + 1);
         this.loadBlocks();
+        this.loadPage(this.page());
         this.submitting.set(false);
       },
       error: (err: unknown) => {
-        this.apiError.set(toApiError(err));
+        const error = toApiError(err);
+        this.apiError.set(error);
         this.submitting.set(false);
+        // Moved by someone else: show where it is now, the clerk checks again before moving
+        if (error.code === 'ContainerVisit.PositionChanged') this.reloadCurrent(c.containerNumber);
       },
     });
   }
@@ -294,6 +365,62 @@ export class YardPage {
     return block.isVirtual
       ? 'Không quản lý bay/row/tier'
       : `${block.maxBays} bay × ${block.maxRows} row × ${block.maxTiers} tier`;
+  }
+
+  // Reads the position again (404 NotInYard when it left meanwhile) and opens it
+  private openContainer(containerNumber: string): void {
+    this.searchError.set(null);
+    this.yard.position(containerNumber).subscribe({
+      next: (position) => this.select(position),
+      error: (err: unknown) => {
+        this.current.set(null);
+        this.searchError.set(toApiError(err).message);
+      },
+    });
+  }
+
+  // After a refused move: new position on screen, the error message stays visible
+  private reloadCurrent(containerNumber: string): void {
+    this.yard.position(containerNumber).subscribe({
+      next: (position) => {
+        this.current.set(position);
+        this.moveForm.patchValue({ blockId: position.blockId, row: position.row ?? 1 });
+        this.applyBlockRules();
+        this.refresh.update((n) => n + 1);
+        this.loadPage(this.page());
+      },
+      error: (err: unknown) => {
+        this.current.set(null);
+        this.searchError.set(toApiError(err).message);
+      },
+    });
+  }
+
+  private currentFilter(): YardSearchFilter {
+    const f = this.filters.getRawValue();
+    return {
+      search: f.search,
+      blockId: f.blockId || null,
+      category: f.category || null,
+      size: f.size || null,
+      operatorId: f.operatorId || null,
+      repair: f.repair || null,
+      minDwellDays: f.minDwellDays,
+      maxDwellDays: f.maxDwellDays,
+    };
+  }
+
+  private loadPage(page: number): void {
+    this.yard.search(page, PAGE_SIZE, this.currentFilter()).subscribe({
+      next: (result) => {
+        this.items.set(result.items);
+        this.totalCount.set(result.totalCount);
+        this.page.set(result.page);
+        this.totalPages.set(Math.max(1, result.totalPages));
+        this.listError.set(null);
+      },
+      error: (err: unknown) => this.listError.set(toApiError(err).message),
+    });
   }
 
   // A container found: show its block and row on the map, and start the move from there

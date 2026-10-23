@@ -69,29 +69,6 @@
   }
 }
 
-.search {
-  display: flex;
-  gap: 12px;
-}
-
-  .search input {
-    flex: 1 1 auto;
-    min-width: 0;
-    height: 44px;
-    padding: 0 12px;
-    border: 1px solid var(--input-border);
-    border-radius: var(--radius);
-    font-size: 15px;
-    letter-spacing: 0.04em;
-    /* Container numbers are stored in upper case; show them the same way while typing */
-    text-transform: uppercase;
-  }
-
-    .search input:focus {
-      outline: none;
-      border: 2px solid var(--focus);
-    }
-
 /* Facts of the container found, on the light page background as in the mockup */
 .facts {
   display: grid;
@@ -203,3 +180,75 @@
   background: #eff4ff;
 }
 
+
+/* ---------- list of containers in the yard (feedback 5 + 8) ---------- */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+  .filters .field {
+    min-width: 170px;
+  }
+
+    .filters .field.small-field {
+      min-width: 110px;
+      width: 110px;
+    }
+
+.filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.upper {
+  text-transform: uppercase;
+}
+
+.yard-list {
+  min-width: 760px;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Long repair notes: two lines in the list */
+.note-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 260px;
+}
+
+/* Open repair case of the selected container: red edge = cần sửa, amber dashed = chờ giám định */
+.repair-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--danger);
+  background: #fffafa;
+  border-radius: 4px;
+}
+
+  .repair-note.abnormal {
+    border-left: 3px dashed #b45309;
+    background: #fffbeb;
+  }

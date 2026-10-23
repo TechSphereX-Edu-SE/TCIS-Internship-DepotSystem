@@ -14,6 +14,7 @@ import {
   MoveRequest,
   PagedResult,
   YardContainer,
+  YardSearchFilter,
 } from './depot-models';
 
 // Container lifecycle in the yard: /api/container-visits
@@ -26,7 +27,7 @@ export class YardApi {
     return this.http.post<GateInResult>(`${this.baseUrl}/gate-in`, request);
   }
 
-  // Returns the new position; 409 ContainerAbove / SlotOccupied / NoSupportBelow, 400 SamePosition
+  // Returns the new position; 409 ContainerAbove / SlotOccupied / NoSupportBelow / PositionChanged, 400 SamePosition
   move(request: MoveRequest): Observable<ContainerPosition> {
     return this.http.post<ContainerPosition>(`${this.baseUrl}/move`, request);
   }
@@ -62,6 +63,23 @@ export class YardApi {
     if (blockId) params = params.set('blockId', blockId);
     if (row) params = params.set('row', row);
     return this.http.get<YardContainer[]>(`${this.baseUrl}/in-yard`, { params });
+  }
+
+  /*
+    Containers in the yard, filtered and paged by the API (feedback 5 + 8); empty filters are left out.
+    Without a search the rows follow the yard (block, row, bay, tier); with one, exact number first.
+  */
+  search(page: number, pageSize: number, filter: YardSearchFilter = {}): Observable<PagedResult<YardContainer>> {
+    const params: Record<string, string | number> = { page, pageSize };
+    if (filter.search?.trim()) params['search'] = filter.search.trim();
+    if (filter.blockId) params['blockId'] = filter.blockId;
+    if (filter.category) params['category'] = filter.category;
+    if (filter.size) params['size'] = filter.size;
+    if (filter.operatorId) params['operatorId'] = filter.operatorId;
+    if (filter.repair) params['repair'] = filter.repair;
+    if (filter.minDwellDays !== null && filter.minDwellDays !== undefined) params['minDwellDays'] = filter.minDwellDays;
+    if (filter.maxDwellDays !== null && filter.maxDwellDays !== undefined) params['maxDwellDays'] = filter.maxDwellDays;
+    return this.http.get<PagedResult<YardContainer>>(`${this.baseUrl}/yard-search`, { params });
   }
 
   // Without a date the API uses today in Vietnam

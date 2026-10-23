@@ -142,9 +142,16 @@ export interface ContainerPosition {
   row: number | null;
   tier: number | null;
   gateInAt: string;
+  isoCode: string;
+  category: ContainerCategory;
+  condition: ContainerCondition;
+  // Open repair case of the container (feedback 5 markers); null when there is none
+  repairCaseId: string | null;
+  repairStatus: RepairCaseStatus | null;
+  repairNote: string | null;
 }
 
-// GET /api/container-visits/in-yard
+// GET /api/container-visits/in-yard and /yard-search
 export interface YardContainer {
   visitId: string;
   containerId: string;
@@ -160,7 +167,53 @@ export interface YardContainer {
   row: number | null;
   tier: number | null;
   gateInAt: string;
+  // Open repair case of the container (feedback 5 markers); null when there is none
+  repairCaseId: string | null;
+  repairStatus: RepairCaseStatus | null;
+  repairNote: string | null;
 }
+
+/*
+  Repair state filter of the yard search (feedback 5 keeps two marks apart):
+  Abnormal = có bất thường, chờ giám định; InRepair = đã xác định cần sửa / đang xử lý.
+*/
+export type YardRepairState = 'None' | 'Abnormal' | 'InRepair' | 'AnyOpen';
+
+export const YARD_REPAIR_STATE_LABEL: Record<YardRepairState, string> = {
+  None: 'Không có hồ sơ',
+  Abnormal: 'Bất thường – chờ giám định',
+  InRepair: 'Cần sửa / đang xử lý',
+  AnyOpen: 'Có hồ sơ đang mở',
+};
+
+// Filters of GET /api/container-visits/yard-search (feedback 8: Vị trí & đảo chuyển)
+export interface YardSearchFilter {
+  search?: string;
+  blockId?: string | null;
+  category?: ContainerCategory | null;
+  size?: ContainerSize | null;
+  operatorId?: string | null;
+  repair?: YardRepairState | null;
+  minDwellDays?: number | null;
+  maxDwellDays?: number | null;
+}
+
+/*
+  Mark drawn on a container in the yard: 'abnormal' (chờ giám định), 'repair' (cần sửa / đang xử lý), or null.
+  A container marked Damaged without a case (data from before repair cases) counts as abnormal.
+*/
+export type RepairMarker = 'abnormal' | 'repair';
+
+export function repairMarker(item: { repairStatus: RepairCaseStatus | null; condition: ContainerCondition }): RepairMarker | null {
+  if (item.repairStatus === 'AwaitingInspection') return 'abnormal';
+  if (item.repairStatus !== null && item.repairStatus !== 'Passed') return 'repair';
+  return item.condition === 'Damaged' ? 'abnormal' : null;
+}
+
+export const REPAIR_MARKER_LABEL: Record<RepairMarker, string> = {
+  abnormal: 'Bất thường – chờ giám định',
+  repair: 'Cần sửa / đang xử lý',
+};
 
 // GET /api/container-visits/daily
 export interface DailyGateIn {
@@ -240,6 +293,11 @@ export interface MoveRequest {
   bay: number | null;
   row: number | null;
   tier: number | null;
+  // Where the screen saw the container: the API answers 409 PositionChanged if it moved meanwhile
+  fromBlockId?: string;
+  fromBay?: number | null;
+  fromRow?: number | null;
+  fromTier?: number | null;
 }
 export interface Customer {
   id: string;

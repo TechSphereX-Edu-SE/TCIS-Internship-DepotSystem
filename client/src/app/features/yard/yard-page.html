@@ -40,11 +40,19 @@
     <section class="card" aria-labelledby="find-title">
       <h2 id="find-title">Tra vị trí container</h2>
 
-      <form class="search" role="search" [formGroup]="searchForm" (ngSubmit)="search()" novalidate>
-        <label for="findNumber" class="visually-hidden">Số container</label>
-        <input id="findNumber" class="mono" formControlName="containerNumber" placeholder="VD: CMAU7654327" maxlength="11" autocomplete="off" />
-        <button class="btn btn-dark" type="submit" [disabled]="searching()">{{ searching() ? 'Đang tìm…' : 'Tra cứu' }}</button>
-      </form>
+      <!-- Feedback 5: only containers in the yard now (with a position), searched by the API -->
+      <div class="field">
+        <label for="lookup" class="visually-hidden">Số container</label>
+        <app-search-select
+          [formControl]="lookup"
+          inputId="lookup"
+          placeholder="Gõ số container đang trong bãi"
+          [load]="loadLookup"
+          [itemKey]="lookupKey"
+          [itemLabel]="lookupLabel"
+          [itemDetail]="lookupDetail"
+        />
+      </div>
 
       @if (searchError(); as message) {
       <div class="alert alert-red" role="alert">{{ message }}</div>
@@ -68,9 +76,33 @@
           <dt>Vào bãi lúc</dt>
           <dd>{{ c.gateInAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }} · {{ currentDwellDays() }} ngày</dd>
         </div>
+        <div>
+          <dt>Loại</dt>
+          <dd>{{ c.isoCode }} · {{ categoryLabel[c.category] }}</dd>
+        </div>
+        <div>
+          <dt>Tình trạng</dt>
+          <dd>
+            @if (currentMarker(); as marker) {
+            <span class="chip" [class]="markerChip[marker]">{{ markerLabel[marker] }}</span>
+            } @else {
+            <span class="chip chip-green">{{ conditionLabel[c.condition] }}</span>
+            }
+          </dd>
+        </div>
       </dl>
+
+      <!-- Feedback 5: what is wrong, and where to handle it; the container can still be moved (e.g. to a repair area) -->
+      @if (c.repairCaseId) {
+      <div class="repair-note" [class.abnormal]="currentMarker() === 'abnormal'">
+        <span>
+          Hồ sơ {{ c.repairStatus ? repairStatusLabel[c.repairStatus] : '' }}@if (c.repairNote) {: “{{ c.repairNote }}”}.
+        </span>
+        <a [routerLink]="['/repairs']" [queryParams]="{ caseId: c.repairCaseId }">Mở hồ sơ</a>
+      </div>
+      }
       } @else {
-      <p class="muted small">Nhập số container, hoặc bấm vào một container trên sơ đồ bên dưới.</p>
+      <p class="muted small">Gõ số container, chọn trong danh sách bên dưới, hoặc bấm vào một container trên sơ đồ.</p>
       }
     </section>
 
@@ -154,7 +186,8 @@
       <ul class="rules muted">
         <li>Container phải không bị container khác đè lên.</li>
         <li>Vị trí mới phải trống, đúng bay lẻ/chẵn và có container đỡ bên dưới.</li>
-        <li>Có thể chuyển sang block ảo (ví dụ WAIT cho container cần sửa).</li>
+        <li>Có thể chuyển sang khu sửa, kể cả block ảo, nếu phù hợp. Chuyển chỗ không đổi hồ sơ sửa chữa.</li>
+        <li>Chỉ bấm Đảo chuyển khi container đã thực sự được nâng hạ sang vị trí mới.</li>
       </ul>
       } @else {
       <h2 id="move-title">Đảo chuyển</h2>
@@ -162,6 +195,131 @@
       }
     </form>
   </div>
+
+  <!-- ================= Containers in the yard (feedback 5 + 8) ================= -->
+  <form class="card filters-card" [formGroup]="filters" (ngSubmit)="applyFilters()" role="search" aria-label="Lọc container trong bãi">
+    <div class="filters">
+      <div class="field">
+        <label for="filterSearch">Số container</label>
+        <input id="filterSearch" class="mono upper" formControlName="search" placeholder="Một phần số container" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="filterBlock">Block</label>
+        <select id="filterBlock" formControlName="blockId">
+          <option value="">Tất cả block</option>
+          @for (block of blocks(); track block.id) {
+          <option [value]="block.id">{{ block.code }}{{ block.isVirtual ? ' (ảo)' : '' }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="filterCategory">Loại</label>
+        <select id="filterCategory" formControlName="category">
+          <option value="">Tất cả loại</option>
+          @for (category of categories; track category) {
+          <option [value]="category">{{ categoryLabel[category] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="filterSize">Kích thước</label>
+        <select id="filterSize" formControlName="size">
+          <option value="">20ft và 40ft</option>
+          @for (size of sizes; track size) {
+          <option [value]="size">{{ sizeLabel[size] }}</option>
+          }
+        </select>
+      </div>
+      @if (moreFilters()) {
+      <div class="field">
+        <label for="filterOperator">Hãng khai thác</label>
+        <select id="filterOperator" formControlName="operatorId">
+          <option value="">Tất cả hãng</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="filterRepair">Tình trạng xử lý</label>
+        <select id="filterRepair" formControlName="repair">
+          <option value="">Tất cả</option>
+          @for (state of repairStates; track state) {
+          <option [value]="state">{{ repairStateLabel[state] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field small-field">
+        <label for="filterMinDays">Lưu từ (ngày)</label>
+        <input id="filterMinDays" type="number" min="0" formControlName="minDwellDays" />
+      </div>
+      <div class="field small-field">
+        <label for="filterMaxDays">Đến (ngày)</label>
+        <input id="filterMaxDays" type="number" min="0" formControlName="maxDwellDays" />
+      </div>
+      }
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">Lọc</button>
+        <button class="btn btn-secondary" type="button" (click)="moreFilters.set(!moreFilters())" [attr.aria-expanded]="moreFilters()">
+          {{ moreFilters() ? 'Ẩn lọc thêm' : 'Lọc thêm' }}
+        </button>
+        <button class="btn btn-secondary" type="button" (click)="clearFilters()">Xoá bộ lọc</button>
+      </div>
+    </div>
+  </form>
+
+  <section class="card" aria-labelledby="list-title">
+    <div class="list-head">
+      <h2 id="list-title">Container trong bãi <span class="muted">· {{ totalCount() }}</span></h2>
+    </div>
+    @if (listError(); as message) {
+    <div class="alert alert-red" role="alert">{{ message }}</div>
+    }
+    @if (items().length === 0) {
+    <p class="muted">Không có container phù hợp.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table yard-list">
+        <thead>
+          <tr>
+            <th>Số container</th>
+            <th>Kích thước / loại</th>
+            <th>Vị trí</th>
+            <th>Hãng</th>
+            <th>Lưu bãi</th>
+            <th>Tình trạng</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of items(); track item.visitId) {
+          <tr class="clickable" [class.current-row]="item.visitId === current()?.visitId" (click)="pickContainer(item)">
+            <td>
+              <button class="link-button mono" type="button" (click)="$event.stopPropagation(); pickContainer(item)">
+                {{ item.containerNumber }}
+              </button>
+            </td>
+            <td>{{ sizeLabel[item.size] }} {{ categoryLabel[item.category] }}</td>
+            <td class="mono">{{ formatPosition(item.blockCode, item.bay, item.row, item.tier) }}</td>
+            <td>{{ item.lineOperatorCode }}</td>
+            <td>{{ dwellDays(item.gateInAt) }} ngày</td>
+            <td>
+              @if (repairMarker(item); as marker) {
+              <span class="chip" [class]="markerChip[marker]">{{ markerLabel[marker] }}</span>
+              @if (item.repairNote) {
+              <div class="muted small note-text">{{ item.repairNote }}</div>
+              }
+              } @else {
+              <span class="chip chip-green">{{ conditionLabel[item.condition] }}</span>
+              }
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <app-pager [page]="page()" [totalPages]="totalPages()" label="Phân trang container trong bãi" (pageChange)="goToPage($event)" />
+    }
+  </section>
 
   <!-- ================= Map / virtual block list ================= -->
   <section class="card" aria-labelledby="map-title">
@@ -204,9 +362,11 @@
             <td>{{ sizeLabel[item.size] }}</td>
             <td>{{ item.lineOperatorCode }}</td>
             <td>
-              <span class="chip" [class.chip-red]="item.condition === 'Damaged'" [class.chip-green]="item.condition === 'Normal'">
-                {{ conditionLabel[item.condition] }}
-              </span>
+              @if (repairMarker(item); as marker) {
+              <span class="chip" [class]="markerChip[marker]">{{ markerLabel[marker] }}</span>
+              } @else {
+              <span class="chip chip-green">{{ conditionLabel[item.condition] }}</span>
+              }
             </td>
             <td>{{ item.gateInAt | date: 'dd/MM HH:mm' : '+0700' }}</td>
             <td>
