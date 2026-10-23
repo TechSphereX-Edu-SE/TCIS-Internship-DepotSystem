@@ -1,3 +1,4 @@
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Estimates;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.External;
 using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.RepairCases.Shared;
@@ -8,6 +9,7 @@ namespace TechSpherex.CleanArchitecture.Application.Features.RepairCases.Shared;
     BlockCode/Bay/Row/Tier: where the container is now (null when it is not in the yard);
     the case itself never changes the position.
     ExternalStatus / ExternalFacility: the active outside repair transfer (waiting to leave or at the facility), if any.
+    EstimateVersion / EstimateStatus / EstimateTotal / EstimateCurrency: the latest estimate version (feedback 4), if any.
 */
 public sealed record RepairCaseSummary(
     Guid Id,
@@ -27,7 +29,11 @@ public sealed record RepairCaseSummary(
     int? Row,
     int? Tier,
     ExternalRepairStatus? ExternalStatus,
-    string? ExternalFacility);
+    string? ExternalFacility,
+    int? EstimateVersion,
+    RepairEstimateStatus? EstimateStatus,
+    decimal? EstimateTotal,
+    string? EstimateCurrency);
 
 public sealed record RepairFindingResponse(
     Guid Id, string Description, RepairFindingSource Source, Guid? VisitId, DateTimeOffset ReportedAt, string? ReportedBy);
@@ -44,6 +50,8 @@ public sealed record RepairCaseEventResponse(
     recorded on the visit (kept even after the case is closed).
     CanRequestExternal: the case may be sent to an outside facility now (approved / in repair, container
     in the yard, no active transfer); Transfers = every outside repair transfer of the case, newest first.
+    Estimates: every estimate version, newest first (feedback 4: chi phí sửa chữa).
+    CanCreateEstimate: a new version can be made now (case open, inspection said repair, no open version).
 */
 public sealed record RepairCaseDetail(
     Guid Id,
@@ -70,4 +78,6 @@ public sealed record RepairCaseDetail(
     IReadOnlyList<RepairPhotoResponse> Photos,
     IReadOnlyList<RepairCaseEventResponse> History,
     bool CanRequestExternal,
-    IReadOnlyList<ExternalRepairResponse> Transfers);
+    IReadOnlyList<ExternalRepairResponse> Transfers,
+    IReadOnlyList<RepairEstimateResponse> Estimates,
+    bool CanCreateEstimate);

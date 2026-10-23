@@ -1031,6 +1031,164 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.ToTable("RepairCaseEvents", (string)null);
                 });
 
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairEstimate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovalReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ApproverName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ApproverParty")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("DecisionRecordedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Evidence")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("RepairCaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepairCaseId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RepairEstimates_RepairCaseId_Open")
+                        .HasFilter("\"Status\" IN ('Draft', 'Submitted')");
+
+                    b.HasIndex("RepairCaseId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("RepairEstimates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RepairEstimates_Approver", "\"Status\" <> 'Approved' OR \"ApproverParty\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_RepairEstimates_Decision", "(\"Status\" IN ('Draft', 'Submitted') AND \"DecidedAt\" IS NULL) OR (\"Status\" IN ('Approved', 'Rejected', 'ChangesRequested') AND \"DecidedAt\" IS NOT NULL AND \"SubmittedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_RepairEstimates_Version", "\"Version\" >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairEstimateLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("DamageDescription")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("EstimateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FindingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Payer")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PayerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("PayerNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PayerStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RepairMethod")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FindingId");
+
+                    b.HasIndex("EstimateId", "Position");
+
+                    b.ToTable("RepairEstimateLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RepairEstimateLines_Amount", "\"Amount\" >= 0");
+
+                            t.HasCheckConstraint("CK_RepairEstimateLines_Payer", "(\"Payer\" <> 'Other' OR \"PayerName\" IS NOT NULL) AND (\"PayerStatus\" <> 'Disputed' OR \"PayerNote\" IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairFinding", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1396,6 +1554,29 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairEstimate", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", null)
+                        .WithMany()
+                        .HasForeignKey("RepairCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairEstimateLine", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairEstimate", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("EstimateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairFinding", null)
+                        .WithMany()
+                        .HasForeignKey("FindingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairFinding", b =>
                 {
                     b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", null)
@@ -1425,6 +1606,11 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.DeliveryOrder", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairEstimate", b =>
                 {
                     b.Navigation("Lines");
                 });

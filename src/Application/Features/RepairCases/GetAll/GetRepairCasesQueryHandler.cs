@@ -62,6 +62,22 @@ public sealed class GetRepairCasesQueryHandler(IAppDbContext dbContext)
                 t.RepairCaseId == c.Id && t.Status != ExternalRepairStatus.Cancelled && t.Facility.ToLower().Contains(facility)));
         }
 
+        // Only the latest version counts: an earlier one was replaced (its items are copied forward)
+        if (query.Payer is { } payer)
+            cases = cases.Where(c => dbContext.RepairEstimates
+                .Where(e => e.RepairCaseId == c.Id)
+                .OrderByDescending(e => e.Version)
+                .Take(1)
+                .SelectMany(e => e.Lines)
+                .Any(l => l.Payer == payer));
+        if (query.PayerStatus is { } payerStatus)
+            cases = cases.Where(c => dbContext.RepairEstimates
+                .Where(e => e.RepairCaseId == c.Id)
+                .OrderByDescending(e => e.Version)
+                .Take(1)
+                .SelectMany(e => e.Lines)
+                .Any(l => l.PayerStatus == payerStatus));
+
         var totalCount = await cases.CountAsync(cancellationToken);
 
         // Newest report first; the id breaks ties so paging is stable
@@ -93,6 +109,12 @@ public sealed class GetRepairCasesQueryHandler(IAppDbContext dbContext)
                     .Where(t => t.RepairCaseId == c.Id &&
                                 (t.Status == ExternalRepairStatus.Requested || t.Status == ExternalRepairStatus.GatedOut))
                     .Select(t => new { t.Status, t.Facility })
+                    .FirstOrDefault(),
+                // Latest estimate version with its total
+                Estimate = dbContext.RepairEstimates
+                    .Where(e => e.RepairCaseId == c.Id)
+                    .OrderByDescending(e => e.Version)
+                    .Select(e => new { e.Version, e.Status, e.Currency, Total = e.Lines.Sum(l => l.Amount) })
                     .FirstOrDefault()
             })
             .ToListAsync(cancellationToken);
@@ -101,7 +123,8 @@ public sealed class GetRepairCasesQueryHandler(IAppDbContext dbContext)
                 x.Case.Id, x.Case.ContainerId, x.ContainerNumber, x.Size, x.Category, x.Case.Status,
                 x.OperatorCode, x.Case.OpenedAt, x.Case.ClosedAt, x.LatestFinding ?? "", x.FindingCount, x.PhotoCount,
                 x.Position?.Code, x.Position?.Bay, x.Position?.Row, x.Position?.Tier,
-                x.External?.Status, x.External?.Facility))
+                x.External?.Status, x.External?.Facility,
+                x.Estimate?.Version, x.Estimate?.Status, x.Estimate?.Total, x.Estimate?.Currency))
             .ToList();
 
         return Result.Success(new PagedResult<RepairCaseSummary>(rows, totalCount, query.Page, query.PageSize));

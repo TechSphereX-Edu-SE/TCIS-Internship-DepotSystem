@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Act;
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Estimates;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.External;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
@@ -61,12 +62,24 @@ public sealed class GetRepairCaseQueryHandler(IAppDbContext dbContext)
             .Where(a => !hasActiveTransfer || RepairCase.Transitions[a].To != RepairCaseStatus.Passed)
             .ToList();
 
+        // Estimate versions newest first; mapped in memory so totals follow the domain rule
+        var estimates = (await dbContext.RepairEstimates.AsNoTracking()
+                .Include(e => e.Lines)
+                .Where(e => e.RepairCaseId == repairCase.Id)
+                .OrderByDescending(e => e.Version)
+                .ToListAsync(cancellationToken))
+            .Select(e => e.ToResponse())
+            .ToList();
+        // Same conditions as RepairEstimate.Create, so the screen only offers what the API accepts
+        var canCreateEstimate = repairCase.IsOpen && repairCase.RepairNeeded == true &&
+                                !estimates.Any(e => e.Status is RepairEstimateStatus.Draft or RepairEstimateStatus.Submitted);
+
         var container = repairCase.Container;
         return Result.Success(new RepairCaseDetail(
             repairCase.Id, container.Id, container.ContainerNumber, container.IsoCode, container.Size, container.Category,
             container.Owner?.Code, repairCase.Status, repairCase.RepairNeeded, repairCase.OpenedAt, repairCase.ClosedAt,
             repairCase.VisitId, repairCase.Visit?.LineOperator.Code, repairCase.Visit?.ConditionIn,
             openVisit is not null, openVisit?.Block.Code, openVisit?.Bay, openVisit?.Row, openVisit?.Tier,
-            actions, findings, photos, history, canRequestExternal, transfers));
+            actions, findings, photos, history, canRequestExternal, transfers, estimates, canCreateEstimate));
     }
 }

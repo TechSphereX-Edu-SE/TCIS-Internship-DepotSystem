@@ -50,9 +50,12 @@ public sealed class RepairCase : AuditableEntity
             [RepairAction.AcceptRejected] = (RepairCaseStatus.AwaitingAcceptance, RepairCaseStatus.InRepair)
         };
 
-    // Actions the screen can offer for a status (same table as Apply uses)
+    /*
+        Actions the screen can offer for a status (same table as Apply uses).
+        ApproveRepair is left out: it happens by approving an estimate version (ApproveEstimate, feedback 4).
+    */
     public static IReadOnlyList<RepairAction> ActionsFrom(RepairCaseStatus status) =>
-        Transitions.Where(t => t.Value.From == status).Select(t => t.Key).ToList();
+        Transitions.Where(t => t.Value.From == status && t.Key != RepairAction.ApproveRepair).Select(t => t.Key).ToList();
 
     /*
         Opens a case with its first finding. The container is marked Damaged with the description,
@@ -101,6 +104,42 @@ public sealed class RepairCase : AuditableEntity
         if (!Transitions.TryGetValue(action, out var step))
             return Result.Failure<RepairCaseEvent>(Error.Validation("RepairCase.UnknownAction", $"Unknown action '{action}'."));
 
+        // Feedback 4: the repair is approved together with its cost, never without an approved estimate
+        if (action == RepairAction.ApproveRepair)
+            return Result.Failure<RepairCaseEvent>(Error.Conflict("RepairCase.EstimateRequired",
+                "The repair is approved by approving a submitted estimate version."));
+
+        return Move(action, step, note, container, at, actor);
+    }
+
+    /*
+        Feedback 4: approving the estimate is the approval of the repair. The first approved version moves
+        the case from AwaitingEstimateApproval to RepairApproved; a later version (extra damage found while
+        repairing) is recorded without changing the status.
+    */
+    public Result<RepairCaseEvent> ApproveEstimate(RepairEstimate estimate, DateTimeOffset at, string? actor)
+    {
+        if (estimate.RepairCaseId != Id)
+            throw new InvalidOperationException("The estimate does not belong to this repair case.");
+        if (!IsOpen)
+            return Result.Failure<RepairCaseEvent>(Closed());
+        if (estimate.Status != RepairEstimateStatus.Approved)
+            return Result.Failure<RepairCaseEvent>(Error.Conflict("RepairEstimate.NotApproved",
+                $"Version {estimate.Version} is {estimate.Status}, not approved."));
+
+        var note = $"v{estimate.Version} · {estimate.Total:0.##} {estimate.Currency} · {estimate.ApproverParty}";
+        if (Status != RepairCaseStatus.AwaitingEstimateApproval)
+            return Result.Success(Record(RepairEventKind.EstimateApproved, note, at, actor));
+
+        var from = Status;
+        Status = Transitions[RepairAction.ApproveRepair].To;
+        return Result.Success(RepairCaseEvent.Create(this, RepairEventKind.EstimateApproved, from, Status, note, at, actor));
+    }
+
+    private Result<RepairCaseEvent> Move(
+        RepairAction action, (RepairCaseStatus From, RepairCaseStatus To) step, string? note, Container container,
+        DateTimeOffset at, string? actor)
+    {
         if (Status != step.From)
             return Result.Failure<RepairCaseEvent>(Error.Conflict("RepairCase.InvalidTransition",
                 $"'{action}' is not allowed while the case is {Status}."));

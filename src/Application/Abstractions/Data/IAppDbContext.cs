@@ -21,5 +21,7 @@ public interface IAppDbContext
     DbSet<RepairPhoto> RepairPhotos { get; }
     DbSet<ExternalRepairTransfer> ExternalRepairTransfers { get; }
     DbSet<ContainerMove> ContainerMoves { get; }
+    DbSet<RepairEstimate> RepairEstimates { get; }
+    DbSet<RepairEstimateLine> RepairEstimateLines { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

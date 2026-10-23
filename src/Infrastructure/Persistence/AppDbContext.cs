@@ -27,6 +27,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<RepairPhoto> RepairPhotos => Set<RepairPhoto>();
     public DbSet<ExternalRepairTransfer> ExternalRepairTransfers => Set<ExternalRepairTransfer>();
     public DbSet<ContainerMove> ContainerMoves => Set<ContainerMove>();
+    public DbSet<RepairEstimate> RepairEstimates => Set<RepairEstimate>();
+    public DbSet<RepairEstimateLine> RepairEstimateLines => Set<RepairEstimateLine>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

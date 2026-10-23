@@ -262,7 +262,7 @@ public sealed class GateOutOrderAndRepairTests
 
         var tooEarly = await RequestExternalAsync(dbContext, caseId);
         await ActAsync(dbContext, caseId, RepairAction.InspectNeedsRepair);
-        await ActAsync(dbContext, caseId, RepairAction.ApproveRepair);
+        await RepairEstimateSteps.ApproveAsync(dbContext, caseId, new FixedTimeProvider(Now));
         var requested = await RequestExternalAsync(dbContext, caseId);
         var twice = await RequestExternalAsync(dbContext, caseId);
         var asEmpty = await GateOutAsync(dbContext, container, order);
@@ -308,7 +308,7 @@ public sealed class GateOutOrderAndRepairTests
         var first = await GateInAsync(dbContext, seed, container, bay: 1, condition: ContainerCondition.Damaged);
         var caseId = first.RepairCaseId!.Value;
         await ActAsync(dbContext, caseId, RepairAction.InspectNeedsRepair);
-        await ActAsync(dbContext, caseId, RepairAction.ApproveRepair);
+        await RepairEstimateSteps.ApproveAsync(dbContext, caseId, new FixedTimeProvider(Now));
         await ActAsync(dbContext, caseId, RepairAction.StartRepair);
         var requested = await RequestExternalAsync(dbContext, caseId);
         await ActAsync(dbContext, caseId, RepairAction.CompleteRepair);
@@ -338,7 +338,7 @@ public sealed class GateOutOrderAndRepairTests
         var container = await AddContainerAsync(dbContext, "MSCU1234566");
         var first = await GateInAsync(dbContext, seed, container, bay: 1, condition: ContainerCondition.Damaged);
         await ActAsync(dbContext, first.RepairCaseId!.Value, RepairAction.InspectNeedsRepair);
-        await ActAsync(dbContext, first.RepairCaseId!.Value, RepairAction.ApproveRepair);
+        await RepairEstimateSteps.ApproveAsync(dbContext, first.RepairCaseId!.Value, new FixedTimeProvider(Now));
         var requested = await RequestExternalAsync(dbContext, first.RepairCaseId!.Value);
         await GateOutForRepairAsync(dbContext, requested.Value);
 

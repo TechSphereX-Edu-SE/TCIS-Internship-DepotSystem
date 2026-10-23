@@ -2,6 +2,7 @@ using FluentValidation;
 using TechSpherex.CleanArchitecture.Api.Extensions;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Act;
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Estimates;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.External;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Get;
 using TechSpherex.CleanArchitecture.Application.Features.RepairCases.GetAll;
@@ -40,7 +41,7 @@ public static class RepairCaseEndpoints
 
         group.MapPost("/{id:guid}/actions", Act)
             .WithName("ApplyRepairAction")
-            .WithSummary("Move the case one step (inspect, approve, start, complete, accept or reject)");
+            .WithSummary("Move the case one step (inspect, start, complete, accept or reject); approval goes through an estimate");
 
         group.MapPost("/{id:guid}/photos", UploadPhoto)
             .DisableAntiforgery()
@@ -50,6 +51,31 @@ public static class RepairCaseEndpoints
         group.MapPost("/{id:guid}/external-repair", RequestExternal)
             .WithName("RequestExternalRepair")
             .WithSummary("Ask to send the container to an outside repair facility (confirmed at gate-out)");
+
+        group.MapPost("/{id:guid}/estimates", CreateEstimate)
+            .WithName("CreateRepairEstimate")
+            .WithSummary("Start a new estimate version (draft); a later version copies the items of the previous one");
+
+        // Feedback 4: repair costs, one version at a time (draft -> submitted -> approved / rejected / changes requested)
+        var estimates = app.MapGroup("/api/repair-estimates")
+            .WithTags("Repair cases")
+            .RequireAuthorization();
+
+        estimates.MapPut("/{id:guid}", UpdateEstimate)
+            .WithName("UpdateRepairEstimate")
+            .WithSummary("Save a draft: currency, note, evidence and the whole item table");
+
+        estimates.MapPost("/{id:guid}/submit", SubmitEstimate)
+            .WithName("SubmitRepairEstimate")
+            .WithSummary("Lock the draft and send it for approval");
+
+        estimates.MapPost("/{id:guid}/decision", DecideEstimate)
+            .WithName("DecideRepairEstimate")
+            .WithSummary("Record the approving party's answer; the first approval moves the case to RepairApproved");
+
+        estimates.MapPut("/{id:guid}/lines/{lineId:guid}/payer", SetLinePayer)
+            .WithName("SetRepairEstimateLinePayer")
+            .WithSummary("Set who pays one item and the allocation state (expected, agreed, disputed)");
 
         var external = app.MapGroup("/api/external-repairs")
             .WithTags("Repair cases")
@@ -82,11 +108,13 @@ public static class RepairCaseEndpoints
         DateOnly? reportedTo,
         bool? external,
         string? facility,
+        CostPayer? payer,
+        CostPayerStatus? payerStatus,
         IQueryHandler<GetRepairCasesQuery, Result<PagedResult<RepairCaseSummary>>> handler,
         CancellationToken cancellationToken)
     {
         var query = new GetRepairCasesQuery(page ?? 1, pageSize ?? 20, search, status, open, operatorId, containerId,
-            reportedFrom, reportedTo, external, facility);
+            reportedFrom, reportedTo, external, facility, payer, payerStatus);
         var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }
@@ -189,6 +217,81 @@ public static class RepairCaseEndpoints
         return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
     }
 
+    private static async Task<IResult> CreateEstimate(
+        Guid id,
+        CreateEstimateRequest request,
+        IValidator<CreateRepairEstimateCommand> validator,
+        ICommandHandler<CreateRepairEstimateCommand, Result<Guid>> handler,
+        CancellationToken cancellationToken)
+    {
+        var command = new CreateRepairEstimateCommand(id, request.Currency, request.Note, request.Evidence);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.Ok(new { id = result.Value }) : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> UpdateEstimate(
+        Guid id,
+        UpdateEstimateRequest request,
+        IValidator<UpdateRepairEstimateCommand> validator,
+        ICommandHandler<UpdateRepairEstimateCommand, Result> handler,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateRepairEstimateCommand(id, request.Currency, request.Note, request.Evidence, request.Lines ?? []);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> SubmitEstimate(
+        Guid id,
+        ICommandHandler<SubmitRepairEstimateCommand, Result> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(new SubmitRepairEstimateCommand(id), cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> DecideEstimate(
+        Guid id,
+        EstimateDecisionRequest request,
+        IValidator<DecideRepairEstimateCommand> validator,
+        ICommandHandler<DecideRepairEstimateCommand, Result> handler,
+        CancellationToken cancellationToken)
+    {
+        var command = new DecideRepairEstimateCommand(id, request.Decision, request.ApproverParty, request.ApproverName,
+            request.ApprovalReference, request.Note);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
+    }
+
+    private static async Task<IResult> SetLinePayer(
+        Guid id,
+        Guid lineId,
+        LinePayerRequest request,
+        IValidator<SetEstimateLinePayerCommand> validator,
+        ICommandHandler<SetEstimateLinePayerCommand, Result> handler,
+        CancellationToken cancellationToken)
+    {
+        var command = new SetEstimateLinePayerCommand(id, lineId, request.Payer, request.PayerName, request.Status, request.Note);
+        var validation = await validator.ValidateAsync(command, cancellationToken);
+        if (!validation.IsValid)
+            return Results.ValidationProblem(validation.ToDictionary());
+
+        var result = await handler.HandleAsync(command, cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToProblemDetails();
+    }
+
     private static async Task<IResult> GetPhoto(
         Guid id,
         IQueryHandler<GetRepairPhotoQuery, Result<RepairPhotoFile>> handler,
@@ -206,3 +309,12 @@ public sealed record RepairActionRequest(RepairAction Action, string? Note);
 public sealed record ExternalRepairRequest(string Facility, string Reason, string Reference);
 
 public sealed record CancelExternalRepairRequest(string Reason);
+
+public sealed record CreateEstimateRequest(string Currency, string? Note, string? Evidence);
+
+public sealed record UpdateEstimateRequest(string Currency, string? Note, string? Evidence, List<RepairEstimateLineInput>? Lines);
+
+public sealed record EstimateDecisionRequest(
+    RepairEstimateDecision Decision, string? ApproverParty, string? ApproverName, string? ApprovalReference, string? Note);
+
+public sealed record LinePayerRequest(CostPayer Payer, string? PayerName, CostPayerStatus Status, string? Note);

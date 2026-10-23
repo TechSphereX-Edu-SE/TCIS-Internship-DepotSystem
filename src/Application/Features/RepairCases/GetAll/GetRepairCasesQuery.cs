@@ -11,6 +11,8 @@ namespace TechSpherex.CleanArchitecture.Application.Features.RepairCases.GetAll;
     ContainerId: the cases of one container (e.g. from gate-out or the container catalog).
     More filters (feedback 8): External = sửa ngoài (true: sent or to be sent to a facility, false: repaired
     at the depot only), Facility = part of the facility name.
+    Payer / PayerStatus (feedback 4): cases whose latest estimate version has an item paid by that party,
+    or in that allocation state (e.g. Disputed = cases with a cost dispute).
     Filters run in SQL before paging, so the count matches the rows.
 */
 public sealed record GetRepairCasesQuery(
@@ -24,5 +26,7 @@ public sealed record GetRepairCasesQuery(
     DateOnly? ReportedFrom = null,
     DateOnly? ReportedTo = null,
     bool? External = null,
-    string? Facility = null)
+    string? Facility = null,
+    CostPayer? Payer = null,
+    CostPayerStatus? PayerStatus = null)
     : IQuery<Result<PagedResult<RepairCaseSummary>>>;

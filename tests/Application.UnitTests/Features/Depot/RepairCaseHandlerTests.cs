@@ -110,7 +110,7 @@ public sealed class RepairCaseHandlerTests
         var id = opened.Value!.CaseId;
 
         await ActAsync(dbContext, id, RepairAction.InspectNeedsRepair, "Thay máy nén");
-        await ActAsync(dbContext, id, RepairAction.ApproveRepair, "HMM duyệt qua email");
+        await RepairEstimateSteps.ApproveAsync(dbContext, id, Clock);
         await ActAsync(dbContext, id, RepairAction.StartRepair);
         await ActAsync(dbContext, id, RepairAction.CompleteRepair);
         // The repairer saying "done" is not the acceptance: still blocked, then sent back
@@ -126,7 +126,8 @@ public sealed class RepairCaseHandlerTests
         repairCase.RepairNeeded.Should().BeTrue();
         repairCase.ClosedAt.Should().Be(Now);
         seed.Reefer.Condition.Should().Be(ContainerCondition.Normal);
-        dbContext.RepairCaseEvents.Should().HaveCount(8); // opened + 7 actions
+        // opened + 6 actions + estimate created, submitted, approved
+        dbContext.RepairCaseEvents.Should().HaveCount(10);
         dbContext.RepairCaseEvents.Should().OnlyContain(e => e.By == "staff@depot.test");
     }
 

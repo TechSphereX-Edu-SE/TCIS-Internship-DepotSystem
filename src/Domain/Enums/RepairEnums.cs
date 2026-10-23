@@ -55,7 +55,14 @@ public enum RepairEventKind
     ExternalRequested = 9,
     ExternalCancelled = 10,
     SentForExternalRepair = 11,
-    ReturnedFromExternalRepair = 12
+    ReturnedFromExternalRepair = 12,
+    // Repair costs (feedback 4): estimate versions, decisions and payers; ApproveRepair stays the status step
+    EstimateCreated = 13,
+    EstimateSubmitted = 14,
+    EstimateApproved = 15,
+    EstimateRejected = 16,
+    EstimateChangesRequested = 17,
+    PayerChanged = 18
 }
 
 /*
@@ -69,4 +76,50 @@ public enum ExternalRepairStatus
     Cancelled = 1,
     GatedOut = 2,
     Returned = 3
+}
+
+/*
+    Repair estimate version (feedback 4: "lưu phiên bản dự toán"):
+    Draft (lines can change) -> Submitted (sent to the approving party, locked)
+      -> Approved | Rejected | ChangesRequested (decision recorded with who approved and the document).
+    Rejected / ChangesRequested keep the case waiting; a new version is created to revise it.
+*/
+public enum RepairEstimateStatus
+{
+    Draft = 0,
+    Submitted = 1,
+    Approved = 2,
+    Rejected = 3,
+    ChangesRequested = 4
+}
+
+// Decision on a submitted estimate
+public enum RepairEstimateDecision
+{
+    Approve = 0,
+    Reject = 1,
+    RequestChanges = 2
+}
+
+/*
+    Who bears the cost of one item (feedback 4). Never derived automatically (no "before handover the
+    line pays, after it the customer pays" rule): staff set it after checking existing damage, wear and tear,
+    who caused it and the agreements.
+*/
+public enum CostPayer
+{
+    Undetermined = 0,
+    LineOperator = 1,
+    Owner = 2,
+    Customer = 3,
+    Depot = 4,
+    Other = 5
+}
+
+// Expected = proposed, Agreed = allocation settled, Disputed = a party contests it (the note says why)
+public enum CostPayerStatus
+{
+    Expected = 0,
+    Agreed = 1,
+    Disputed = 2
 }
