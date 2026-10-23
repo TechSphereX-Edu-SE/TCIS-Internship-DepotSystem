@@ -129,6 +129,7 @@ try
     app.MapCustomerEndpoints();
     app.MapBlockEndpoints();
     app.MapContainerVisitEndpoints();
+    app.MapRepairCaseEndpoints();
     app.MapDeliveryOrderEndpoints();
     app.MapStatisticsEndpoints();
 

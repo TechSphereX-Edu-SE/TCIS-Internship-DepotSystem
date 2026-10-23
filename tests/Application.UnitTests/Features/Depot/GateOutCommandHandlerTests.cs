@@ -2,6 +2,7 @@ using FluentAssertions;
 using TechSpherex.CleanArchitecture.Application.Features.Containers.UpdateCondition;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateOut;
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Act;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
 using TechSpherex.CleanArchitecture.Domain.Enums;
@@ -154,7 +155,7 @@ public sealed class GateOutCommandHandlerTests
     }
 
     [Fact]
-    public async Task Should_Not_Release_Damaged_Container_Until_Repaired()
+    public async Task Should_Not_Release_Damaged_Container_Until_Its_Case_Passes()
     {
         await using var dbContext = TestDbContextFactory.Create();
         var seed = await SeedAsync(dbContext);
@@ -162,13 +163,18 @@ public sealed class GateOutCommandHandlerTests
         await GateInAsync(dbContext, seed, seed.Dry1, bay: 1, condition: ContainerCondition.Damaged);
 
         var damaged = await GateOutAsync(dbContext, seed.Dry1, order);
-        await new UpdateContainerConditionCommandHandler(dbContext).HandleAsync(
+        // Feedback 4: switching the condition back to Normal no longer opens release
+        var switchedBack = await new UpdateContainerConditionCommandHandler(dbContext, new FixedTimeProvider(Now)).HandleAsync(
             new UpdateContainerConditionCommand(seed.Dry1.Id, ContainerCondition.Normal, null),
             TestContext.Current.CancellationToken);
-        var repaired = await GateOutAsync(dbContext, seed.Dry1, order);
+        var repairCase = dbContext.RepairCases.Single();
+        await new ApplyRepairActionCommandHandler(dbContext, new FixedTimeProvider(Now), new FakeCurrentUser())
+            .HandleAsync(new ApplyRepairActionCommand(repairCase.Id, RepairAction.InspectPassed, null), TestContext.Current.CancellationToken);
+        var passed = await GateOutAsync(dbContext, seed.Dry1, order);
 
-        damaged.Error!.Code.Should().Be("ContainerVisit.ContainerDamaged");
-        repaired.IsSuccess.Should().BeTrue();
+        damaged.Error!.Code.Should().Be("ContainerVisit.RepairCaseOpen");
+        switchedBack.Error!.Code.Should().Be("Container.RepairCaseOpen");
+        passed.IsSuccess.Should().BeTrue();
     }
 
     [Fact]

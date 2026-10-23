@@ -4,12 +4,14 @@ using TechSpherex.CleanArchitecture.Application.Abstractions.Caching;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Identity;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Rules;
+using TechSpherex.CleanArchitecture.Application.Abstractions.Storage;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Tenancy;
 using TechSpherex.CleanArchitecture.Domain.Entities;
 using TechSpherex.CleanArchitecture.Infrastructure.Caching;
 using TechSpherex.CleanArchitecture.Infrastructure.Identity;
 using TechSpherex.CleanArchitecture.Infrastructure.Persistence;
 using TechSpherex.CleanArchitecture.Infrastructure.Rules;
+using TechSpherex.CleanArchitecture.Infrastructure.Storage;
 using TechSpherex.CleanArchitecture.Infrastructure.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -36,6 +38,9 @@ public static class DependencyInjection
     private static void AddPersistence(this IServiceCollection services)
     {
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
+        // Repair photos on the server disk (Q4); stateless, so one instance serves every request
+        services.AddSingleton<IRepairPhotoStorage, LocalRepairPhotoStorage>();
     }
 
     private static void AddAuth(this IServiceCollection services, IConfiguration configuration)

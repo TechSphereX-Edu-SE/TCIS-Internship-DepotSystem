@@ -23,6 +23,44 @@ public static class AppDbSeeder
         await SeedAdminUserAsync(userManager, logger);
         await SeedSampleTodosAsync(context, logger);
         await SeedDepotMasterDataAsync(context, logger);
+        await OpenCasesForDamagedContainersAsync(context, logger);
+    }
+
+    /*
+        Feedback 4: a damaged container is released only after its repair case passes, and the old
+        "set back to Normal" switch is gone. Containers marked Damaged before repair cases existed get
+        a case "Chờ giám định" with their old note, so they can be inspected and released again.
+        Runs at every start but only touches damaged containers without an open case.
+    */
+    private static async Task OpenCasesForDamagedContainersAsync(AppDbContext context, ILogger logger)
+    {
+        var damaged = await context.Containers
+            .Where(c => c.Condition == ContainerCondition.Damaged &&
+                        !context.RepairCases.Any(r => r.ContainerId == c.Id && r.Status != RepairCaseStatus.Passed))
+            .ToListAsync();
+        if (damaged.Count == 0)
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        foreach (var container in damaged)
+        {
+            var visitId = await context.ContainerVisits
+                .Where(v => v.ContainerId == container.Id && v.GateOutAt == null)
+                .Select(v => (Guid?)v.Id)
+                .FirstOrDefaultAsync();
+            // The finding column holds 500 characters; the old note can already be 500 long
+            var description = $"Ghi nhận trước khi có hồ sơ giám định: {container.ConditionNote ?? "không có mô tả"}";
+            if (description.Length > 500)
+                description = description[..500];
+            var (repairCase, finding, opened) = RepairCase.Open(
+                container, visitId, description, RepairFindingSource.Catalog, now, "system");
+            context.RepairCases.Add(repairCase);
+            context.RepairFindings.Add(finding);
+            context.RepairCaseEvents.Add(opened);
+        }
+
+        await context.SaveChangesAsync();
+        logger.LogInformation("Opened {Count} repair cases for containers damaged before repair cases existed", damaged.Count);
     }
 
     // Depot sample data: partners, customers, yard blocks, containers, operating assignments.

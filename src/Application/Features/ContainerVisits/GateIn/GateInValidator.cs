@@ -1,5 +1,6 @@
 using FluentValidation;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
+using TechSpherex.CleanArchitecture.Domain.Enums;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 
 /*
@@ -20,6 +21,12 @@ public sealed class GateInValidator : AbstractValidator<GateInCommand>
 
         // Column lengths follow ContainerVisitConfiguration
         RuleFor(x => x.ConditionNote).MaximumLength(500);
+
+        // Feedback 3: a damage seen at the gate is described; it becomes the first finding of a repair case
+        RuleFor(x => x.ConditionNote)
+            .NotEmpty()
+            .When(x => x.Condition == ContainerCondition.Damaged)
+            .WithMessage("Describe the damage seen at the gate.");
 
         RuleFor(x => x.VehicleNo).NotEmpty().MaximumLength(20);
     }

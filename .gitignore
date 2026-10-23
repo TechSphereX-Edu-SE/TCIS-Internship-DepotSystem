@@ -67,3 +67,5 @@ TestResults/
 coverage/
 *.trx
 *.txt
+# Repair photos stored by the Api (Q4); kept on disk between runs, not in git
+src/Api/App_Data/

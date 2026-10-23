@@ -722,6 +722,195 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ContainerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool?>("RepairNeeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("VisitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContainerId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RepairCases_ContainerId_Open")
+                        .HasFilter("\"Status\" <> 'Passed'");
+
+                    b.HasIndex("VisitId");
+
+                    b.HasIndex("Status", "OpenedAt");
+
+                    b.ToTable("RepairCases", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RepairCases_Closed", "(\"Status\" = 'Passed') = (\"ClosedAt\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairCaseEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("By")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("RepairCaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepairCaseId", "At");
+
+                    b.ToTable("RepairCaseEvents", (string)null);
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairFinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("RepairCaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReportedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("VisitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VisitId");
+
+                    b.HasIndex("RepairCaseId", "ReportedAt");
+
+                    b.ToTable("RepairFindings", (string)null);
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid?>("FindingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("RepairCaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UploadedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FindingId");
+
+                    b.HasIndex("RepairCaseId");
+
+                    b.HasIndex("StoredFileName")
+                        .IsUnique();
+
+                    b.ToTable("RepairPhotos", (string)null);
+                });
+
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.TodoItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -914,6 +1103,61 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Navigation("Container");
 
                     b.Navigation("Operator");
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Container", "Container")
+                        .WithMany()
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", "Visit")
+                        .WithMany()
+                        .HasForeignKey("VisitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Container");
+
+                    b.Navigation("Visit");
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairCaseEvent", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", null)
+                        .WithMany()
+                        .HasForeignKey("RepairCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairFinding", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", null)
+                        .WithMany()
+                        .HasForeignKey("RepairCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.ContainerVisit", null)
+                        .WithMany()
+                        .HasForeignKey("VisitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.RepairPhoto", b =>
+                {
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairFinding", null)
+                        .WithMany()
+                        .HasForeignKey("FindingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.RepairCase", null)
+                        .WithMany()
+                        .HasForeignKey("RepairCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TechSpherex.CleanArchitecture.Domain.Entities.DeliveryOrder", b =>

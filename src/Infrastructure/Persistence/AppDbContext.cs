@@ -21,6 +21,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<ContainerVisit> ContainerVisits => Set<ContainerVisit>();
     public DbSet<DeliveryOrder> DeliveryOrders => Set<DeliveryOrder>();
     public DbSet<OperatingAssignment> OperatingAssignments => Set<OperatingAssignment>();
+    public DbSet<RepairCase> RepairCases => Set<RepairCase>();
+    public DbSet<RepairFinding> RepairFindings => Set<RepairFinding>();
+    public DbSet<RepairCaseEvent> RepairCaseEvents => Set<RepairCaseEvent>();
+    public DbSet<RepairPhoto> RepairPhotos => Set<RepairPhoto>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

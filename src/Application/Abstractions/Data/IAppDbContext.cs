@@ -15,5 +15,9 @@ public interface IAppDbContext
     DbSet<ContainerVisit> ContainerVisits { get; }
     DbSet<DeliveryOrder> DeliveryOrders { get; }
     DbSet<OperatingAssignment> OperatingAssignments { get; }
+    DbSet<RepairCase> RepairCases { get; }
+    DbSet<RepairFinding> RepairFindings { get; }
+    DbSet<RepairCaseEvent> RepairCaseEvents { get; }
+    DbSet<RepairPhoto> RepairPhotos { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

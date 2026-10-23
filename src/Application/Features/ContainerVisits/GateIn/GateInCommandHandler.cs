@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Data;
+using TechSpherex.CleanArchitecture.Application.Abstractions.Identity;
 using TechSpherex.CleanArchitecture.Application.Abstractions.Messaging;
 using TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Shared;
 using TechSpherex.CleanArchitecture.Application.Features.OperatingAssignments.Shared;
+using TechSpherex.CleanArchitecture.Application.Features.RepairCases.Shared;
 using TechSpherex.CleanArchitecture.Domain.Common;
 using TechSpherex.CleanArchitecture.Domain.Entities;
+using TechSpherex.CleanArchitecture.Domain.Enums;
 using TechSpherex.CleanArchitecture.Domain.Services;
 namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.GateIn;
 
@@ -22,8 +25,12 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Gat
          Block.ValidateSlot), so the rules live in one place.
       4. The position is free and supported (409) - YardPlacement / YardSlotRules: no overlap with
          20ft/40ft footprints in the same row and tier, and something underneath above tier 1.
+    Feedback 3/4: a container that comes in Damaged gets a repair case "Chờ giám định" (or a new finding
+    in its open case) in the same transaction. That blocks release until the case passes; it is not
+    a decision that the container must be repaired, and the container stays where it was placed.
+    currentUser is optional so tests can build the handler with the database and the clock only.
 */
-public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider timeProvider)
+public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider timeProvider, ICurrentUser? currentUser = null)
     : ICommandHandler<GateInCommand, Result<GateInResponse>>
 {
     public async Task<Result<GateInResponse>> HandleAsync(
@@ -85,13 +92,21 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
         var visit = gateIn.Value!;
         dbContext.ContainerVisits.Add(visit);
 
+        Guid? repairCaseId = null;
+        if (command.Condition == ContainerCondition.Damaged)
+        {
+            var recorded = await dbContext.RecordDamageAsync(
+                container, visit.Id, command.ConditionNote!, RepairFindingSource.GateIn, now, currentUser?.Email, cancellationToken);
+            repairCaseId = recorded.CaseId;
+        }
+
         // The partial unique indexes (one open visit per container, one container per slot)
         // still guard the database if two gate-ins race past the checks above.
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new GateInResponse(
             visit.Id, container.ContainerNumber, block.Code,
-            visit.Bay, visit.Row, visit.Tier, visit.GateInAt));
+            visit.Bay, visit.Row, visit.Tier, visit.GateInAt, repairCaseId));
     }
 
     // Open visit = not gated out yet
