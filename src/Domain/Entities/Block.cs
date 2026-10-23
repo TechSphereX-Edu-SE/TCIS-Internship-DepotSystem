@@ -22,6 +22,24 @@ public sealed class Block : AuditableEntity
     */
     public List<ContainerCategory> AllowedCategories { get; private set; } = [];
 
+    /*
+        Soft delete (feedback 9): a block with history is archived instead of deleted, so old visits
+        still show its code. An archived block takes no new container (gate-in / move).
+    */
+    public DateTimeOffset? ArchivedAt { get; private set; }
+    public bool IsArchived => ArchivedAt is not null;
+
+    /*
+        Bumped every time a container enters or leaves the block. Saving it updates the block row,
+        so its row version (xmin) changes: two operations on the same block at the same time
+        (two gate-ins in neighbouring 40ft bays, a gate-in during a resize or a delete) cannot both
+        commit - the second one gets a concurrency conflict and is asked to retry.
+    */
+    public int PlacementVersion { get; private set; }
+
+    // PostgreSQL xmin row version (concurrency token), mapped in BlockConfiguration
+    public uint RowVersion { get; private set; }
+
     // Spec section 1: a row can stack "from 2 to many tiers"
     public const int MinTiers = 2;
 
@@ -55,9 +73,39 @@ public sealed class Block : AuditableEntity
             AllowedCategories = Distinct(allowedCategories ?? AllCategories)
         };
 
+    /*
+        Code and description can change (feedback 9); the Id stays the same, so every visit keeps
+        pointing to this block. The code is unique - checked by the handler (needs a query).
+    */
+    public Result UpdateDetails(string code, string? description)
+    {
+        if (IsArchived)
+            return Result.Failure(ArchivedError());
+
+        Code = code.Trim().ToUpperInvariant();
+        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        return Result.Success();
+    }
+
+    // Archives the block; the handler checks first that no container is in it
+    public Result Archive(DateTimeOffset at)
+    {
+        if (IsArchived)
+            return Result.Failure(ArchivedError());
+
+        ArchivedAt = at;
+        return Result.Success();
+    }
+
+    // Called when a container enters or leaves this block (see PlacementVersion)
+    public void RecordContainerChange() => PlacementVersion++;
+
     // Replaces the allowed types; a block must accept at least one type or nothing could ever enter it
     public Result SetAllowedCategories(IEnumerable<ContainerCategory> categories)
     {
+        if (IsArchived)
+            return Result.Failure(ArchivedError());
+
         var list = Distinct(categories);
         if (list.Count == 0)
             return Result.Failure(Error.Validation("Block.NoCategories", "A block must accept at least one container type."));
@@ -66,12 +114,20 @@ public sealed class Block : AuditableEntity
         return Result.Success();
     }
 
-    // Gate-in and move refuse a container whose type this block does not take (409)
-    public Result CheckAccepts(ContainerCategory category) =>
-        AllowedCategories.Contains(category)
+    // Gate-in and move refuse an archived block, or a container whose type this block does not take (409)
+    public Result CheckAccepts(ContainerCategory category)
+    {
+        if (IsArchived)
+            return Result.Failure(ArchivedError());
+
+        return AllowedCategories.Contains(category)
             ? Result.Success()
             : Result.Failure(Error.Conflict("Block.CategoryNotAllowed",
                 $"Block {Code} does not take {category} containers (allowed: {string.Join(", ", AllowedCategories)})."));
+    }
+
+    private Error ArchivedError() =>
+        Error.Conflict("Block.Archived", $"Block {Code} is archived; it is kept only for history.");
 
     // Same order as the enum, no duplicates, so the stored list is stable and easy to compare
     private static List<ContainerCategory> Distinct(IEnumerable<ContainerCategory> categories) =>
@@ -83,6 +139,9 @@ public sealed class Block : AuditableEntity
     */
     public Result Resize(int maxBays, int maxRows, int maxTiers)
     {
+        if (IsArchived)
+            return Result.Failure(ArchivedError());
+
         if (IsVirtual)
             return Result.Failure(Error.Validation("Block.VirtualCannotResize", "A virtual block has no bay/row/tier."));
 

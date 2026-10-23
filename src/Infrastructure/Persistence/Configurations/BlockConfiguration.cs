@@ -29,5 +29,11 @@ public sealed class BlockConfiguration : IEntityTypeConfiguration<Block>
             .IsRequired()
             .ElementType()
             .HasConversion<string>();
+
+        builder.Ignore(b => b.IsArchived);
+
+        // PostgreSQL system column xmin as row version: an UPDATE or DELETE of a block that changed
+        // since it was read fails with DbUpdateConcurrencyException (mapped to 409 by the API)
+        builder.Property(b => b.RowVersion).IsRowVersion();
     }
 }

@@ -11,15 +11,20 @@ public sealed class GetAllBlocksQueryHandler(IAppDbContext dbContext)
     public async Task<Result<PagedResult<BlockResponse>>> HandleAsync(
         GetAllBlocksQuery query, CancellationToken cancellationToken = default)
     {
-        var totalCount = await dbContext.Blocks.CountAsync(cancellationToken);
+        var blocks = dbContext.Blocks.AsNoTracking();
+        if (!query.IncludeArchived)
+            blocks = blocks.Where(b => b.ArchivedAt == null);
 
-        var items = await dbContext.Blocks
-            .AsNoTracking()
-            .OrderBy(b => b.Code)
+        var totalCount = await blocks.CountAsync(cancellationToken);
+
+        // Active blocks first, then archived ones; by code inside each group
+        var items = await blocks
+            .OrderBy(b => b.ArchivedAt != null)
+            .ThenBy(b => b.Code)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(b => new BlockResponse(
-                b.Id, b.Code, b.Description, b.IsVirtual, b.MaxBays, b.MaxRows, b.MaxTiers, b.AllowedCategories,
+                b.Id, b.Code, b.Description, b.IsVirtual, b.MaxBays, b.MaxRows, b.MaxTiers, b.AllowedCategories, b.ArchivedAt,
                 dbContext.ContainerVisits.Count(v => v.BlockId == b.Id && v.GateOutAt == null),
                 b.CreatedAt))
             .ToListAsync(cancellationToken);

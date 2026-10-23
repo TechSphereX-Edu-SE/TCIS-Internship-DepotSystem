@@ -76,6 +76,7 @@ public sealed class ContainerVisit : AuditableEntity
             return Result.Failure<ContainerVisit>(slot.Error!);
 
         container.UpdateCondition(condition, conditionNote);
+        block.RecordContainerChange();
 
         var visit = new ContainerVisit
         {
@@ -108,6 +109,12 @@ public sealed class ContainerVisit : AuditableEntity
         if (slot.IsFailure)
             return slot;
 
+        // Both blocks change: the old one loses the container, the new one gets it (see Block.PlacementVersion).
+        // The old block is the loaded navigation (null when the caller did not load it, e.g. in unit tests).
+        Block?.RecordContainerChange();
+        block.RecordContainerChange();
+        // Navigation and key together, so a loaded Block never points to the old block
+        Block = block;
         BlockId = block.Id;
         Bay = bay;
         Row = row;
@@ -131,6 +138,8 @@ public sealed class ContainerVisit : AuditableEntity
         if (release.IsFailure)
             return release;
 
+        // The container leaves its block (see Block.PlacementVersion); null when the block was not loaded
+        Block?.RecordContainerChange();
         DeliveryOrderId = order.Id;
         GateOutAt = gateOutAt;
         GateOutVehicleNo = vehicleNo.Trim().ToUpperInvariant();

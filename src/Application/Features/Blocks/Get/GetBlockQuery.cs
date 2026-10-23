@@ -14,5 +14,7 @@ public sealed record BlockResponse(
     int? MaxRows,
     int? MaxTiers,
     IReadOnlyList<ContainerCategory> AllowedCategories,
+    // Set when the block was archived (soft delete): kept for history, closed to new containers
+    DateTimeOffset? ArchivedAt,
     int ContainersInYard,
     DateTimeOffset CreatedAt);

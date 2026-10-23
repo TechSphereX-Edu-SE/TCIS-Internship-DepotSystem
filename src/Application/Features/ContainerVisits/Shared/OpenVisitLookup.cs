@@ -15,6 +15,8 @@ public static class OpenVisitLookup
         dbContext.ContainerVisits
             .Include(v => v.Container)
             .Include(v => v.LineOperator)
+            // Loaded so a move or gate-out can mark the block it leaves (Block.RecordContainerChange)
+            .Include(v => v.Block)
             .FirstOrDefaultAsync(v => v.ContainerId == containerId && v.GateOutAt == null, cancellationToken);
 
     // Tells apart "no such container" and "container exists but is not in the yard"

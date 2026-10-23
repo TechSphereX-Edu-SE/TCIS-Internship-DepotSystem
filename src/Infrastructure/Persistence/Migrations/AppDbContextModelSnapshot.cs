@@ -245,6 +245,9 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -277,6 +280,15 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
 
                     b.Property<int?>("MaxTiers")
                         .HasColumnType("integer");
+
+                    b.Property<int>("PlacementVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
