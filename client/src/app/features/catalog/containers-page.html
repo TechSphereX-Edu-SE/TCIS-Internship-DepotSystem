@@ -68,6 +68,7 @@
                 <div class="row-actions">
                   <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Sửa ' + item.containerNumber" (click)="edit(item)">Sửa</button>
                   <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Quan hệ khai thác ' + item.containerNumber" (click)="openRelations(item)">Khai thác</button>
+                  <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Báo hư ' + item.containerNumber" (click)="reportDamage(item)">Báo hư</button>
                   <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Xoá ' + item.containerNumber" (click)="remove(item)">Xoá</button>
                 </div>
               </td>

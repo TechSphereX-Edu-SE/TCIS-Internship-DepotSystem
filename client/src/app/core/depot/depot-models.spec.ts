@@ -12,7 +12,11 @@ import {
   formatDateTime,
   formatPosition,
   orderStatus,
+  PHOTO_MAX_BYTES,
+  REPAIR_STATUSES,
+  REPAIR_STATUS_LABEL,
   partnerRolesText,
+  photoFileError,
   releasedSummary,
   vietnamToday,
 } from './depot-models';
@@ -137,5 +141,25 @@ describe('partners and operating assignments', () => {
     expect(assignmentCovers({ ...period, validTo: null }, '2027-05-01')).toBe(true);
     expect(assignmentCovers({ ...period, status: 'Pending' }, '2026-10-15')).toBe(false);
     expect(assignmentCovers({ ...period, status: 'Cancelled' }, '2026-10-15')).toBe(false);
+  });
+
+  // Q4: the same limits as the API (RepairPhotoRules), checked before anything is uploaded
+  it('accepts only JPG / PNG photos of at most 5 MB', () => {
+    expect(photoFileError({ name: 'a.jpg', type: 'image/jpeg', size: 1000 })).toBeNull();
+    expect(photoFileError({ name: 'a.png', type: 'image/png', size: PHOTO_MAX_BYTES })).toBeNull();
+    expect(photoFileError({ name: 'a.pdf', type: 'application/pdf', size: 1000 })).toContain('JPG hoặc PNG');
+    expect(photoFileError({ name: 'big.png', type: 'image/png', size: PHOTO_MAX_BYTES + 1 })).toContain('5 MB');
+    expect(photoFileError({ name: 'empty.png', type: 'image/png', size: 0 })).toContain('rỗng');
+  });
+
+  it('labels every repair status, ending with Đạt', () => {
+    expect(REPAIR_STATUSES.map((s) => REPAIR_STATUS_LABEL[s])).toEqual([
+      'Chờ giám định',
+      'Chờ duyệt phương án',
+      'Đã duyệt sửa',
+      'Đang sửa',
+      'Chờ nghiệm thu',
+      'Đạt',
+    ]);
   });
 });

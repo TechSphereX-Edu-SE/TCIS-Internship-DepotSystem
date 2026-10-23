@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Observable, map, startWith } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { checkContainerNumber, containerNumberError, isoCodeError, suggestIsoCode } from '../../core/depot/container-number';
@@ -22,6 +23,7 @@ import {
   vietnamToday,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
+import { RepairApi } from '../../core/depot/repair-api';
 import { Pager } from '../../shared/pager/pager';
 import { SearchPageLoader, SearchSelect } from '../../shared/search-select/search-select';
 import { ToastService } from '../../shared/toast/toast-service';
@@ -57,7 +59,8 @@ const weightValidators = [Validators.required, Validators.min(1), Validators.pat
   so it can only be typed when creating; editing changes the other fields (PUT keeps the number).
   The number and the ISO code are checked while typing with the same rules as the API validators,
   so the clerk sees the mistake in Vietnamese before saving.
-  The condition is changed on the gate-out screen (repair flow), not here.
+  The condition is not edited here. Feedback 4: "Báo hư" records a damage found on a container
+  (source Catalog); it opens a repair case or joins the open one, and the repair page takes over.
 
   Feedback 2 (23/10/2026):
     - the owner is picked from the partner catalog (owner role), never typed; containers recorded
@@ -73,6 +76,8 @@ const weightValidators = [Validators.required, Validators.min(1), Validators.pat
 })
 export class ContainersPage {
   private readonly api = inject(MasterDataApi);
+  private readonly repairs = inject(RepairApi);
+  private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
 
   protected readonly sizes: ContainerSize[] = ['Ft20', 'Ft40'];
@@ -242,6 +247,27 @@ export class ContainersPage {
         this.load(this.page());
       },
       error: (err: unknown) => this.toast.error(`Không xoá được ${item.containerNumber}: ${toApiError(err).message}`),
+    });
+  }
+
+  // A short description is enough here; photos and the next steps are added on the repair page
+  protected reportDamage(item: Container): void {
+    const description = prompt(`Mô tả hư hỏng của ${item.containerNumber} (móp, méo, cong, thủng…):`)?.trim();
+    if (!description) return;
+    if (description.length > 500) {
+      this.toast.error('Mô tả hư hỏng tối đa 500 ký tự.');
+      return;
+    }
+    this.repairs.report({ containerId: item.id, description, source: 'Catalog' }).subscribe({
+      next: (recorded) => {
+        this.toast.success(
+          recorded.created
+            ? `Đã mở hồ sơ giám định cho ${item.containerNumber}`
+            : `Đã thêm hư hỏng vào hồ sơ đang mở của ${item.containerNumber}`,
+        );
+        void this.router.navigate(['/repairs'], { queryParams: { caseId: recorded.caseId } });
+      },
+      error: (err: unknown) => this.toast.error(`Không ghi nhận được: ${toApiError(err).message}`),
     });
   }
 

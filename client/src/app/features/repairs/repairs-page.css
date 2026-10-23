@@ -1,0 +1,194 @@
+/* Filters on one line on wide screens, wrapping below */
+.filters-card {
+  margin-bottom: 24px;
+}
+
+  .filters-card .field {
+    min-width: 180px;
+  }
+
+.filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Fits the list column at 1440px; scrolls inside its box on narrower screens */
+.cases {
+  min-width: 620px;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+/* The container number is the keyboard way to open a case (the row click is for the mouse) */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Long damage descriptions: two lines in the list, the whole text in the detail */
+.finding-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.detail h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Label / value pairs of the case */
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+
+  .facts dt {
+    color: var(--muted);
+  }
+
+  .facts dd {
+    margin: 0;
+  }
+
+.steps,
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.label-note {
+  font-weight: 400;
+}
+
+.findings,
+.history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+  .findings li,
+  .history li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+.history li {
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+
+.history-what {
+  font-weight: 500;
+}
+
+.history-note {
+  font-style: italic;
+}
+
+/* Text field + button on one line */
+.inline-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+  .inline-form .field {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+/* Thumbnails, about three per row in the detail column */
+.photos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+  .photos li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .photos img,
+  .photo-loading {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--page);
+  }
+
+.photo-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+  .photo-upload .field {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+/* The real file input is hidden inside its label, which looks like a button */
+.file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+  .file-button input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .file-button.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  /* Keyboard focus lands on the hidden input: show it on the visible button */
+  .file-button:focus-within {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }

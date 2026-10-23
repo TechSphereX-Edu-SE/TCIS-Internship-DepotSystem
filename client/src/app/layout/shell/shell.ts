@@ -39,6 +39,7 @@ export class Shell {
       title: 'Nghiệp vụ',
       items: [
         { label: 'Nhập bãi', path: '/gate-in' },
+        { label: 'Giám định & sửa chữa', path: '/repairs' },
         { label: 'Vị trí & đảo chuyển', path: '/yard' },
         { label: 'Xuất bãi', path: '/gate-out' },
         { label: 'Lệnh giao', path: '/delivery-orders' },

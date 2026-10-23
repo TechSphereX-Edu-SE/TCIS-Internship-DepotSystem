@@ -11,11 +11,12 @@ import {
   CATEGORY_LABEL,
   CONDITION_LABEL,
   Container,
-  ContainerCondition,
   ContainerPosition,
   DailyGateOut,
   DeliveryOrder,
   SIZE_LABEL,
+  REPAIR_STATUS_LABEL,
+  RepairCaseSummary,
   YardContainer,
   formatDate,
   formatDateTime,
@@ -23,6 +24,7 @@ import {
   orderStatus,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
+import { RepairApi } from '../../core/depot/repair-api';
 import { YardApi } from '../../core/depot/yard-api';
 import { findContainerAbove, toPlaced } from '../../core/depot/yard-rules';
 import { ToastService } from '../../shared/toast/toast-service';
@@ -50,8 +52,10 @@ const ORDER_LOOKUP_SIZE = 100;
 /*
   Spec section 3: gate-out releases a container under a delivery order of its line operator.
   Mockup 04: the form, a panel with every rule the API checks (GateOutCommandHandler order),
-  the container condition (a damaged container must be repaired and set back to Normal first),
-  and today's gate-outs.
+  the repair state and today's gate-outs.
+  Feedback 4: a container with an open repair case (not Đạt yet) cannot leave. The old
+  "set back to Normal" switch is gone: the case is finished on the repair page (link below), and a
+  damage found while checking before release is reported here and opens / joins that case.
   The rules are shown before submitting so the clerk knows why a container cannot leave;
   the API still checks all of them.
 */
@@ -65,12 +69,14 @@ export class GateOutPage {
   private readonly masterData = inject(MasterDataApi);
   private readonly yard = inject(YardApi);
   private readonly orderApi = inject(DeliveryOrderApi);
+  private readonly repairs = inject(RepairApi);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder).nonNullable;
 
   protected readonly sizeLabel = SIZE_LABEL;
   protected readonly categoryLabel = CATEGORY_LABEL;
   protected readonly conditionLabel = CONDITION_LABEL;
+  protected readonly repairStatusLabel = REPAIR_STATUS_LABEL;
   protected readonly formatDate = formatDate;
 
   // Same fields as GateOutCommand (containerId comes from the container found)
@@ -80,10 +86,9 @@ export class GateOutPage {
     vehicleNo: ['', [Validators.required, Validators.maxLength(20)]],
   });
 
-  // Same fields as UpdateContainerConditionCommand (the id is the container found)
-  protected readonly conditionForm = this.fb.group({
-    condition: ['Normal' as ContainerCondition],
-    conditionNote: ['', Validators.maxLength(500)],
+  // Damage found while checking before release (ReportDamageCommand, source Yard)
+  protected readonly damageForm = this.fb.group({
+    description: ['', [Validators.required, Validators.maxLength(500)]],
   });
 
   protected readonly lookup = signal<Lookup>({ kind: 'idle' });
@@ -94,8 +99,10 @@ export class GateOutPage {
   protected readonly submitting = signal(false);
   protected readonly submitted = signal(false);
   protected readonly apiError = signal<ApiError | null>(null);
-  protected readonly savingCondition = signal(false);
-  protected readonly conditionError = signal<ApiError | null>(null);
+  // Open repair case of the container found (null = none); undefined while it is being checked
+  protected readonly openCase = signal<RepairCaseSummary | null | undefined>(undefined);
+  protected readonly reporting = signal(false);
+  protected readonly reportError = signal<ApiError | null>(null);
 
   // Selected order id as a signal, so the checks follow the dropdown
   private readonly orderId = toSignal(this.form.controls.deliveryOrderId.valueChanges.pipe(startWith('')), {
@@ -172,14 +179,7 @@ export class GateOutPage {
             : `Tier ${position.tier + 1} phía trên trống`,
         state: above ? 'fail' : 'ok',
       },
-      {
-        title: 'Tình trạng bình thường',
-        detail:
-          container.condition === 'Damaged'
-            ? `Đang hư hỏng${container.conditionNote ? ': ' + container.conditionNote : ''}. Sửa xong, cập nhật tình trạng bên dưới.`
-            : 'Container hư hỏng phải sửa xong mới được giao',
-        state: container.condition === 'Damaged' ? 'fail' : 'ok',
-      },
+      this.repairCheck(container),
       {
         title: 'Lệnh giao đúng hãng',
         detail: order
@@ -222,6 +222,18 @@ export class GateOutPage {
         takeUntilDestroyed(),
       )
       .subscribe((state) => this.applyLookup(state));
+
+    // Open repair case of the container (same rule as GateOutCommandHandler: 409 RepairCaseOpen)
+    toObservable(this.ready)
+      .pipe(
+        switchMap((state) => {
+          if (!state) return of(null);
+          this.openCase.set(undefined);
+          return this.findOpenCase(state.container.id);
+        }),
+        takeUntilDestroyed(),
+      )
+      .subscribe((repairCase) => this.openCase.set(repairCase));
 
     // Row of the container, to know whether another container rests on it
     toObservable(this.ready)
@@ -266,28 +278,32 @@ export class GateOutPage {
       });
   }
 
-  // Records the condition, e.g. back to Normal after repair; the gate-out checks update right away
-  protected saveCondition(): void {
+  /*
+    A damage seen while checking the container before release: it opens a repair case (or joins the
+    open one), which blocks this gate-out until the case passes on the repair page.
+  */
+  protected reportDamage(): void {
     const state = this.ready();
-    if (!state || this.conditionForm.invalid) return;
+    this.damageForm.markAllAsTouched();
+    if (!state || this.damageForm.invalid || this.reporting()) return;
 
-    const { condition, conditionNote } = this.conditionForm.getRawValue();
-    // The API keeps a note only for a damaged container (Container.UpdateCondition)
-    const note = condition === 'Damaged' ? conditionNote.trim() || null : null;
-
-    this.savingCondition.set(true);
-    this.conditionError.set(null);
-    this.masterData.updateCondition(state.container.id, { condition, conditionNote: note }).subscribe({
-      next: () => {
-        this.lookup.set({ ...state, container: { ...state.container, condition, conditionNote: note } });
-        this.toast.success(`Đã cập nhật ${state.container.containerNumber}: ${CONDITION_LABEL[condition]}`);
-        this.savingCondition.set(false);
-      },
-      error: (err: unknown) => {
-        this.conditionError.set(toApiError(err));
-        this.savingCondition.set(false);
-      },
-    });
+    this.reporting.set(true);
+    this.reportError.set(null);
+    this.repairs
+      .report({ containerId: state.container.id, description: this.damageForm.controls.description.value.trim(), source: 'Yard' })
+      .subscribe({
+        next: () => {
+          this.toast.success(`Đã ghi nhận hư hỏng ${state.container.containerNumber} vào hồ sơ giám định`);
+          this.damageForm.reset();
+          this.reporting.set(false);
+          // The container is Damaged now; a new ready state also reloads its open case for the checks
+          this.lookup.set({ ...state, container: { ...state.container, condition: 'Damaged' } });
+        },
+        error: (err: unknown) => {
+          this.reportError.set(toApiError(err));
+          this.reporting.set(false);
+        },
+      });
   }
 
   // "Làm lại": clear everything for the next truck
@@ -295,7 +311,8 @@ export class GateOutPage {
     this.form.reset();
     this.submitted.set(false);
     this.apiError.set(null);
-    this.conditionError.set(null);
+    this.reportError.set(null);
+    this.damageForm.reset();
     this.lookup.set({ kind: 'idle' });
   }
 
@@ -321,6 +338,36 @@ export class GateOutPage {
     return row.orderLineQuantity === null
       ? '—'
       : `${CATEGORY_LABEL[row.category]} ${row.orderLineRemaining}/${row.orderLineQuantity}`;
+  }
+
+  /*
+    Feedback 4: an open repair case blocks release whatever its step; "Đạt" closes it.
+    A container marked Damaged without a case (data from before repair cases) is blocked too;
+    the server opened a case for it at start-up, so it is shown here after a reload.
+  */
+  private repairCheck(container: Container): GateOutCheck {
+    const repairCase = this.openCase();
+    if (repairCase === undefined) {
+      return { title: 'Không có hồ sơ sửa chữa đang mở', detail: 'Đang kiểm tra hồ sơ giám định…', state: 'pending' };
+    }
+    if (repairCase) {
+      return {
+        title: 'Không có hồ sơ sửa chữa đang mở',
+        detail: `Hồ sơ đang ở bước "${REPAIR_STATUS_LABEL[repairCase.status]}": ${repairCase.latestFinding}. Chỉ xuất được khi hồ sơ đạt.`,
+        state: 'fail',
+      };
+    }
+    return container.condition === 'Damaged'
+      ? { title: 'Không có hồ sơ sửa chữa đang mở', detail: 'Container đang ghi Hư hỏng. Tải lại trang để xem hồ sơ.', state: 'fail' }
+      : { title: 'Không có hồ sơ sửa chữa đang mở', detail: 'Không có hư hỏng chờ xử lý', state: 'ok' };
+  }
+
+  // At most one case of a container is open (unique index), so one row is enough
+  private findOpenCase(containerId: string): Observable<RepairCaseSummary | null> {
+    return this.repairs.list(1, 1, { containerId, open: true }).pipe(
+      map((page) => page.items[0] ?? null),
+      catchError(() => of(null)),
+    );
   }
 
   private checkNumber(number: string): Observable<Lookup> {
@@ -352,12 +399,10 @@ export class GateOutPage {
   private applyLookup(state: Lookup): void {
     this.lookup.set(state);
     this.apiError.set(null);
-    this.conditionError.set(null);
+    this.reportError.set(null);
+    this.damageForm.reset();
     this.form.controls.deliveryOrderId.setValue('');
     if (state.kind !== 'ready') return;
-
-    // Start the condition form from what is recorded on the container
-    this.conditionForm.reset({ condition: state.container.condition, conditionNote: state.container.conditionNote ?? '' });
 
     // Only one order fits: pick it, the clerk can still see it in the dropdown
     const usable = this.usableOrders();

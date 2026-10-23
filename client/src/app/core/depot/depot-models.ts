@@ -224,6 +224,8 @@ export interface GateInResult {
   row: number | null;
   tier: number | null;
   gateInAt: string;
+  // Set when the container came in Damaged: the repair case (Chờ giám định) the damage went into
+  repairCaseId: string | null;
 }
 
 // POST /api/container-visits/move (MoveContainerCommand); the response is a ContainerPosition
@@ -299,11 +301,6 @@ export interface GateOutResult {
   gateOutAt: string;
 }
 
-// PUT /api/containers/{id}/condition (the API keeps the note only for a damaged container)
-export interface UpdateConditionRequest {
-  condition: ContainerCondition;
-  conditionNote: string | null;
-}
 // GET /api/statistics/yard-inventory: shortStay = fewer than longStayDays days, longStay = that many or more
 export interface LineOperatorInventory {
   lineOperatorId: string;
@@ -538,4 +535,198 @@ export function orderStatus(order: DeliveryOrder): OrderStatus {
 // "Dry 0/2 · Reefer 1/1" = released / ordered per type, as in the order list
 export function releasedSummary(order: DeliveryOrder): string {
   return order.lines.map((l) => `${CATEGORY_LABEL[l.category]} ${l.releasedQuantity}/${l.quantity}`).join(' · ');
+}
+
+// ---------- inspection & repair (feedback 3, 4, 8; Q4, Q6) ----------
+
+/*
+  Q6 flow: Chờ giám định -> (Đạt | Chờ duyệt phương án) -> Đã duyệt sửa -> Đang sửa -> Chờ nghiệm thu
+  -> (Đạt | back to Đang sửa). Only Passed (Đạt) closes the case and lets the container leave.
+*/
+export type RepairCaseStatus =
+  | 'AwaitingInspection'
+  | 'AwaitingEstimateApproval'
+  | 'RepairApproved'
+  | 'InRepair'
+  | 'AwaitingAcceptance'
+  | 'Passed';
+
+export type RepairAction =
+  | 'InspectPassed'
+  | 'InspectNeedsRepair'
+  | 'ApproveRepair'
+  | 'StartRepair'
+  | 'CompleteRepair'
+  | 'AcceptPassed'
+  | 'AcceptRejected';
+
+// Where a damage was seen: gate-in, the yard / move screen, the container catalog, or an inspection
+export type RepairFindingSource = 'GateIn' | 'Yard' | 'Catalog' | 'Inspection';
+
+export type RepairEventKind = 'Opened' | 'FindingAdded' | RepairAction;
+
+export const REPAIR_STATUS_LABEL: Record<RepairCaseStatus, string> = {
+  AwaitingInspection: 'Chờ giám định',
+  AwaitingEstimateApproval: 'Chờ duyệt phương án',
+  RepairApproved: 'Đã duyệt sửa',
+  InRepair: 'Đang sửa',
+  AwaitingAcceptance: 'Chờ nghiệm thu',
+  Passed: 'Đạt',
+};
+
+// Statuses in flow order, for the status filter
+export const REPAIR_STATUSES: RepairCaseStatus[] = [
+  'AwaitingInspection',
+  'AwaitingEstimateApproval',
+  'RepairApproved',
+  'InRepair',
+  'AwaitingAcceptance',
+  'Passed',
+];
+
+// Button text of each action on the detail panel
+export const REPAIR_ACTION_LABEL: Record<RepairAction, string> = {
+  InspectPassed: 'Giám định: Đạt, không cần sửa',
+  InspectNeedsRepair: 'Giám định: Cần sửa',
+  ApproveRepair: 'Duyệt phương án sửa',
+  StartRepair: 'Bắt đầu sửa',
+  CompleteRepair: 'Sửa xong, chờ nghiệm thu',
+  AcceptPassed: 'Nghiệm thu: Đạt',
+  AcceptRejected: 'Nghiệm thu: Sửa lại',
+};
+
+// History line text; an action event reads as what was done
+export const REPAIR_EVENT_LABEL: Record<RepairEventKind, string> = {
+  Opened: 'Mở hồ sơ',
+  FindingAdded: 'Ghi nhận thêm hư hỏng',
+  InspectPassed: 'Giám định đạt, không cần sửa',
+  InspectNeedsRepair: 'Giám định: cần sửa',
+  ApproveRepair: 'Duyệt phương án sửa',
+  StartRepair: 'Bắt đầu sửa',
+  CompleteRepair: 'Sửa xong',
+  AcceptPassed: 'Nghiệm thu đạt',
+  AcceptRejected: 'Nghiệm thu không đạt, sửa lại',
+};
+
+export const FINDING_SOURCE_LABEL: Record<RepairFindingSource, string> = {
+  GateIn: 'Nhập bãi',
+  Yard: 'Trong bãi',
+  Catalog: 'Danh mục',
+  Inspection: 'Giám định',
+};
+
+// Actions that need a note (the API answers 400 RepairCase.ReasonRequired without one)
+export const REPAIR_ACTIONS_NEEDING_NOTE: readonly RepairAction[] = ['AcceptRejected'];
+
+// One row of GET /api/repair-cases; blockCode..tier = where the container is now (null outside the yard)
+export interface RepairCaseSummary {
+  id: string;
+  containerId: string;
+  containerNumber: string;
+  size: ContainerSize;
+  category: ContainerCategory;
+  status: RepairCaseStatus;
+  operatorCode: string | null;
+  openedAt: string;
+  closedAt: string | null;
+  latestFinding: string;
+  findingCount: number;
+  photoCount: number;
+  blockCode: string | null;
+  bay: number | null;
+  row: number | null;
+  tier: number | null;
+}
+
+export interface RepairFinding {
+  id: string;
+  description: string;
+  source: RepairFindingSource;
+  visitId: string | null;
+  reportedAt: string;
+  reportedBy: string | null;
+}
+
+export interface RepairPhoto {
+  id: string;
+  findingId: string | null;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  uploadedBy: string | null;
+}
+
+export interface RepairCaseEvent {
+  id: string;
+  kind: RepairEventKind;
+  fromStatus: RepairCaseStatus | null;
+  toStatus: RepairCaseStatus;
+  note: string | null;
+  at: string;
+  by: string | null;
+}
+
+// GET /api/repair-cases/{id}; allowedActions = what the API accepts from the current status
+export interface RepairCaseDetail {
+  id: string;
+  containerId: string;
+  containerNumber: string;
+  isoCode: string;
+  size: ContainerSize;
+  category: ContainerCategory;
+  ownerCode: string | null;
+  status: RepairCaseStatus;
+  repairNeeded: boolean | null;
+  openedAt: string;
+  closedAt: string | null;
+  visitId: string | null;
+  operatorCode: string | null;
+  conditionAtGateIn: ContainerCondition | null;
+  inYard: boolean;
+  blockCode: string | null;
+  bay: number | null;
+  row: number | null;
+  tier: number | null;
+  allowedActions: RepairAction[];
+  findings: RepairFinding[];
+  photos: RepairPhoto[];
+  history: RepairCaseEvent[];
+}
+
+// Filters of GET /api/repair-cases; open: true = not Passed yet, false = Passed only
+export interface RepairCaseFilter {
+  search?: string;
+  status?: RepairCaseStatus | null;
+  open?: boolean | null;
+  operatorId?: string | null;
+  containerId?: string | null;
+  reportedFrom?: string | null;
+  reportedTo?: string | null;
+}
+
+// POST /api/repair-cases/report (source GateIn is refused: gate-in reports with the gate-in itself)
+export interface ReportDamageRequest {
+  containerId: string;
+  description: string;
+  source: Exclude<RepairFindingSource, 'GateIn'>;
+}
+
+// created = this report opened the case (false: it was added to the open case)
+export interface RecordedDamage {
+  caseId: string;
+  created: boolean;
+  findingId: string;
+}
+
+// Q4: JPG / PNG of at most 5 MB, checked before upload (the API checks the bytes again)
+export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+export const PHOTO_TYPES: readonly string[] = ['image/jpeg', 'image/png'];
+
+// null when the file can be uploaded, otherwise the reason in Vietnamese
+export function photoFileError(file: Pick<File, 'type' | 'size' | 'name'>): string | null {
+  if (!PHOTO_TYPES.includes(file.type)) return `${file.name}: chỉ nhận ảnh JPG hoặc PNG.`;
+  if (file.size > PHOTO_MAX_BYTES) return `${file.name}: ảnh tối đa 5 MB.`;
+  if (file.size === 0) return `${file.name}: file rỗng.`;
+  return null;
 }

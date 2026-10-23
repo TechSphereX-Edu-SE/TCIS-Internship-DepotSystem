@@ -1,0 +1,274 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Nghiệp vụ</p>
+      <h1>Giám định &amp; sửa chữa</h1>
+    </div>
+  </header>
+
+  @if (listError(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  <!-- ================= Filters ================= -->
+  <form class="card filters-card" [formGroup]="filters" (ngSubmit)="search()" role="search" aria-label="Lọc hồ sơ sửa chữa">
+    <div class="filters">
+      <div class="field">
+        <label for="search">Số container</label>
+        <input id="search" class="mono upper" formControlName="search" placeholder="Một phần số container" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="status">Trạng thái</label>
+        <select id="status" formControlName="status">
+          <option value="open">Đang mở (chưa đạt)</option>
+          <option value="all">Tất cả</option>
+          @for (status of statuses; track status) {
+          <option [value]="status">{{ statusLabel[status] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="operatorId">Hãng khai thác</label>
+        <select id="operatorId" formControlName="operatorId">
+          <option value="">Tất cả hãng</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
+          }
+        </select>
+      </div>
+      @if (moreFilters()) {
+      <div class="field">
+        <label for="reportedFrom">Báo hư từ ngày</label>
+        <input id="reportedFrom" type="date" formControlName="reportedFrom" />
+      </div>
+      <div class="field">
+        <label for="reportedTo">Đến ngày</label>
+        <input id="reportedTo" type="date" formControlName="reportedTo" />
+      </div>
+      }
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">Lọc</button>
+        <button class="btn btn-secondary" type="button" (click)="moreFilters.set(!moreFilters())" [attr.aria-expanded]="moreFilters()">
+          {{ moreFilters() ? 'Ẩn lọc thêm' : 'Lọc thêm' }}
+        </button>
+        <button class="btn btn-secondary" type="button" (click)="clearFilters()">Xoá lọc</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="catalog-layout">
+    <!-- ================= List ================= -->
+    <section class="card" aria-labelledby="list-title">
+      <div class="list-head">
+        <h2 id="list-title">Hồ sơ <span class="muted">· {{ totalCount() }}</span></h2>
+      </div>
+
+      @if (items().length === 0) {
+      <p class="muted">Không có hồ sơ phù hợp.</p>
+      } @else {
+      <div class="table-wrap">
+        <table class="table cases">
+          <thead>
+            <tr>
+              <th>Số container</th>
+              <th>Trạng thái</th>
+              <th>Hư hỏng gần nhất</th>
+              <th>Hãng</th>
+              <th>Vị trí hiện tại</th>
+              <th>Báo hư lúc</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of items(); track item.id) {
+            <tr class="clickable" [class.editing]="item.id === selectedId()" (click)="select(item)">
+              <td>
+                <button class="link-button mono" type="button" (click)="$event.stopPropagation(); select(item)">
+                  {{ item.containerNumber }}
+                </button>
+                <div class="muted small">{{ sizeLabel[item.size] }} {{ categoryLabel[item.category] }}</div>
+              </td>
+              <td><span class="chip" [class]="statusChip[item.status]">{{ statusLabel[item.status] }}</span></td>
+              <td>
+                <span class="finding-text">{{ item.latestFinding }}</span>
+                <div class="muted small">
+                  {{ item.findingCount }} hư hỏng · {{ item.photoCount }} ảnh
+                </div>
+              </td>
+              <td class="mono">{{ item.operatorCode ?? '—' }}</td>
+              <td>{{ positionText(item) }}</td>
+              <td>{{ formatDateTime(item.openedAt) }}</td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <app-pager [page]="page()" [totalPages]="totalPages()" label="Phân trang hồ sơ sửa chữa" (pageChange)="goToPage($event)" />
+      }
+    </section>
+
+    <!-- ================= Detail ================= -->
+    <section class="card detail" aria-labelledby="detail-title">
+      @if (detailError(); as message) {
+      <div class="alert alert-red" role="alert">{{ message }}</div>
+      }
+
+      @if (detail(); as d) {
+      <div class="detail-head">
+        <div>
+          <h2 id="detail-title"><span class="mono">{{ d.containerNumber }}</span></h2>
+          <p class="muted">{{ d.isoCode }} · {{ sizeLabel[d.size] }} {{ categoryLabel[d.category] }}</p>
+        </div>
+        <span class="chip" [class]="statusChip[d.status]">{{ statusLabel[d.status] }}</span>
+      </div>
+
+      <dl class="facts">
+        <dt>Chủ sở hữu</dt>
+        <dd>{{ d.ownerCode ?? '—' }}</dd>
+        <dt>Hãng khai thác</dt>
+        <dd>{{ d.operatorCode ?? 'Báo hư ngoài lượt vào bãi' }}</dd>
+        <dt>Tình trạng lúc nhập</dt>
+        <dd>{{ d.conditionAtGateIn ? conditionLabel[d.conditionAtGateIn] : '—' }}</dd>
+        <dt>Vị trí hiện tại</dt>
+        <dd>{{ positionText(d) }}</dd>
+        <dt>Kết luận giám định</dt>
+        <dd>{{ repairNeededText(d) }}</dd>
+        <dt>Mở hồ sơ</dt>
+        <dd>{{ formatDateTime(d.openedAt) }}</dd>
+        @if (d.closedAt) {
+        <dt>Đạt lúc</dt>
+        <dd>{{ formatDateTime(d.closedAt) }}</dd>
+        }
+      </dl>
+
+      <!-- Next steps: only what the API accepts from the current status -->
+      @if (isOpen()) {
+      <div class="steps" [formGroup]="actionForm">
+        <h3>Bước tiếp theo</h3>
+        <div class="field" [class.has-error]="noteMissing()">
+          <label for="actionNote">
+            Ghi chú <span class="muted label-note">(bắt buộc khi nghiệm thu không đạt)</span>
+          </label>
+          <textarea id="actionNote" rows="2" formControlName="note" maxlength="500" placeholder="VD: HMM duyệt qua email 21/10"></textarea>
+          @if (noteMissing()) {
+          <span class="field-error">Ghi lý do sửa lại.</span>
+          }
+        </div>
+        <div class="actions">
+          @for (action of primaryActions(); track action) {
+          <button class="btn btn-primary" type="button" [disabled]="acting()" (click)="act(action)">{{ actionLabel[action] }}</button>
+          }
+          @for (action of otherActions(); track action) {
+          <button class="btn btn-secondary" type="button" [disabled]="acting()" (click)="act(action)">{{ actionLabel[action] }}</button>
+          }
+        </div>
+        @if (actionError(); as error) {
+        <div class="alert alert-red" role="alert"><strong>Không thực hiện được ({{ error.status }}):</strong> {{ error.message }}</div>
+        }
+      </div>
+      } @else {
+      <div class="alert alert-green">
+        Hồ sơ đã đạt. Container hết bị chặn sửa chữa và được xuất bãi bình thường. Hư hỏng mới sẽ mở hồ sơ mới.
+      </div>
+      }
+
+      <!-- Findings -->
+      <div class="block">
+        <h3>Hư hỏng ghi nhận <span class="muted">· {{ d.findings.length }}</span></h3>
+        <ul class="findings">
+          @for (finding of d.findings; track finding.id) {
+          <li>
+            <span>{{ finding.description }}</span>
+            <span class="muted small">
+              {{ sourceLabel[finding.source] }} · {{ formatDateTime(finding.reportedAt) }}{{ finding.reportedBy ? ' · ' + finding.reportedBy : '' }}
+            </span>
+          </li>
+          }
+        </ul>
+        @if (isOpen()) {
+        <form class="inline-form" [formGroup]="findingForm" (ngSubmit)="addFinding()" novalidate>
+          <div class="field" [class.has-error]="findingForm.controls.description.invalid && findingForm.controls.description.touched">
+            <label for="findingDescription">Thêm hư hỏng phát hiện khi giám định</label>
+            <input id="findingDescription" formControlName="description" maxlength="500" placeholder="VD: Thủng sàn góc trái" />
+          </div>
+          <button class="btn btn-dark" type="submit" [disabled]="addingFinding()">{{ addingFinding() ? 'Đang lưu…' : 'Thêm' }}</button>
+        </form>
+        @if (findingError(); as error) {
+        <div class="alert alert-red" role="alert">{{ error.message }}</div>
+        }
+        }
+      </div>
+
+      <!-- Photos -->
+      <div class="block">
+        <h3>Ảnh <span class="muted">· {{ d.photos.length }}</span></h3>
+        @if (d.photos.length === 0) {
+        <p class="muted small">Chưa có ảnh.</p>
+        } @else {
+        <ul class="photos">
+          @for (photo of d.photos; track photo.id) {
+          <li>
+            @if (photoUrls()[photo.id]; as url) {
+            <a [href]="url" target="_blank" rel="noopener" [attr.aria-label]="'Mở ảnh ' + photo.fileName">
+              <img [src]="url" [alt]="photo.fileName" />
+            </a>
+            } @else {
+            <div class="photo-loading muted small">Đang tải…</div>
+            }
+            <span class="muted small">{{ findingText(photo.findingId) }}</span>
+          </li>
+          }
+        </ul>
+        }
+        @if (isOpen()) {
+        <div class="photo-upload">
+          <div class="field">
+            <label for="photoFinding">Ảnh cho</label>
+            <select id="photoFinding" [formControl]="photoFindingId">
+              <option value="">Cả hồ sơ</option>
+              @for (finding of d.findings; track finding.id) {
+              <option [value]="finding.id">{{ finding.description }}</option>
+              }
+            </select>
+          </div>
+          <label class="btn btn-secondary file-button" [class.disabled]="uploading()">
+            {{ uploading() ? 'Đang tải lên…' : 'Chọn ảnh (JPG/PNG ≤ 5 MB)' }}
+            <input #photoInput type="file" accept="image/jpeg,image/png" multiple [disabled]="uploading()"
+                   (change)="uploadPhotos(photoInput)" />
+          </label>
+        </div>
+        }
+        @for (message of photoErrors(); track message) {
+        <span class="field-error">{{ message }}</span>
+        }
+      </div>
+
+      <!-- History -->
+      <div class="block">
+        <h3>Lịch sử</h3>
+        <ol class="history">
+          @for (event of d.history; track event.id) {
+          <li>
+            <span class="history-what">{{ eventLabel[event.kind] }}</span>
+            @if (event.fromStatus && event.fromStatus !== event.toStatus) {
+            <span class="muted small">{{ statusLabel[event.fromStatus] }} → {{ statusLabel[event.toStatus] }}</span>
+            }
+            @if (event.note) {
+            <span class="history-note">“{{ event.note }}”</span>
+            }
+            <span class="muted small">{{ formatDateTime(event.at) }}{{ event.by ? ' · ' + event.by : '' }}</span>
+          </li>
+          }
+        </ol>
+      </div>
+
+      <button class="btn btn-secondary" type="button" (click)="closeDetail()">Đóng</button>
+      } @else if (!detailError()) {
+      <h2 id="detail-title">Chi tiết hồ sơ</h2>
+      <p class="muted">
+        Chọn một hồ sơ trong danh sách. Hồ sơ được mở khi nhập bãi tình trạng Hư hỏng, hoặc khi báo hư ở Danh mục · Container.
+        Container có hồ sơ chưa đạt thì chưa được xuất bãi.
+      </p>
+      }
+    </section>
+  </div>
+</div>

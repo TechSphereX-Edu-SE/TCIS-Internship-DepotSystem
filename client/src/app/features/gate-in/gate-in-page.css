@@ -118,3 +118,49 @@
 #vehicleNo {
   text-transform: uppercase;
 }
+
+/* "Ảnh hư hỏng" title: a span, because the label element is the button */
+.field .label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The real file input is hidden inside its label, which looks like a button */
+.file-button {
+  position: relative;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+  .field .file-button input {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .file-button:focus-within {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.repair-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+

@@ -3,7 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Observable, catchError, concat, map, of, startWith, switchMap } from 'rxjs';
+import { Observable, catchError, concat, concatMap, from, map, of, startWith, switchMap, toArray } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import {
   Block,
@@ -20,8 +20,10 @@ import {
   blockAccepts,
   categoriesText,
   formatPosition,
+  photoFileError,
 } from '../../core/depot/depot-models';
 import { MasterDataApi } from '../../core/depot/master-data-api';
+import { RepairApi } from '../../core/depot/repair-api';
 import { YardApi } from '../../core/depot/yard-api';
 import { SlotErrors, bayForClick, hasSlotErrors, placementWarning, toPlaced, validateSlot } from '../../core/depot/yard-rules';
 import { SearchSelect, SearchPageLoader } from '../../shared/search-select/search-select';
@@ -44,6 +46,14 @@ type Lookup =
   | { kind: 'ready'; container: Container }
   | { kind: 'error'; message: string };
 
+// Banner after a Damaged gate-in: the repair case the damage went into, and how the photos went
+interface GateInRepair {
+  caseId: string;
+  containerNumber: string;
+  photosUploaded: number;
+  photoErrors: string[];
+}
+
 @Component({
   selector: 'app-gate-in-page',
   imports: [ReactiveFormsModule, DatePipe, RouterLink, YardMap, SearchSelect],
@@ -53,6 +63,7 @@ type Lookup =
 export class GateInPage {
   private readonly masterData = inject(MasterDataApi);
   private readonly yard = inject(YardApi);
+  private readonly repairs = inject(RepairApi);
   private readonly toast = inject(ToastService);
 
   protected readonly sizeLabel = SIZE_LABEL;
@@ -104,6 +115,12 @@ export class GateInPage {
   protected readonly submitting = signal(false);
   protected readonly submitted = signal(false);
   protected readonly apiError = signal<ApiError | null>(null);
+
+  // Feedback 4 / Q4: photos of a damage seen at the gate, uploaded to its case after the gate-in
+  protected readonly damagePhotos = signal<File[]>([]);
+  protected readonly damagePhotoErrors = signal<string[]>([]);
+  protected readonly lastRepair = signal<GateInRepair | null>(null);
+  protected readonly photoNames = computed(() => this.damagePhotos().map((f) => f.name).join(', '));
 
   // Form values as a signal, so computed() below reacts to typing
   private readonly value = toSignal(
@@ -185,6 +202,12 @@ export class GateInPage {
   });
 
   // Overlap / support warning computed from the map data (same rules as YardSlotRules)
+  // Feedback 3: a damage seen at the gate must be described (it becomes the first finding of the case)
+  protected readonly damageNoteMissing = computed(() => {
+    const v = this.value();
+    return this.submitted() && v.condition === 'Damaged' && !v.conditionNote.trim();
+  });
+
   protected readonly slotWarning = computed(() => {
     const { bay, tier } = this.value();
     const size = this.container()?.size;
@@ -244,7 +267,14 @@ export class GateInPage {
     const block = this.selectedBlock();
     const errors = this.positionErrors();
     const v = this.form.getRawValue();
-    if (state.kind !== 'ready' || !state.container.currentOperatorId || !block || this.form.invalid || hasSlotErrors(errors)) {
+    if (
+      state.kind !== 'ready' ||
+      !state.container.currentOperatorId ||
+      !block ||
+      this.form.invalid ||
+      hasSlotErrors(errors) ||
+      this.damageNoteMissing()
+    ) {
       return;
     }
 
@@ -257,17 +287,22 @@ export class GateInPage {
       row: block.isVirtual ? null : v.row,
       tier: block.isVirtual ? null : v.tier,
       condition: v.condition,
-      // The API only keeps a note for a damaged container
-      conditionNote: v.condition === 'Damaged' ? v.conditionNote.trim() || null : null,
+      // The API only keeps a note for a damaged container, and requires it then
+      conditionNote: v.condition === 'Damaged' ? v.conditionNote.trim() : null,
       vehicleNo: v.vehicleNo.trim(),
     };
 
+    // Photos only make sense for a damaged container; kept aside before the form is reset
+    const photos = v.condition === 'Damaged' ? this.damagePhotos() : [];
+
     this.submitting.set(true);
+    this.lastRepair.set(null);
     this.yard.gateIn(request).subscribe({
       next: (result) => {
         this.toast.success(
           `Đã nhập ${result.containerNumber} vào ${formatPosition(result.blockCode, result.bay, result.row, result.tier)}`,
         );
+        if (result.repairCaseId) this.uploadDamagePhotos(result.repairCaseId, result.containerNumber, photos);
         this.resetForNext();
         this.refreshMap.update((n) => n + 1);
         this.loadToday();
@@ -289,16 +324,52 @@ export class GateInPage {
     this.submitted.set(false);
     this.apiError.set(null);
     this.lookup.set({ kind: 'idle' });
+    this.damagePhotos.set([]);
+    this.damagePhotoErrors.set([]);
+  }
+
+  // Q4: only JPG / PNG of at most 5 MB are kept; the others are listed with the reason
+  protected pickDamagePhotos(input: HTMLInputElement): void {
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    this.damagePhotoErrors.set(files.map(photoFileError).filter((e): e is string => e !== null));
+    this.damagePhotos.update((picked) => [...picked, ...files.filter((f) => photoFileError(f) === null)]);
   }
 
   // Red border + message for a plain required/length rule or a matching API validation error
   protected invalid(name: 'blockId' | 'vehicleNo' | 'conditionNote'): boolean {
     const control = this.form.controls[name];
-    return (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), name);
+    const missingNote = name === 'conditionNote' && this.damageNoteMissing();
+    return missingNote || (control.invalid && (control.touched || this.submitted())) || !!fieldError(this.apiError(), name);
   }
 
   protected positionText(position: ContainerPosition): string {
     return formatPosition(position.blockCode, position.bay, position.row, position.tier);
+  }
+
+  /*
+    The gate-in is already saved, so a failed photo does not undo it: the banner lists what failed
+    and the clerk can add the photo again from the repair page. Uploaded one after the other.
+  */
+  private uploadDamagePhotos(caseId: string, containerNumber: string, photos: File[]): void {
+    const banner: GateInRepair = { caseId, containerNumber, photosUploaded: 0, photoErrors: [] };
+    this.lastRepair.set(banner);
+    if (photos.length === 0) return;
+
+    from(photos)
+      .pipe(
+        concatMap((file) =>
+          this.repairs.uploadPhoto(caseId, file).pipe(
+            map(() => null),
+            catchError((err: unknown) => of(`${file.name}: ${toApiError(err).message}`)),
+          ),
+        ),
+        toArray(),
+      )
+      .subscribe((results) => {
+        const failed = results.filter((r): r is string => r !== null);
+        this.lastRepair.set({ ...banner, photosUploaded: photos.length - failed.length, photoErrors: failed });
+      });
   }
 
   // In the yard already -> position found; 404 NotInYard -> ready, unless no operator is confirmed for today

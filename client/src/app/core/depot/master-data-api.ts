@@ -17,7 +17,6 @@ import {
   PartnerRole,
   ResizeBlockRequest,
   UpdateBlockRequest,
-  UpdateConditionRequest,
   UpdateContainerRequest,
   UpdateLineOperatorRequest,
 } from './depot-models';
@@ -54,11 +53,6 @@ export class MasterDataApi {
     return this.http
       .get<PagedResult<Customer>>('/api/customers', { params: { pageSize: 100 } })
       .pipe(map((page) => [...page.items].sort((a, b) => a.name.localeCompare(b.name, 'vi'))));
-  }
-
-  // E.g. back to Normal after repair, so the container can be released at gate-out (204 No Content)
-  updateCondition(containerId: string, request: UpdateConditionRequest): Observable<void> {
-    return this.http.put<void>(`/api/containers/${containerId}/condition`, request);
   }
 
   // Exact match on a full container number, using the API's ?search= (part of the number)

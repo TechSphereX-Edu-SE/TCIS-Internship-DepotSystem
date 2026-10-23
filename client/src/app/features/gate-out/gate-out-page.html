@@ -121,49 +121,49 @@
     </section>
   </div>
 
-  <!-- ================= Condition ================= -->
+  <!-- ================= Repair (feedback 4) ================= -->
   @if (ready(); as state) {
-  <form class="card condition" [class.damaged]="state.container.condition === 'Damaged'" [formGroup]="conditionForm"
-        (ngSubmit)="saveCondition()" novalidate aria-labelledby="condition-title">
+  <section class="card condition" [class.damaged]="!!openCase()" aria-labelledby="condition-title">
     <div class="condition-head">
+      @if (openCase(); as repairCase) {
+      <span class="chip chip-red">{{ repairStatusLabel[repairCase.status] }}</span>
+      } @else {
       <span class="chip" [class.chip-red]="state.container.condition === 'Damaged'" [class.chip-green]="state.container.condition === 'Normal'">
         {{ conditionLabel[state.container.condition] }}
       </span>
+      }
       <div>
         <h2 id="condition-title">
-          Tình trạng <span class="mono">{{ state.container.containerNumber }}</span>
-          @if (state.container.condition === 'Damaged') { · không thể xuất bãi }
+          Giám định <span class="mono">{{ state.container.containerNumber }}</span>
+          @if (openCase()) { · không thể xuất bãi }
         </h2>
         <p class="muted">
-          @if (state.container.condition === 'Damaged') {
-          Ghi chú: “{{ state.container.conditionNote ?? 'không có' }}”. Sửa xong, chọn Bình thường rồi lưu để giao container.
+          @if (openCase(); as repairCase) {
+          Hồ sơ giám định/sửa chữa chưa đạt: “{{ repairCase.latestFinding }}”.
+          <a [routerLink]="['/repairs']" [queryParams]="{ caseId: repairCase.id }">Mở hồ sơ</a> để giám định, sửa và nghiệm thu.
           } @else {
-          Phát hiện hư hỏng khi kiểm tra trước khi giao? Ghi nhận Hư hỏng, container sẽ không được xuất cho đến khi sửa xong.
+          Phát hiện hư hỏng khi kiểm tra trước khi giao? Ghi nhận bên dưới: container sẽ có hồ sơ giám định và chưa được xuất cho đến khi đạt.
           }
         </p>
       </div>
     </div>
 
-    <div class="condition-fields">
-      <div class="radios" role="radiogroup" aria-label="Tình trạng mới">
-        <label class="radio"><input type="radio" formControlName="condition" value="Normal" /> Bình thường</label>
-        <label class="radio"><input type="radio" formControlName="condition" value="Damaged" /> Hư hỏng</label>
+    <form class="condition-fields" [formGroup]="damageForm" (ngSubmit)="reportDamage()" novalidate>
+      <div class="field note" [class.has-error]="damageForm.controls.description.invalid && damageForm.controls.description.touched">
+        <label for="damageDescription">
+          {{ openCase() ? 'Thêm hư hỏng vào hồ sơ' : 'Mô tả hư hỏng' }} <span class="muted label-note">(móp, méo, cong, thủng…)</span>
+        </label>
+        <input id="damageDescription" formControlName="description" maxlength="500" placeholder="VD: Móp cửa phải" />
       </div>
-      @if (conditionForm.controls.condition.value === 'Damaged') {
-      <div class="field note">
-        <label for="conditionNote">Ghi chú hư hỏng <span class="muted label-note">(móp, méo, cong…)</span></label>
-        <input id="conditionNote" formControlName="conditionNote" maxlength="500" placeholder="VD: Dent on door" />
-      </div>
-      }
-      <button class="btn btn-dark" type="submit" [disabled]="savingCondition()">
-        {{ savingCondition() ? 'Đang lưu…' : 'Cập nhật tình trạng' }}
+      <button class="btn btn-dark" type="submit" [disabled]="reporting()">
+        {{ reporting() ? 'Đang lưu…' : 'Báo hư' }}
       </button>
-    </div>
+    </form>
 
-    @if (conditionError(); as error) {
-    <div class="alert alert-red" role="alert"><strong>Không cập nhật được ({{ error.status }}):</strong> {{ error.message }}</div>
+    @if (reportError(); as error) {
+    <div class="alert alert-red" role="alert"><strong>Không ghi nhận được ({{ error.status }}):</strong> {{ error.message }}</div>
     }
-  </form>
+  </section>
   }
 
   <!-- ================= Today ================= -->

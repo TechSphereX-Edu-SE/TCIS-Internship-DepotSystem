@@ -80,7 +80,7 @@
   color: var(--muted);
 }
 
-/* ---------- condition card: red edge when the container cannot leave ---------- */
+/* ---------- repair card: red edge while an open case blocks the release ---------- */
 .condition.damaged {
   border-color: #fca5a5;
   background: #fffafa;
@@ -106,27 +106,6 @@
   gap: 16px;
   align-items: flex-end;
 }
-
-.radios {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  height: 44px;
-}
-
-.radio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-  .radio input {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--primary);
-  }
 
 .note {
   flex: 1 1 280px;

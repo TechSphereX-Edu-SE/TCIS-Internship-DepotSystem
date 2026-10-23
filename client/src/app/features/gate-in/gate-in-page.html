@@ -10,6 +10,21 @@
   <div class="alert alert-red" role="alert">{{ message }}</div>
   }
 
+  <!-- After a Damaged gate-in: the case it went into, with a link; stays until closed or the next gate-in -->
+  @if (lastRepair(); as repair) {
+  <div class="alert alert-amber repair-banner" role="status">
+    <span>
+      {{ repair.containerNumber }} vào bãi tình trạng Hư hỏng: đã ghi vào hồ sơ giám định
+      @if (repair.photosUploaded > 0) { kèm {{ repair.photosUploaded }} ảnh }.
+      <a [routerLink]="['/repairs']" [queryParams]="{ caseId: repair.caseId }">Mở hồ sơ</a>
+    </span>
+    <button class="link-button" type="button" (click)="lastRepair.set(null)" aria-label="Đóng thông báo">Đóng</button>
+    @for (message of repair.photoErrors; track message) {
+    <span class="field-error">{{ message }}</span>
+    }
+  </div>
+  }
+
   <div class="layout">
     <!-- ================= Form ================= -->
     <form class="card form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
@@ -144,13 +159,31 @@
         </div>
       </fieldset>
 
+      <!-- Feedback 3/4: a damage seen at the gate opens a repair case "Chờ giám định" with this description -->
       @if (form.controls.condition.value === 'Damaged') {
       <div class="field" [class.has-error]="invalid('conditionNote')">
-        <label for="conditionNote">Ghi chú hư hỏng <span class="muted">(móp, méo, cong…)</span></label>
-        <textarea id="conditionNote" rows="2" formControlName="conditionNote" placeholder="VD: Dent on door"></textarea>
+        <label for="conditionNote">Mô tả hư hỏng <span class="muted">(bắt buộc: móp, méo, cong, thủng…)</span></label>
+        <textarea id="conditionNote" rows="2" formControlName="conditionNote" placeholder="VD: Móp cửa phải"></textarea>
         @if (invalid('conditionNote')) {
-        <span class="field-error">Tối đa 500 ký tự.</span>
+        <span class="field-error">Mô tả hư hỏng (tối đa 500 ký tự).</span>
         }
+      </div>
+      <div class="field">
+        <span class="label">Ảnh hư hỏng <span class="muted">(tuỳ chọn, JPG/PNG ≤ 5 MB)</span></span>
+        <label class="btn btn-secondary file-button">
+          Chọn ảnh
+          <input #damagePhotoInput type="file" accept="image/jpeg,image/png" multiple (change)="pickDamagePhotos(damagePhotoInput)" />
+        </label>
+        @if (damagePhotos().length > 0) {
+        <span class="muted hint">
+          {{ damagePhotos().length }} ảnh: {{ photoNames() }}
+          <button class="link-button" type="button" (click)="damagePhotos.set([])">Bỏ chọn</button>
+        </span>
+        }
+        @for (message of damagePhotoErrors(); track message) {
+        <span class="field-error">{{ message }}</span>
+        }
+        <span class="muted hint">Container vẫn được xếp vào vị trí đã chọn; hồ sơ giám định mở tự động, chưa xuất bãi được cho đến khi đạt.</span>
       </div>
       }
 

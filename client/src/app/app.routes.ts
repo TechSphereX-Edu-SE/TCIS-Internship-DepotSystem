@@ -23,6 +23,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/gate-in/gate-in-page').then((m) => m.GateInPage),
       },
       {
+        // Feedback 4: inspection & repair cases; ?caseId= opens one case
+        path: 'repairs',
+        title: 'Giám định & sửa chữa · Depot',
+        loadComponent: () => import('./features/repairs/repairs-page').then((m) => m.RepairsPage),
+      },
+      {
         path: 'yard',
         title: 'Vị trí & đảo chuyển · Depot',
         loadComponent: () => import('./features/yard/yard-page').then((m) => m.YardPage),
