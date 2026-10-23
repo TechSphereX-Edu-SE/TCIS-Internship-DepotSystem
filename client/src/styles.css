@@ -554,6 +554,11 @@ a {
   background: #eff4ff;
 }
 
+/* Archived catalog rows (e.g. a block kept for history): readable but clearly not in use */
+.table tr.archived td {
+  color: var(--muted);
+}
+
 /* ---------- accessibility ---------- */
 /* Text kept for screen readers only (e.g. a label when the field has a visible placeholder) */
 .visually-hidden {

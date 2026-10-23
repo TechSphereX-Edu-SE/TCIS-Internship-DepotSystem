@@ -9,9 +9,11 @@ import {
   CreateCustomerRequest,
   CreateLineOperatorRequest,
   Customer,
+  DeleteBlockResult,
   LineOperator,
   PagedResult,
   ResizeBlockRequest,
+  UpdateBlockRequest,
   UpdateConditionRequest,
   UpdateContainerRequest,
 } from './depot-models';
@@ -33,6 +35,7 @@ export class MasterDataApi {
       .pipe(map((page) => [...page.items].sort((a, b) => a.code.localeCompare(b.code))));
   }
 
+  // Active blocks only: an archived block is never offered for a new position
   blocks(): Observable<Block[]> {
     return this.http
       .get<PagedResult<Block>>('/api/blocks', { params: { pageSize: 100 } })
@@ -90,8 +93,21 @@ export class MasterDataApi {
     return this.http.put<void>(`/api/customers/${id}`, { name });
   }
 
+  // The catalog also lists archived blocks (after the active ones), so their history stays visible
   blockPage(page: number, pageSize: number): Observable<PagedResult<Block>> {
-    return this.page<Block>('/api/blocks', page, pageSize);
+    return this.http.get<PagedResult<Block>>('/api/blocks', {
+      params: { page, pageSize, includeArchived: true },
+    });
+  }
+
+  // 409 Block.Duplicate (code taken) or Block.ContainersOfRemovedType (a removed type is still in the block)
+  updateBlock(id: string, request: UpdateBlockRequest): Observable<void> {
+    return this.http.put<void>(`/api/blocks/${id}`, request);
+  }
+
+  // 409 Block.HasContainers while a container is in the block; a block with history is archived
+  deleteBlock(id: string): Observable<DeleteBlockResult> {
+    return this.http.delete<DeleteBlockResult>(`/api/blocks/${id}`);
   }
 
   // 201 with { id, code, isVirtual }; 409 Block.Duplicate when the code exists

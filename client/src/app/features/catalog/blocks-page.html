@@ -36,25 +36,44 @@
           </thead>
           <tbody>
             @for (block of items(); track block.id) {
-            <tr [class.editing]="block.id === resizing()?.id">
+            <tr [class.editing]="block.id === selectedId()" [class.archived]="block.archivedAt">
               <td class="mono">{{ block.code }}</td>
               <td>
                 <span class="chip" [class.chip-grey]="!block.isVirtual" [class.chip-indigo]="block.isVirtual">
                   {{ block.isVirtual ? 'Ảo' : 'Thật' }}
                 </span>
+                @if (block.archivedAt) {
+                <span class="chip chip-amber" title="Giữ để tra cứu lịch sử, không còn chọn làm vị trí mới">Lưu trữ</span>
+                }
               </td>
               <td>{{ block.description ?? '—' }}</td>
               <td>{{ categoriesText(block.allowedCategories) }}</td>
               <td>{{ sizeText(block) }}</td>
               <td class="num">{{ block.containersInYard }}</td>
               <td>
+                <!-- An archived block is read-only: it only stays for history -->
+                @if (!block.archivedAt) {
                 <div class="row-actions">
+                  <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Sửa block ' + block.code" (click)="startEdit(block)">
+                    Sửa
+                  </button>
                   @if (!block.isVirtual) {
                   <button class="btn btn-secondary btn-small" type="button" [attr.aria-label]="'Đổi kích thước block ' + block.code" (click)="startResize(block)">
                     Đổi kích thước
                   </button>
                   }
+                  <button
+                    class="btn btn-secondary btn-small"
+                    type="button"
+                    [attr.aria-label]="'Xoá block ' + block.code"
+                    [disabled]="block.containersInYard > 0"
+                    [title]="block.containersInYard > 0 ? 'Còn ' + block.containersInYard + ' container trong block, chuyển ra trước khi xoá' : ''"
+                    (click)="remove(block)"
+                  >
+                    Xoá
+                  </button>
                 </div>
+                }
               </td>
             </tr>
             }
@@ -104,64 +123,81 @@
       </div>
     </form>
     } @else {
-    <!-- ================= Create ================= -->
-    <form class="card" [formGroup]="createForm" (ngSubmit)="submit()" novalidate aria-labelledby="form-title">
+    <!-- ================= Create / edit ================= -->
+    <form class="card" [formGroup]="detailsForm" (ngSubmit)="submit()" novalidate aria-labelledby="form-title">
+      @if (editing(); as block) {
+      <h2 id="form-title">Sửa block {{ block.code }}</h2>
+      <p class="muted small">
+        {{ block.isVirtual ? 'Block ảo' : 'Block thật · ' + sizeText(block) }} · {{ block.containersInYard }} container trong block.
+        Đổi mã không làm thay đổi lịch sử: các lượt cũ vẫn gắn với block này.
+      </p>
+      } @else {
       <h2 id="form-title">Thêm block</h2>
+      }
 
-      <div class="field" [class.has-error]="invalid('create', 'code')">
+      <div class="field" [class.has-error]="invalid('details', 'code')">
         <label for="code">Mã block</label>
         <input id="code" class="mono upper" formControlName="code" placeholder="VD: A, B1, WAIT" maxlength="10" autocomplete="off" />
-        @if (invalid('create', 'code')) {
+        @if (invalid('details', 'code')) {
         <span class="field-error">1–10 chữ cái hoặc số (VD: A, B1, WAIT).</span>
         }
       </div>
 
-      <div class="field" [class.has-error]="invalid('create', 'description')">
+      <div class="field" [class.has-error]="invalid('details', 'description')">
         <label for="description">Mô tả <span class="muted">(không bắt buộc)</span></label>
         <input id="description" formControlName="description" placeholder="VD: Khu container khô" maxlength="200" />
       </div>
 
       <!-- Feedback 3: the list of types is what gate-in checks, not the name or description -->
-      <fieldset class="category-picker" [class.has-error]="invalid('create', 'allowedCategories')">
+      <fieldset class="category-picker" [class.has-error]="invalid('details', 'allowedCategories')">
         <legend>Loại container được nhận</legend>
         <div class="category-options">
           @for (category of categories; track category) {
           <label class="checkbox">
             <input
               type="checkbox"
-              [checked]="createForm.controls.allowedCategories.value.includes(category)"
+              [checked]="detailsForm.controls.allowedCategories.value.includes(category)"
               (change)="toggleCategory(category, $any($event.target).checked)"
             />
             {{ categoryLabel[category] }} <span class="muted">({{ categoryHint[category] }})</span>
           </label>
           }
         </div>
-        @if (invalid('create', 'allowedCategories')) {
+        @if (invalid('details', 'allowedCategories')) {
         <span class="field-error">Chọn ít nhất một loại container.</span>
         }
       </fieldset>
 
+      @if (removingTypes()) {
+      <div class="alert alert-amber" role="status">
+        Đang bỏ loại container khỏi block có container. Nếu trong block còn container thuộc loại bị bỏ, hệ thống sẽ từ chối — đảo chuyển container đó trước.
+      </div>
+      }
+
+      <!-- The kind and the sizes are only chosen when creating; resize has its own form -->
+      @if (!editing()) {
       <label class="checkbox">
         <input type="checkbox" formControlName="isVirtual" />
         Block ảo <span class="muted">(không quản lý bay/row/tier, VD: khu chờ sửa chữa)</span>
       </label>
+      }
 
-      @if (!isVirtual()) {
+      @if (!editing() && !isVirtual()) {
       <div class="grid-3">
-        <div class="field" [class.has-error]="invalid('create', 'maxBays')">
+        <div class="field" [class.has-error]="invalid('details', 'maxBays')">
           <label for="maxBays">Bay</label>
           <input id="maxBays" type="number" min="1" step="1" formControlName="maxBays" />
         </div>
-        <div class="field" [class.has-error]="invalid('create', 'maxRows')">
+        <div class="field" [class.has-error]="invalid('details', 'maxRows')">
           <label for="maxRows">Row</label>
           <input id="maxRows" type="number" min="1" step="1" formControlName="maxRows" />
         </div>
-        <div class="field" [class.has-error]="invalid('create', 'maxTiers')">
+        <div class="field" [class.has-error]="invalid('details', 'maxTiers')">
           <label for="maxTiers">Tier</label>
           <input id="maxTiers" type="number" [min]="minTiers" step="1" formControlName="maxTiers" />
         </div>
       </div>
-      @if (invalid('create', 'maxBays') || invalid('create', 'maxRows') || invalid('create', 'maxTiers')) {
+      @if (invalid('details', 'maxBays') || invalid('details', 'maxRows') || invalid('details', 'maxTiers')) {
       <span class="field-error">Bay và row ≥ 1, tier ≥ {{ minTiers }} (số nguyên).</span>
       }
       <p class="muted small">Bay tính theo đơn vị 20ft: bay lẻ xếp 20ft, bay chẵn xếp 40ft (chiếm 2 bay lẻ hai bên).</p>
@@ -172,7 +208,12 @@
       }
 
       <div class="actions">
-        <button class="btn btn-primary" type="submit" [disabled]="submitting()">{{ submitting() ? 'Đang lưu…' : 'Thêm block' }}</button>
+        <button class="btn btn-primary" type="submit" [disabled]="submitting()">
+          {{ submitting() ? 'Đang lưu…' : editing() ? 'Lưu thay đổi' : 'Thêm block' }}
+        </button>
+        @if (editing()) {
+        <button class="btn btn-secondary" type="button" (click)="cancel()">Huỷ</button>
+        }
       </div>
     </form>
     }

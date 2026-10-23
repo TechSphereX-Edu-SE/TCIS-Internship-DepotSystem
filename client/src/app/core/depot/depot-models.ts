@@ -33,6 +33,8 @@ export interface Block {
   maxTiers: number | null;
   // Container types the block takes (feedback 3); gate-in and move only offer blocks that take the type
   allowedCategories: ContainerCategory[];
+  // Archived (soft-deleted) block: kept for history, never offered for a new position
+  archivedAt: string | null;
   containersInYard: number;
   createdAt: string;
 }
@@ -291,6 +293,20 @@ export interface CreateBlockRequest {
   maxRows: number | null;
   maxTiers: number | null;
   allowedCategories: ContainerCategory[];
+}
+
+// PUT /api/blocks/{id}: code, description and accepted types (the size has its own endpoint)
+export interface UpdateBlockRequest {
+  code: string;
+  description: string | null;
+  allowedCategories: ContainerCategory[];
+}
+
+// DELETE /api/blocks/{id}: archived = true when the block had history and was kept (soft delete)
+export interface DeleteBlockResult {
+  id: string;
+  code: string;
+  archived: boolean;
 }
 
 // PUT /api/blocks/{id}/size (physical blocks only; 409 when a container would be left outside)
