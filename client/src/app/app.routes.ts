@@ -55,6 +55,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/statistics/throughput-page').then((m) => m.ThroughputPage),
       },
       {
+        // Feedback 7: one row per visit; the filters live in the query string (links from reports and the catalog)
+        path: 'statistics/history',
+        title: 'Lịch sử container · Depot',
+        loadComponent: () => import('./features/statistics/history-page').then((m) => m.HistoryPage),
+      },
+      {
         path: 'catalog/containers',
         title: 'Container · Depot',
         loadComponent: () => import('./features/catalog/containers-page').then((m) => m.ContainersPage),

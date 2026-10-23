@@ -3,6 +3,7 @@ import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   ContainerPosition,
+  ContainerVisitSummary,
   DailyVisits,
   GateInRequest,
   GateInResult,
@@ -13,8 +14,12 @@ import {
   GateOutResult,
   MoveRequest,
   PagedResult,
+  VisitHistoryDetail,
+  VisitHistoryFilter,
+  VisitHistoryRow,
   YardContainer,
   YardSearchFilter,
+  compactParams,
 } from './depot-models';
 
 // Container lifecycle in the yard: /api/container-visits
@@ -67,19 +72,28 @@ export class YardApi {
 
   /*
     Containers in the yard, filtered and paged by the API (feedback 5 + 8); empty filters are left out.
-    Without a search the rows follow the yard (block, row, bay, tier); with one, exact number first.
+    Without a search the rows follow filter.sort (default: block, row, bay, tier); with one, exact number first.
+    The yard inventory report uses the same filters for its totals.
   */
   search(page: number, pageSize: number, filter: YardSearchFilter = {}): Observable<PagedResult<YardContainer>> {
-    const params: Record<string, string | number> = { page, pageSize };
-    if (filter.search?.trim()) params['search'] = filter.search.trim();
-    if (filter.blockId) params['blockId'] = filter.blockId;
-    if (filter.category) params['category'] = filter.category;
-    if (filter.size) params['size'] = filter.size;
-    if (filter.operatorId) params['operatorId'] = filter.operatorId;
-    if (filter.repair) params['repair'] = filter.repair;
-    if (filter.minDwellDays !== null && filter.minDwellDays !== undefined) params['minDwellDays'] = filter.minDwellDays;
-    if (filter.maxDwellDays !== null && filter.maxDwellDays !== undefined) params['maxDwellDays'] = filter.maxDwellDays;
+    const params = compactParams({ ...filter, page, pageSize });
     return this.http.get<PagedResult<YardContainer>>(`${this.baseUrl}/yard-search`, { params });
+  }
+
+  // Feedback 7: every visit, open or closed, one row per visit (Lịch sử container)
+  history(page: number, pageSize: number, filter: VisitHistoryFilter = {}): Observable<PagedResult<VisitHistoryRow>> {
+    const params = compactParams({ ...filter, page, pageSize });
+    return this.http.get<PagedResult<VisitHistoryRow>>(`${this.baseUrl}/history`, { params });
+  }
+
+  // One visit: gate-in/out, moves, repair cases, stored documents; 404 ContainerVisit.NotFound
+  visitHistory(visitId: string): Observable<VisitHistoryDetail> {
+    return this.http.get<VisitHistoryDetail>(`${this.baseUrl}/history/${visitId}`);
+  }
+
+  // Visit counts, presence and dwell days of one container; 404 Container.NotFound
+  containerSummary(containerId: string): Observable<ContainerVisitSummary> {
+    return this.http.get<ContainerVisitSummary>(`${this.baseUrl}/history/containers/${containerId}`);
   }
 
   // Without a date the API uses today in Vietnam

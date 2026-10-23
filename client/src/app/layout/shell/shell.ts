@@ -50,6 +50,7 @@ export class Shell {
       items: [
         { label: 'Tồn bãi', path: '/statistics/inventory' },
         { label: 'Sản lượng nhập/xuất', path: '/statistics/throughput' },
+        { label: 'Lịch sử container', path: '/statistics/history' },
       ],
     },
     {

@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Observable, map, startWith } from 'rxjs';
 import { ApiError, fieldError, toApiError } from '../../core/api/api-error';
 import { checkContainerNumber, containerNumberError, isoCodeError, suggestIsoCode } from '../../core/depot/container-number';
@@ -70,7 +70,7 @@ const weightValidators = [Validators.required, Validators.min(1), Validators.pat
 */
 @Component({
   selector: 'app-containers-page',
-  imports: [ReactiveFormsModule, Pager, SearchSelect],
+  imports: [ReactiveFormsModule, RouterLink, Pager, SearchSelect],
   templateUrl: './containers-page.html',
   styleUrl: './containers-page.css',
 })

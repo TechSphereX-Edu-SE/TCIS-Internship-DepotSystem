@@ -6,8 +6,8 @@
 }
 
 .limit {
+  margin: 8px 0 0;
   font-size: 12px;
-  padding-bottom: 12px;
 }
 
 .chart-head {
@@ -78,4 +78,54 @@
 
 .detail {
   min-width: 560px;
+}
+
+.operators {
+  min-width: 640px;
+}
+
+.expand-col {
+  width: 44px;
+}
+
+/* Lượt nhập / Lượt xuất tabs above the rows of an opened line operator */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+  .tab.active {
+    border-bottom-color: var(--focus);
+    color: inherit;
+    font-weight: 600;
+  }
+
+  .tab:focus-visible {
+    outline: 3px solid rgb(29 78 216 / 35%);
+  }
+
+.events {
+  min-width: 880px;
+  background: var(--surface);
+}
+
+.detail-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
 }

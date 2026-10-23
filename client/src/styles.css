@@ -432,6 +432,42 @@ a {
   align-items: flex-end;
 }
 
+  /* Feedback 8: Lọc / Lọc thêm / Xoá bộ lọc next to the fields */
+  .filters .filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Day counts and other short numbers take less room than a select */
+  .filters .field.small-field {
+    width: 110px;
+  }
+
+/* ▸ / ▾ button that opens the detail rows of a report line (feedback 7) */
+.expand-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+  .expand-button:focus-visible {
+    outline: 3px solid rgb(29 78 216 / 35%);
+    outline-offset: 2px;
+  }
+
+/* Detail table under an opened report line: indented on the page background */
+.table tr.detail-row > td {
+  padding: 12px 16px 16px 44px;
+  background: var(--page);
+}
+
 /* Total row at the bottom of a statistics table */
 .table tr.total td {
   font-weight: 600;

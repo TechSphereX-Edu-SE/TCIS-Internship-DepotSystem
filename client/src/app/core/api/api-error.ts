@@ -48,6 +48,7 @@ const MESSAGES: Record<string, string> = {
   'ContainerVisit.AlreadyGatedOut': 'Container đã xuất bãi.',
   'ContainerVisit.AlreadyInYard': 'Container đang ở trong bãi.',
   'ContainerVisit.ContainerAbove': 'Có container khác đang xếp phía trên.',
+  'ContainerVisit.NotFound': 'Không tìm thấy lượt ra/vào này.',
   'ContainerVisit.ContainerDamaged': 'Container đang hư hỏng, chưa xuất bãi được.',
   'ContainerVisit.NoOperatingAssignment':
     'Container chưa có quan hệ khai thác đã xác nhận cho ngày nhập, nên chưa biết hãng khai thác. Ghi nhận ở Danh mục · Container.',

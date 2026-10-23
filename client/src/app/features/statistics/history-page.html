@@ -1,0 +1,294 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Thống kê · Giờ Việt Nam · ngày nhập tính là ngày 0</p>
+      <h1>Lịch sử container</h1>
+    </div>
+  </header>
+
+  <!-- ================= Filters (feedback 8) ================= -->
+  <form class="card" [formGroup]="filters" (ngSubmit)="applyFilters()" role="search" aria-label="Lọc lịch sử container" novalidate>
+    <div class="filters">
+      <div class="field">
+        <label for="search">Số container</label>
+        <input id="search" class="mono upper" formControlName="search" placeholder="Một phần số container" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="operatorId">Hãng của lượt</label>
+        <select id="operatorId" formControlName="operatorId">
+          <option value="">Tất cả hãng</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="from">Từ ngày</label>
+        <input id="from" type="date" formControlName="from" />
+      </div>
+      <div class="field">
+        <label for="to">Đến ngày</label>
+        <input id="to" type="date" formControlName="to" />
+      </div>
+      <div class="field">
+        <label for="event">Sự kiện trong kỳ</label>
+        <select id="event" formControlName="event">
+          @for (event of events; track event) {
+          <option [value]="event">{{ eventLabel[event] }}</option>
+          }
+        </select>
+      </div>
+      @if (moreFilters()) {
+      <div class="field">
+        <label for="category">Loại</label>
+        <select id="category" formControlName="category">
+          <option value="">Tất cả loại</option>
+          @for (category of categories; track category) {
+          <option [value]="category">{{ categoryLabel[category] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="size">Kích thước</label>
+        <select id="size" formControlName="size">
+          <option value="">20ft và 40ft</option>
+          @for (size of sizes; track size) {
+          <option [value]="size">{{ sizeLabel[size] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="state">Lượt</label>
+        <select id="state" formControlName="state">
+          <option value="">Mở và đóng</option>
+          @for (state of states; track state) {
+          <option [value]="state">{{ stateLabel[state] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="purpose">Mục đích xuất</label>
+        <select id="purpose" formControlName="purpose">
+          <option value="">Tất cả</option>
+          @for (purpose of purposes; track purpose) {
+          <option [value]="purpose">{{ purposeLabel[purpose] }}</option>
+          }
+        </select>
+      </div>
+      }
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">Lọc</button>
+        <button class="btn btn-secondary" type="button" (click)="moreFilters.set(!moreFilters())" [attr.aria-expanded]="moreFilters()">
+          {{ moreFilters() ? 'Ẩn lọc thêm' : 'Lọc thêm' }}
+        </button>
+        <button class="btn btn-secondary" type="button" (click)="clearFilters()">Xoá bộ lọc</button>
+      </div>
+    </div>
+    <p class="muted small hint">
+      Nhập lọc theo giờ vào, Xuất lọc theo giờ ra; "Nhập hoặc xuất" lấy lượt có ít nhất một sự kiện trong kỳ, mỗi lượt một dòng.
+      Đây không phải báo cáo tồn tại một ngày trong quá khứ.
+    </p>
+  </form>
+
+  @if (error(); as message) {
+  <div class="alert alert-red" role="alert">{{ message }}</div>
+  }
+
+  <!-- ================= Summary of one container (from the catalog) ================= -->
+  @if (summary(); as s) {
+  <section class="card" aria-labelledby="summary-title">
+    <div class="list-head">
+      <h2 id="summary-title"><span class="mono">{{ s.containerNumber }}</span> · {{ s.isoCode }} · {{ categoryLabel[s.category] }} · {{ sizeLabel[s.size] }}</h2>
+      <span class="chip" [class.chip-green]="s.presence === 'InDepot'" [class.chip-amber]="s.presence === 'AtOutsideRepair'"
+        [class.chip-grey]="s.presence === 'OutOfDepot' || s.presence === 'NeverIn'">{{ presenceLabel[s.presence] }}</span>
+    </div>
+    <div class="stat-tiles">
+      <div class="stat-tile">
+        <span class="label">Lượt nhập</span>
+        <span class="value blue">{{ s.gateInCount }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="label">Lượt xuất</span>
+        <span class="value orange">{{ s.gateOutCount }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="label">Lưu lượt hiện tại</span>
+        <span class="value">{{ s.currentDwellDays === null ? '—' : s.currentDwellDays + ' ngày' }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="label">Tổng ngày lưu các lượt</span>
+        <span class="value">{{ s.totalDwellDays }} ngày</span>
+      </div>
+    </div>
+    <p class="muted small">
+      Chủ sở hữu hiện tại: {{ s.ownerCode ? s.ownerCode + ' · ' + s.ownerName : 'chưa đối chiếu' }}.
+      Tổng ngày lưu không cộng thời gian ở ngoài depot. Tính đến {{ s.asOf | date: 'dd/MM/yyyy HH:mm' : '+0700' }}.
+    </p>
+  </section>
+  }
+
+  <!-- ================= One row per visit ================= -->
+  <section class="card" aria-labelledby="rows-title">
+    <div class="list-head">
+      <h2 id="rows-title">Lượt ra/vào <span class="muted">· {{ totalCount() }}</span></h2>
+    </div>
+    @if (rows().length === 0) {
+    <p class="muted">{{ loading() ? 'Đang tải…' : 'Không có lượt nào phù hợp.' }}</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table history">
+        <thead>
+          <tr>
+            <th class="expand-col"><span class="visually-hidden">Mở lượt</span></th>
+            <th>Số container · mã lượt</th>
+            <th>Chủ sở hữu (lúc nhập)</th>
+            <th>Hãng của lượt</th>
+            <th>Giờ vào</th>
+            <th>Giờ ra</th>
+            <th class="num">Ngày lưu</th>
+            <th>Mục đích xuất · lệnh / chỉ thị</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.visitId) {
+          <tr>
+            <td>
+              <button class="expand-button" type="button" (click)="toggleVisit(row)" [attr.aria-expanded]="openVisitId() === row.visitId"
+                [attr.aria-label]="(openVisitId() === row.visitId ? 'Thu lượt ' : 'Mở lượt ') + row.containerNumber + ' ' + row.visitRef">
+                {{ openVisitId() === row.visitId ? '▾' : '▸' }}
+              </button>
+            </td>
+            <td>
+              <span class="mono">{{ row.containerNumber }}</span> <span class="muted small">· {{ row.visitRef }}</span>
+              <div class="muted small">{{ row.isoCode }} · {{ categoryLabel[row.category] }} · {{ sizeLabel[row.size] }}</div>
+            </td>
+            <td>
+              @if (row.ownerCode) {
+              {{ row.ownerCode }}
+              } @else {
+              <span class="muted">Không có dữ liệu</span>
+              }
+            </td>
+            <td>{{ row.lineOperatorCode }}</td>
+            <td>{{ row.gateInAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }}</td>
+            <td>
+              @if (row.gateOutAt) {
+              {{ row.gateOutAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }}
+              } @else {
+              <span class="chip chip-green">Đang trong bãi</span>
+              }
+            </td>
+            <td class="num">{{ row.dwellDays }}</td>
+            <td>{{ exitText(row) || '—' }}</td>
+          </tr>
+          @if (openVisitId() === row.visitId) {
+          <tr class="detail-row">
+            <td colspan="8">
+              @if (visitError(); as message) {
+              <div class="alert alert-red" role="alert">{{ message }}</div>
+              } @else if (visit(); as v) {
+              <div class="visit-grid">
+                <!-- Gate-in / gate-out -->
+                <section aria-label="Giao nhận">
+                  <h3>Giao nhận</h3>
+                  <dl class="facts">
+                    <div><dt>Vào bãi</dt><dd>{{ v.gateIn.at | date: 'dd/MM/yyyy HH:mm' : '+0700' }} · xe {{ v.gateIn.vehicleNo }}</dd></div>
+                    <div>
+                      <dt>Tình trạng khi vào</dt>
+                      <dd>
+                        {{ conditionLabel[v.gateIn.condition] }}{{ v.gateIn.conditionNote ? ' · ' + v.gateIn.conditionNote : '' }}
+                        {{ v.gateIn.legacyGrade ? ' · cấp ' + v.gateIn.legacyGrade + ' (dữ liệu cũ)' : '' }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Vị trí lúc nhập</dt>
+                      <dd>{{ v.gateIn.position ? positionText(v.gateIn.position) : 'Không có dữ liệu' }}</dd>
+                    </div>
+                    @if (v.gateOut; as out) {
+                    <div><dt>Ra bãi</dt><dd>{{ out.at | date: 'dd/MM/yyyy HH:mm' : '+0700' }} · xe {{ out.vehicleNo }}</dd></div>
+                    <div>
+                      <dt>Mục đích</dt>
+                      <dd>
+                        {{ out.purpose ? purposeLabel[out.purpose] : 'Không có dữ liệu' }}
+                        {{ out.deliveryOrderNumber ? ' · lệnh ' + out.deliveryOrderNumber : '' }}
+                        {{ out.customerName ? ' · ' + out.customerName : '' }}
+                        {{ out.repairFacility ? ' · ' + out.repairFacility : '' }}
+                      </dd>
+                    </div>
+                    } @else {
+                    <div><dt>Vị trí hiện tại</dt><dd>{{ v.currentPosition ? positionText(v.currentPosition) : '—' }}</dd></div>
+                    }
+                  </dl>
+                </section>
+
+                <!-- Moves -->
+                <section aria-label="Di chuyển">
+                  <h3>Di chuyển</h3>
+                  @if (v.moves.length === 0) {
+                  <p class="muted small">Chưa ghi nhận lần đảo chuyển nào (lịch sử đảo chuyển được lưu từ 23/10/2026).</p>
+                  } @else {
+                  <ul class="plain-list">
+                    @for (move of v.moves; track $index) {
+                    <li>
+                      {{ move.movedAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }}:
+                      <span class="mono">{{ positionText(move.from) }}</span> → <span class="mono">{{ positionText(move.to) }}</span>
+                      @if (move.movedBy) { <span class="muted small">· {{ move.movedBy }}</span> }
+                    </li>
+                    }
+                  </ul>
+                  }
+                </section>
+
+                <!-- Inspection / repair cases -->
+                <section aria-label="Giám định và sửa chữa">
+                  <h3>Giám định & sửa chữa</h3>
+                  @if (v.repairCases.length === 0) {
+                  <p class="muted small">Không có hồ sơ trong lượt này.</p>
+                  } @else {
+                  <ul class="plain-list">
+                    @for (repair of v.repairCases; track repair.id) {
+                    <li>
+                      <a [routerLink]="['/repairs']" [queryParams]="{ caseId: repair.id }">{{ repairStatusLabel[repair.status] }}</a>
+                      · mở {{ repair.openedAt | date: 'dd/MM/yyyy' : '+0700' }}
+                      @if (repair.closedAt) { · đóng {{ repair.closedAt | date: 'dd/MM/yyyy' : '+0700' }} }
+                      @if (repair.firstFinding) { <div class="muted small">{{ repair.firstFinding }}</div> }
+                    </li>
+                    }
+                  </ul>
+                  }
+                </section>
+
+                <!-- Stored documents -->
+                <section aria-label="Chứng từ">
+                  <h3>Chứng từ</h3>
+                  @if (v.documents.length === 0) {
+                  <p class="muted small">Không có chứng từ được lưu cho lượt này.</p>
+                  } @else {
+                  <ul class="plain-list">
+                    @for (doc of v.documents; track $index) {
+                    <li>
+                      {{ documentLabel[doc.kind] }}: {{ doc.reference || 'không có số' }}
+                      @if (doc.at) { <span class="muted small">· {{ doc.at | date: 'dd/MM/yyyy HH:mm' : '+0700' }}</span> }
+                      @if (doc.linkId && (doc.kind === 'RepairPhoto' || doc.kind === 'ExternalRepairOut' || doc.kind === 'ExternalRepairReturn')) {
+                      · <a [routerLink]="['/repairs']" [queryParams]="{ caseId: doc.linkId }">Mở hồ sơ</a>
+                      }
+                    </li>
+                    }
+                  </ul>
+                  }
+                </section>
+              </div>
+              } @else {
+              <p class="muted">Đang tải lượt…</p>
+              }
+            </td>
+          </tr>
+          }
+          }
+        </tbody>
+      </table>
+    </div>
+    <app-pager [page]="page()" [totalPages]="totalPages()" label="Phân trang lịch sử container" (pageChange)="goToPage($event)" />
+    }
+  </section>
+</div>

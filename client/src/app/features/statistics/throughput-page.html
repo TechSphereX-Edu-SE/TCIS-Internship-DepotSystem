@@ -5,26 +5,66 @@
       <h1>Sản lượng nhập/xuất theo hãng, theo ngày</h1>
     </div>
 
-    <form class="filters" [formGroup]="form" (ngSubmit)="load()" novalidate>
-      <div class="field">
-        <label for="from">Từ ngày</label>
-        <input id="from" type="date" formControlName="from" />
+    <form class="card" [formGroup]="form" (ngSubmit)="load()" role="search" aria-label="Lọc sản lượng" novalidate>
+      <div class="filters">
+        <div class="field">
+          <label for="from">Từ ngày</label>
+          <input id="from" type="date" formControlName="from" />
+        </div>
+        <div class="field">
+          <label for="to">Đến ngày</label>
+          <input id="to" type="date" formControlName="to" />
+        </div>
+        <div class="field">
+          <label for="lineOperatorId">Hãng</label>
+          <select id="lineOperatorId" formControlName="lineOperatorId">
+            <option value="">Tất cả hãng</option>
+            @for (operator of operators(); track operator.id) {
+            <option [value]="operator.id">{{ operator.code }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="category">Loại</label>
+          <select id="category" formControlName="category">
+            <option value="">Tất cả loại</option>
+            @for (category of categories; track category) {
+            <option [value]="category">{{ categoryLabel[category] }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="size">Kích thước</label>
+          <select id="size" formControlName="size">
+            <option value="">20ft và 40ft</option>
+            @for (size of sizes; track size) {
+            <option [value]="size">{{ sizeLabel[size] }}</option>
+            }
+          </select>
+        </div>
+        @if (moreFilters()) {
+        <div class="field">
+          <label for="purpose">Mục đích xuất</label>
+          <select id="purpose" formControlName="purpose">
+            <option value="">Tất cả</option>
+            @for (purpose of purposes; track purpose) {
+            <option [value]="purpose">{{ purposeLabel[purpose] }}</option>
+            }
+          </select>
+        </div>
+        }
+        <div class="filter-actions">
+          <button class="btn btn-dark" type="submit" [disabled]="loading() || !!rangeError()">{{ loading() ? 'Đang tải…' : 'Xem' }}</button>
+          <button class="btn btn-secondary" type="button" (click)="moreFilters.set(!moreFilters())" [attr.aria-expanded]="moreFilters()">
+            {{ moreFilters() ? 'Ẩn lọc thêm' : 'Lọc thêm' }}
+          </button>
+          <button class="btn btn-secondary" type="button" (click)="clearFilters()">Xoá bộ lọc</button>
+        </div>
       </div>
-      <div class="field">
-        <label for="to">Đến ngày</label>
-        <input id="to" type="date" formControlName="to" />
-      </div>
-      <div class="field">
-        <label for="lineOperatorId">Hãng</label>
-        <select id="lineOperatorId" formControlName="lineOperatorId">
-          <option value="">Tất cả hãng</option>
-          @for (operator of operators(); track operator.id) {
-          <option [value]="operator.id">{{ operator.code }}</option>
-          }
-        </select>
-      </div>
-      <button class="btn btn-dark" type="submit" [disabled]="loading() || !!rangeError()">{{ loading() ? 'Đang tải…' : 'Xem' }}</button>
-      <span class="muted limit">Tối đa {{ maxDays }} ngày</span>
+      <p class="muted limit">
+        Khoảng ngày gồm cả hai đầu, tối đa {{ maxDays }} ngày. Lượt nhập tính theo giờ vào, lượt xuất theo giờ ra.
+        Mục đích xuất chỉ lọc lượt xuất.
+      </p>
     </form>
   </header>
 
@@ -44,6 +84,14 @@
     <div class="stat-tile">
       <span class="label">Tổng lượt ra bãi</span>
       <span class="value orange">{{ data.totalGateOut }}</span>
+    </div>
+    <div class="stat-tile">
+      <span class="label">Trong đó cấp rỗng</span>
+      <span class="value">{{ data.totalReleased }}</span>
+    </div>
+    <div class="stat-tile">
+      <span class="label">Trong đó chuyển sửa ngoài</span>
+      <span class="value">{{ data.totalToRepair }}</span>
     </div>
   </div>
 
@@ -79,6 +127,125 @@
         }
       </div>
     </div>
+  </section>
+
+  <!-- ================= Per line operator, with the event rows behind each total (feedback 7) ================= -->
+  <section class="card" aria-labelledby="operators-title">
+    <h2 id="operators-title">Theo hãng</h2>
+    @if (data.lineOperators.length === 0) {
+    <p class="muted">Không có lượt vào hoặc ra bãi nào trong khoảng thời gian này.</p>
+    } @else {
+    <div class="table-wrap">
+      <table class="table operators">
+        <thead>
+          <tr>
+            <th class="expand-col"><span class="visually-hidden">Mở chi tiết</span></th>
+            <th>Hãng</th>
+            <th class="num">Vào bãi</th>
+            <th class="num">Ra bãi</th>
+            <th class="num">Cấp rỗng</th>
+            <th class="num">Chuyển sửa ngoài</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of data.lineOperators; track row.lineOperatorId) {
+          <tr>
+            <td>
+              <button class="expand-button" type="button" (click)="toggle(row.lineOperatorId)"
+                [attr.aria-expanded]="isOpen(row.lineOperatorId)"
+                [attr.aria-label]="(isOpen(row.lineOperatorId) ? 'Thu chi tiết ' : 'Mở chi tiết ') + row.code">
+                {{ isOpen(row.lineOperatorId) ? '▾' : '▸' }}
+              </button>
+            </td>
+            <td>{{ row.code }} · {{ row.name }}</td>
+            <td class="num">{{ row.gateIn }}</td>
+            <td class="num">{{ row.gateOut }}</td>
+            <td class="num">{{ row.released }}</td>
+            <td class="num">{{ row.toRepair }}</td>
+          </tr>
+          @if (isOpen(row.lineOperatorId)) {
+          <tr class="detail-row">
+            <td colspan="6">
+              <div class="tabs" role="tablist" [attr.aria-label]="'Lượt của ' + row.code">
+                <button class="tab" type="button" role="tab" [class.active]="tabOf(row.lineOperatorId) === 'GateIn'"
+                  [attr.aria-selected]="tabOf(row.lineOperatorId) === 'GateIn'" (click)="showTab(row.lineOperatorId, 'GateIn')">
+                  Lượt nhập ({{ row.gateIn }})
+                </button>
+                <button class="tab" type="button" role="tab" [class.active]="tabOf(row.lineOperatorId) === 'GateOut'"
+                  [attr.aria-selected]="tabOf(row.lineOperatorId) === 'GateOut'" (click)="showTab(row.lineOperatorId, 'GateOut')">
+                  Lượt xuất ({{ row.gateOut }})
+                </button>
+              </div>
+              @let kind = tabOf(row.lineOperatorId);
+              @if (details.state(detailKey(row.lineOperatorId, kind)); as detail) {
+              @if (detail.error) {
+              <div class="alert alert-red" role="alert">{{ detail.error }}</div>
+              } @else if (detail.items.length === 0) {
+              <p class="muted">{{ detail.loading ? 'Đang tải…' : 'Không có lượt nào.' }}</p>
+              } @else {
+              <div class="table-wrap">
+                <table class="table events">
+                  <thead>
+                    <tr>
+                      <th>Số container · mã lượt</th>
+                      <th>ISO · loại · kích thước</th>
+                      <th>Hãng của lượt</th>
+                      <th>Giờ vào</th>
+                      <th>Giờ ra</th>
+                      <th class="num">Ngày lưu</th>
+                      <th>Mục đích xuất</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of detail.items; track item.visitId) {
+                    <tr>
+                      <td><span class="mono">{{ item.containerNumber }}</span> <span class="muted small">· {{ item.visitRef }}</span></td>
+                      <td>{{ item.isoCode }} · {{ categoryLabel[item.category] }} · {{ sizeLabel[item.size] }}</td>
+                      <td>{{ item.lineOperatorCode }}</td>
+                      <td>{{ item.gateInAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }}</td>
+                      <td>
+                        @if (item.gateOutAt) {
+                        {{ item.gateOutAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }}
+                        } @else {
+                        <span class="muted">Đang trong bãi</span>
+                        }
+                      </td>
+                      <td class="num">{{ item.dwellDays }}</td>
+                      <td>{{ exitText(item) || '—' }}</td>
+                    </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <div class="detail-foot">
+                <span class="muted small">
+                  {{ detail.totalCount }} lượt ·
+                  <a [routerLink]="['/statistics/history']" [queryParams]="historyParams(row.lineOperatorId, kind)">Mở trong Lịch sử</a>
+                </span>
+                <app-pager [page]="detail.page" [totalPages]="detail.totalPages" [label]="'Phân trang lượt của ' + row.code"
+                  (pageChange)="details.load(detailKey(row.lineOperatorId, kind), $event)" />
+              </div>
+              @if (kind === 'GateIn') {
+              <p class="muted small">Giờ ra sau kỳ chỉ để tham chiếu, không tính vào lượt xuất của kỳ này.</p>
+              }
+              }
+              }
+            </td>
+          </tr>
+          }
+          }
+          <tr class="total">
+            <td></td>
+            <td>Tổng</td>
+            <td class="num">{{ data.totalGateIn }}</td>
+            <td class="num">{{ data.totalGateOut }}</td>
+            <td class="num">{{ data.totalReleased }}</td>
+            <td class="num">{{ data.totalToRepair }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    }
   </section>
 
   <!-- ================= Table: date x line operator ================= -->

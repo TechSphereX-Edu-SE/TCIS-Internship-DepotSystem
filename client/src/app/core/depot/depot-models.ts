@@ -196,7 +196,14 @@ export interface YardSearchFilter {
   repair?: YardRepairState | null;
   minDwellDays?: number | null;
   maxDwellDays?: number | null;
+  // Feedback 8 (Tồn bãi): gate-in Vietnam dates "yyyy-MM-dd", both included
+  gateInFrom?: string | null;
+  gateInTo?: string | null;
+  // Row order without a search: yard position (default), longest stay first, or newest first
+  sort?: YardSort | null;
 }
+
+export type YardSort = 'Position' | 'Oldest' | 'Newest';
 
 /*
   Mark drawn on a container in the yard: 'abnormal' (chờ giám định), 'repair' (cần sửa / đang xử lý), or null.
@@ -445,8 +452,9 @@ export interface LineOperatorInventory {
 }
 
 export interface YardInventory {
-  // Vietnam date the dwell days were counted on
+  // Vietnam date and exact time the dwell days were counted on (feedback 7: hiển thị mốc tính)
   asOf: string;
+  asOfTime: string;
   longStayDays: number;
   lineOperators: LineOperatorInventory[];
   totalShortStay: number;
@@ -468,11 +476,253 @@ export interface Throughput {
   to: string;
   days: DailyThroughput[];
   totalGateIn: number;
+  // totalGateOut = totalReleased (cấp rỗng) + totalToRepair (chuyển sửa ngoài)
   totalGateOut: number;
+  totalReleased: number;
+  totalToRepair: number;
+  // One row per line operator with at least one event: the rows the detail tabs open from
+  lineOperators: OperatorThroughput[];
+}
+
+export interface OperatorThroughput {
+  lineOperatorId: string;
+  code: string;
+  name: string;
+  gateIn: number;
+  gateOut: number;
+  released: number;
+  toRepair: number;
 }
 
 // Same limit as GetThroughputQuery.MaxDays (both dates included)
 export const THROUGHPUT_MAX_DAYS = 366;
+
+/*
+  Filters of the yard inventory report: the same ones as the detail rows (yard search), so a total and
+  the rows opened under it always agree (feedback 8). Empty values are left out of the request.
+*/
+export type YardInventoryFilter = Omit<YardSearchFilter, 'search' | 'sort'>;
+
+// Filters of the throughput totals and detail rows (purpose only narrows gate-outs)
+export interface ThroughputFilter {
+  lineOperatorId?: string | null;
+  category?: ContainerCategory | null;
+  size?: ContainerSize | null;
+  purpose?: GateOutPurpose | null;
+}
+
+export type ThroughputEventKind = 'GateIn' | 'GateOut';
+
+// ---------- container history (feedback 7: Lịch sử container) ----------
+
+/*
+  One visit (lượt). visitRef is a short code of the visit (first 8 characters of its id).
+  ownerCode / ownerName: owner recorded at gate-in; null = no historical data, never today's owner.
+  lineOperatorCode: operator of that visit. dwellDays: to the gate-out, or to today for an open visit.
+*/
+export interface VisitHistoryRow {
+  visitId: string;
+  visitRef: string;
+  containerId: string;
+  containerNumber: string;
+  isoCode: string;
+  category: ContainerCategory;
+  size: ContainerSize;
+  ownerCode: string | null;
+  ownerName: string | null;
+  lineOperatorId: string;
+  lineOperatorCode: string;
+  gateInAt: string;
+  gateOutAt: string | null;
+  isOpen: boolean;
+  dwellDays: number;
+  exitPurpose: GateOutPurpose | null;
+  deliveryOrderId: string | null;
+  deliveryOrderNumber: string | null;
+  repairFacility: string | null;
+}
+
+// Which time the period applies to: gate-in, gate-out, or either (still one row per visit)
+export type VisitHistoryEvent = 'Any' | 'GateIn' | 'GateOut';
+
+export const VISIT_HISTORY_EVENT_LABEL: Record<VisitHistoryEvent, string> = {
+  Any: 'Nhập hoặc xuất',
+  GateIn: 'Nhập (giờ vào)',
+  GateOut: 'Xuất (giờ ra)',
+};
+
+export type VisitState = 'Open' | 'Closed';
+
+export const VISIT_STATE_LABEL: Record<VisitState, string> = {
+  Open: 'Đang mở (trong bãi)',
+  Closed: 'Đã đóng (đã xuất)',
+};
+
+// Filters of GET /api/container-visits/history; also the query params of the history page
+export interface VisitHistoryFilter {
+  search?: string | null;
+  containerId?: string | null;
+  operatorId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  event?: VisitHistoryEvent | null;
+  category?: ContainerCategory | null;
+  size?: ContainerSize | null;
+  state?: VisitState | null;
+  purpose?: GateOutPurpose | null;
+}
+
+export interface VisitPosition {
+  blockId: string;
+  blockCode: string;
+  isVirtual: boolean;
+  bay: number | null;
+  row: number | null;
+  tier: number | null;
+}
+
+export type VisitDocumentKind = 'OperatingAssignment' | 'DeliveryOrder' | 'ExternalRepairOut' | 'ExternalRepairReturn' | 'RepairPhoto';
+
+export const VISIT_DOCUMENT_KIND_LABEL: Record<VisitDocumentKind, string> = {
+  OperatingAssignment: 'Căn cứ phân công khai thác',
+  DeliveryOrder: 'Lệnh cấp rỗng',
+  ExternalRepairOut: 'Chỉ thị chuyển sửa ngoài',
+  ExternalRepairReturn: 'Quay về từ sửa ngoài',
+  RepairPhoto: 'Ảnh hư hỏng',
+};
+
+// GET /api/container-visits/history/{visitId}
+export interface VisitHistoryDetail {
+  visit: VisitHistoryRow;
+  gateIn: {
+    at: string;
+    vehicleNo: string;
+    condition: ContainerCondition;
+    conditionNote: string | null;
+    legacyGrade: string | null;
+    // null: gate-in position not stored (visits before 23/10/2026)
+    position: VisitPosition | null;
+  };
+  gateOut: {
+    at: string;
+    vehicleNo: string;
+    purpose: GateOutPurpose | null;
+    deliveryOrderNumber: string | null;
+    customerName: string | null;
+    repairFacility: string | null;
+  } | null;
+  currentPosition: VisitPosition | null;
+  moves: { movedAt: string; from: VisitPosition; to: VisitPosition; movedBy: string | null }[];
+  repairCases: {
+    id: string;
+    status: RepairCaseStatus;
+    repairNeeded: boolean | null;
+    openedAt: string;
+    closedAt: string | null;
+    firstFinding: string | null;
+    photoCount: number;
+  }[];
+  documents: { kind: VisitDocumentKind; reference: string | null; at: string | null; linkId: string | null }[];
+}
+
+export type ContainerPresence = 'NeverIn' | 'InDepot' | 'AtOutsideRepair' | 'OutOfDepot';
+
+export const CONTAINER_PRESENCE_LABEL: Record<ContainerPresence, string> = {
+  NeverIn: 'Chưa từng vào depot',
+  InDepot: 'Đang trong depot',
+  AtOutsideRepair: 'Đang sửa ngoài',
+  OutOfDepot: 'Ngoài depot',
+};
+
+// GET /api/container-visits/history/containers/{containerId}
+export interface ContainerVisitSummary {
+  containerId: string;
+  containerNumber: string;
+  isoCode: string;
+  category: ContainerCategory;
+  size: ContainerSize;
+  ownerCode: string | null;
+  ownerName: string | null;
+  gateInCount: number;
+  gateOutCount: number;
+  presence: ContainerPresence;
+  currentVisitId: string | null;
+  currentDwellDays: number | null;
+  // Sum of the dwell days of every visit; days outside the depot are not added
+  totalDwellDays: number;
+  asOf: string;
+}
+
+/*
+  Query string values without the empty ones (null, undefined, '' or blank text), so a filter left empty
+  is not sent at all. Text is trimmed; numbers are kept, 0 included.
+*/
+export function compactParams(values: Record<string, string | number | null | undefined>): Record<string, string | number> {
+  const params: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === 'string') {
+      if (value.trim()) params[key] = value.trim();
+    } else {
+      params[key] = value;
+    }
+  }
+  return params;
+}
+
+/*
+  Query params of a link from a report to the history page (feedback 7: báo cáo liên kết sang lịch sử mang
+  theo bộ lọc). Same names as the history page reads; empty filters are left out.
+*/
+export function historyLinkParams(filter: VisitHistoryFilter): Record<string, string | number> {
+  return compactParams({
+    search: filter.search,
+    containerId: filter.containerId,
+    operatorId: filter.operatorId,
+    from: filter.from,
+    to: filter.to,
+    event: filter.event,
+    category: filter.category,
+    size: filter.size,
+    state: filter.state,
+    purpose: filter.purpose,
+  });
+}
+
+/*
+  History filter read back from the page URL (links from reports and the container catalog, reload, back).
+  Values that are not one of the API's own (a mistyped or old link) are dropped instead of sent, so the
+  page still opens with the remaining filters.
+*/
+export function historyFilterFromParams(get: (key: string) => string | null): VisitHistoryFilter {
+  const pick = <T extends string>(key: string, allowed: readonly T[]): T | null => {
+    const value = get(key);
+    return value !== null && (allowed as readonly string[]).includes(value) ? (value as T) : null;
+  };
+  const date = (key: string): string | null => {
+    const value = get(key);
+    return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+  };
+  return {
+    search: get('search'),
+    containerId: get('containerId'),
+    operatorId: get('operatorId'),
+    from: date('from'),
+    to: date('to'),
+    event: pick<VisitHistoryEvent>('event', ['Any', 'GateIn', 'GateOut']),
+    category: pick('category', CATEGORIES),
+    size: pick('size', SIZES),
+    state: pick<VisitState>('state', ['Open', 'Closed']),
+    purpose: pick('purpose', GATE_OUT_PURPOSES),
+  };
+}
+
+// "Cấp rỗng · DO-001" / "Chuyển sửa ngoài · Xưởng A"; "" while the visit is open
+export function exitText(row: Pick<VisitHistoryRow, 'exitPurpose' | 'deliveryOrderNumber' | 'repairFacility'>): string {
+  if (!row.exitPurpose) return '';
+  const reference = row.exitPurpose === 'EmptyRelease' ? row.deliveryOrderNumber : row.repairFacility;
+  return reference ? `${GATE_OUT_PURPOSE_LABEL[row.exitPurpose]} · ${reference}` : GATE_OUT_PURPOSE_LABEL[row.exitPurpose];
+}
 
 // ---------- catalog requests (Danh mục) ----------
 
@@ -547,6 +797,14 @@ export interface CreateContainerRequest extends UpdateContainerRequest {
 
 // The 7 container types of Appendix II, in the order of the API enum
 export const CATEGORIES: ContainerCategory[] = ['Dry', 'Reefer', 'OpenTop', 'FlatRack', 'Bunker', 'Ventilated', 'Specialized'];
+
+// Both sizes, in the order of the API enum (filters and dropdowns)
+export const SIZES: ContainerSize[] = ['Ft20', 'Ft40'];
+
+// Repair states offered in the filters, most urgent first
+export const YARD_REPAIR_STATES: YardRepairState[] = ['Abnormal', 'InRepair', 'AnyOpen', 'None'];
+
+export const GATE_OUT_PURPOSES: GateOutPurpose[] = ['EmptyRelease', 'ExternalRepair'];
 
 // ---------- display helpers ----------
 export const SIZE_LABEL: Record<ContainerSize, string> = { Ft20: '20ft', Ft40: '40ft' };

@@ -5,6 +5,10 @@ import {
   DeliveryOrder,
   DeliveryOrderLine,
   canCancelOrder,
+  compactParams,
+  exitText,
+  historyFilterFromParams,
+  historyLinkParams,
   addDays,
   assignmentCovers,
   blockAccepts,
@@ -191,5 +195,59 @@ describe('yard repair markers (feedback 5)', () => {
     expect(repairMarker({ repairStatus: null, condition: 'Normal' })).toBeNull();
     expect(repairMarker({ repairStatus: 'Passed', condition: 'Normal' })).toBeNull();
     expect(repairMarker({ repairStatus: null, condition: 'Damaged' })).toBe('abnormal');
+  });
+});
+
+describe('report and history helpers (feedback 7 + 8)', () => {
+  it('leaves empty filters out of the query string but keeps 0', () => {
+    expect(compactParams({ search: '  ', operatorId: null, size: undefined, minDwellDays: 0, category: 'Dry', text: ' MSCU ' })).toEqual({
+      minDwellDays: 0,
+      category: 'Dry',
+      text: 'MSCU',
+    });
+  });
+
+  it('builds a history link with only the filters given', () => {
+    expect(historyLinkParams({ operatorId: 'op-1', from: '2026-10-01', to: '2026-10-15', event: 'GateOut', purpose: null })).toEqual({
+      operatorId: 'op-1',
+      from: '2026-10-01',
+      to: '2026-10-15',
+      event: 'GateOut',
+    });
+  });
+
+  it('reads a history link back and drops values the API does not know', () => {
+    const params: Record<string, string> = {
+      search: 'MSCU',
+      from: '2026-10-01',
+      to: '01/10/2026',
+      event: 'GateIn',
+      category: 'Boat',
+      size: 'Ft40',
+      state: 'Closed',
+      purpose: 'ExternalRepair',
+    };
+    const filter = historyFilterFromParams((key) => params[key] ?? null);
+
+    expect(filter).toEqual({
+      search: 'MSCU',
+      containerId: null,
+      operatorId: null,
+      from: '2026-10-01',
+      to: null,
+      event: 'GateIn',
+      category: null,
+      size: 'Ft40',
+      state: 'Closed',
+      purpose: 'ExternalRepair',
+    });
+  });
+
+  it('names what a visit left under, and nothing while it is open', () => {
+    expect(exitText({ exitPurpose: 'EmptyRelease', deliveryOrderNumber: 'DO-001', repairFacility: null })).toBe('Cấp rỗng · DO-001');
+    expect(exitText({ exitPurpose: 'ExternalRepair', deliveryOrderNumber: null, repairFacility: 'Xưởng A' })).toBe(
+      'Chuyển sửa ngoài · Xưởng A',
+    );
+    expect(exitText({ exitPurpose: null, deliveryOrderNumber: null, repairFacility: null })).toBe('');
   });
 });

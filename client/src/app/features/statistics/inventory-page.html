@@ -2,22 +2,100 @@
   <header class="page-header">
     <div>
       <p class="eyebrow">
-        Thống kê{{ inventory() ? ' · Tính đến ' + formatDate(inventory()!.asOf) + ' (giờ Việt Nam)' : '' }}
+        Thống kê
+        @if (inventory(); as data) {
+        · Tính đến {{ data.asOfTime | date: 'dd/MM/yyyy HH:mm' : '+0700' }} (giờ Việt Nam) · ngày nhập tính là ngày 0
+        }
       </p>
       <h1>Container tồn bãi theo hãng</h1>
     </div>
-
-    <form class="filters" [formGroup]="filterForm" (ngSubmit)="load()" novalidate>
-      <div class="field" [class.has-error]="longStayDays.invalid && longStayDays.touched">
-        <label for="longStayDays">Mốc tồn lâu (ngày)</label>
-        <input id="longStayDays" class="days" type="number" min="1" max="365" step="1" formControlName="longStayDays" />
-      </div>
-      <button class="btn btn-dark" type="submit" [disabled]="loading()">{{ loading() ? 'Đang tải…' : 'Xem' }}</button>
-    </form>
   </header>
+
+  <!-- ================= Filters (feedback 8): above the table, below the title ================= -->
+  <form class="card" [formGroup]="filterForm" (ngSubmit)="load()" role="search" aria-label="Lọc tồn bãi" novalidate>
+    <div class="filters">
+      <div class="field">
+        <label for="operatorId">Hãng khai thác</label>
+        <select id="operatorId" formControlName="operatorId">
+          <option value="">Tất cả hãng</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="category">Loại</label>
+        <select id="category" formControlName="category">
+          <option value="">Tất cả loại</option>
+          @for (category of categories; track category) {
+          <option [value]="category">{{ categoryLabel[category] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="size">Kích thước</label>
+        <select id="size" formControlName="size">
+          <option value="">20ft và 40ft</option>
+          @for (size of sizes; track size) {
+          <option [value]="size">{{ sizeLabel[size] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field small-field">
+        <label for="minDwellDays">Lưu từ (ngày)</label>
+        <input id="minDwellDays" type="number" min="0" formControlName="minDwellDays" />
+      </div>
+      <div class="field small-field">
+        <label for="maxDwellDays">Đến (ngày)</label>
+        <input id="maxDwellDays" type="number" min="0" formControlName="maxDwellDays" />
+      </div>
+      <div class="field small-field" [class.has-error]="longStayDays.invalid && longStayDays.touched">
+        <label for="longStayDays">Mốc tồn lâu</label>
+        <input id="longStayDays" type="number" min="1" max="365" step="1" formControlName="longStayDays" />
+      </div>
+      @if (moreFilters()) {
+      <div class="field">
+        <label for="blockId">Block</label>
+        <select id="blockId" formControlName="blockId">
+          <option value="">Tất cả block</option>
+          @for (block of blocks(); track block.id) {
+          <option [value]="block.id">{{ block.code }}{{ block.isVirtual ? ' (ảo)' : '' }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="repair">Tình trạng xử lý</label>
+        <select id="repair" formControlName="repair">
+          <option value="">Tất cả</option>
+          @for (state of repairStates; track state) {
+          <option [value]="state">{{ repairStateLabel[state] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="gateInFrom">Ngày nhập từ</label>
+        <input id="gateInFrom" type="date" formControlName="gateInFrom" />
+      </div>
+      <div class="field">
+        <label for="gateInTo">Ngày nhập đến</label>
+        <input id="gateInTo" type="date" formControlName="gateInTo" />
+      </div>
+      }
+      <div class="filter-actions">
+        <button class="btn btn-dark" type="submit" [disabled]="loading()">{{ loading() ? 'Đang tải…' : 'Xem' }}</button>
+        <button class="btn btn-secondary" type="button" (click)="moreFilters.set(!moreFilters())" [attr.aria-expanded]="moreFilters()">
+          {{ moreFilters() ? 'Ẩn lọc thêm' : 'Lọc thêm' }}
+        </button>
+        <button class="btn btn-secondary" type="button" (click)="clearFilters()">Xoá bộ lọc</button>
+      </div>
+    </div>
+  </form>
 
   @if (longStayDays.invalid && longStayDays.touched) {
   <div class="alert alert-amber" role="status">Mốc tồn lâu là số ngày nguyên từ 1 đến 365.</div>
+  }
+  @if (filterError(); as message) {
+  <div class="alert alert-amber" role="status">{{ message }}</div>
   }
   @if (error(); as message) {
   <div class="alert alert-red" role="alert">{{ message }}</div>
@@ -71,13 +149,22 @@
     }
   </section>
 
-  <!-- ================= Table ================= -->
+  <!-- ================= Table with the rows of each line operator ================= -->
   <section class="card" aria-labelledby="table-title">
-    <h2 id="table-title">Bảng số liệu</h2>
+    <div class="list-head">
+      <h2 id="table-title">Bảng số liệu</h2>
+      <div class="sort-switch" role="group" aria-label="Thứ tự container khi mở chi tiết">
+        <button class="btn btn-small" type="button" [class.btn-dark]="sort() === 'Oldest'" [class.btn-secondary]="sort() !== 'Oldest'"
+          [attr.aria-pressed]="sort() === 'Oldest'" (click)="changeSort('Oldest')">Tồn lâu nhất trước</button>
+        <button class="btn btn-small" type="button" [class.btn-dark]="sort() === 'Newest'" [class.btn-secondary]="sort() !== 'Newest'"
+          [attr.aria-pressed]="sort() === 'Newest'" (click)="changeSort('Newest')">Mới vào trước</button>
+      </div>
+    </div>
     <div class="table-wrap">
       <table class="table inventory">
         <thead>
           <tr>
+            <th class="expand-col"><span class="visually-hidden">Mở chi tiết</span></th>
             <th>Hãng</th>
             <th class="num">{{ shortLabel() }}</th>
             <th class="num">{{ longLabel() }}</th>
@@ -87,13 +174,77 @@
         <tbody>
           @for (row of data.lineOperators; track row.lineOperatorId) {
           <tr>
+            <td>
+              <button class="expand-button" type="button" (click)="details.toggle(row.lineOperatorId)"
+                [attr.aria-expanded]="details.isOpen(row.lineOperatorId)"
+                [attr.aria-label]="(details.isOpen(row.lineOperatorId) ? 'Thu chi tiết ' : 'Mở chi tiết ') + row.code">
+                {{ details.isOpen(row.lineOperatorId) ? '▾' : '▸' }}
+              </button>
+            </td>
             <td>{{ row.code }} · {{ row.name }}</td>
             <td class="num">{{ row.shortStay }}</td>
             <td class="num">{{ row.longStay }}</td>
             <td class="num strong">{{ row.total }}</td>
           </tr>
+          @if (details.isOpen(row.lineOperatorId)) {
+          <tr class="detail-row">
+            <td colspan="5">
+              @if (details.state(row.lineOperatorId); as detail) {
+              @if (detail.error) {
+              <div class="alert alert-red" role="alert">{{ detail.error }}</div>
+              } @else if (detail.items.length === 0) {
+              <p class="muted">{{ detail.loading ? 'Đang tải…' : 'Không có container phù hợp.' }}</p>
+              } @else {
+              <div class="table-wrap">
+                <table class="table detail-table" [attr.aria-label]="'Container tồn của ' + row.code">
+                  <thead>
+                    <tr>
+                      <th>Số container</th>
+                      <th>ISO · loại · kích thước</th>
+                      <th>Vị trí</th>
+                      <th>Giờ vào</th>
+                      <th class="num">Ngày lưu</th>
+                      <th>Tình trạng</th>
+                      <th>Giờ ra</th>
+                      <th><span class="visually-hidden">Lịch sử</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of detail.items; track item.visitId) {
+                    <tr>
+                      <td class="mono">{{ item.containerNumber }}</td>
+                      <td>{{ item.isoCode }} · {{ categoryLabel[item.category] }} · {{ sizeLabel[item.size] }}</td>
+                      <td class="mono">{{ formatPosition(item.blockCode, item.bay, item.row, item.tier) }}</td>
+                      <td>{{ item.gateInAt | date: 'dd/MM/yyyy HH:mm' : '+0700' }}</td>
+                      <td class="num">{{ dwellOf(item) }}</td>
+                      <td>
+                        @if (repairMarker(item); as marker) {
+                        <span class="chip" [class]="markerChip[marker]">{{ markerLabel[marker] }}</span>
+                        } @else {
+                        <span class="chip chip-green">{{ conditionLabel[item.condition] }}</span>
+                        }
+                      </td>
+                      <td class="muted">Đang trong bãi</td>
+                      <td><a [routerLink]="['/statistics/history']" [queryParams]="historyParams(item)">Lịch sử</a></td>
+                    </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <div class="detail-foot">
+                <span class="muted small">{{ detail.totalCount }} container · <a [routerLink]="['/statistics/history']"
+                    [queryParams]="operatorHistoryParams(row.lineOperatorId)">Mở trong Lịch sử</a></span>
+                <app-pager [page]="detail.page" [totalPages]="detail.totalPages" [label]="'Phân trang container của ' + row.code"
+                  (pageChange)="details.load(row.lineOperatorId, $event)" />
+              </div>
+              }
+              }
+            </td>
+          </tr>
+          }
           }
           <tr class="total">
+            <td></td>
             <td>Tổng</td>
             <td class="num">{{ data.totalShortStay }}</td>
             <td class="num">{{ data.totalLongStay }}</td>
