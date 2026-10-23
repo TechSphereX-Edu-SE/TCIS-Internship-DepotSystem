@@ -1,3 +1,12 @@
+/* Filters card above the list and the form */
+.filters-card {
+  margin-bottom: 24px;
+}
+
+  .filters-card .field {
+    min-width: 170px;
+  }
+
 .form {
   gap: 18px;
 }

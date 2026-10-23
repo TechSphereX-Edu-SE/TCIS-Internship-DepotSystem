@@ -15,16 +15,8 @@ public sealed class GetAllContainersQueryHandler(IAppDbContext dbContext, TimePr
         GetAllContainersQuery query, CancellationToken cancellationToken = default)
     {
         var today = DepotTime.DateOf(timeProvider.GetUtcNow());
-        var containers = dbContext.Containers.AsNoTracking().Include(c => c.Owner).AsQueryable();
+        var containers = ApplyFilters(dbContext.Containers.AsNoTracking().Include(c => c.Owner), query, today);
         IOrderedQueryable<Container> ordered;
-
-        if (query.OperatorId is { } operatorId)
-        {
-            var operated = dbContext.OperatingAssignments.ActiveOn(today)
-                .Where(a => a.OperatorId == operatorId)
-                .Select(a => a.ContainerId);
-            containers = containers.Where(c => operated.Contains(c.Id));
-        }
 
         if (string.IsNullOrWhiteSpace(query.Search))
         {
@@ -65,5 +57,48 @@ public sealed class GetAllContainersQueryHandler(IAppDbContext dbContext, TimePr
         var items = page.Select(c => ContainerResponse.From(c, operatorByContainer.GetValueOrDefault(c.Id))).ToList();
 
         return Result.Success(new PagedResult<ContainerResponse>(items, totalCount, query.Page, query.PageSize));
+    }
+
+    /*
+        Catalog filters, each only when given, so the gate-in lookup (search only) is unchanged.
+        Operator and location are sub-queries (IN / NOT IN) on assignments and open visits:
+        one SQL statement, counted and paged like the plain list.
+    */
+    private IQueryable<Container> ApplyFilters(IQueryable<Container> containers, GetAllContainersQuery query, DateOnly today)
+    {
+        var activeToday = dbContext.OperatingAssignments.ActiveOn(today);
+
+        if (query.OperatorId is { } operatorId)
+        {
+            var operated = activeToday.Where(a => a.OperatorId == operatorId).Select(a => a.ContainerId);
+            containers = containers.Where(c => operated.Contains(c.Id));
+        }
+
+        if (query.HasOperator is { } hasOperator)
+        {
+            var operatedToday = activeToday.Select(a => a.ContainerId);
+            containers = hasOperator
+                ? containers.Where(c => operatedToday.Contains(c.Id))
+                : containers.Where(c => !operatedToday.Contains(c.Id));
+        }
+
+        if (query.InYard is { } inYard)
+        {
+            var inYardIds = dbContext.ContainerVisits.Where(v => v.GateOutAt == null).Select(v => v.ContainerId);
+            containers = inYard
+                ? containers.Where(c => inYardIds.Contains(c.Id))
+                : containers.Where(c => !inYardIds.Contains(c.Id));
+        }
+
+        if (query.OwnerId is { } ownerId)
+            containers = containers.Where(c => c.OwnerId == ownerId);
+        if (query.Category is { } category)
+            containers = containers.Where(c => c.Category == category);
+        if (query.Size is { } size)
+            containers = containers.Where(c => c.Size == size);
+        if (query.Condition is { } condition)
+            containers = containers.Where(c => c.Condition == condition);
+
+        return containers;
     }
 }

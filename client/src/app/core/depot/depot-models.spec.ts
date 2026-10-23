@@ -6,6 +6,7 @@ import {
   DeliveryOrderLine,
   canCancelOrder,
   compactParams,
+  containerFilterParams,
   exitText,
   historyFilterFromParams,
   historyLinkParams,
@@ -264,5 +265,23 @@ describe('repair cost helpers (feedback 4)', () => {
   it('adds the party name to the payer role when there is one', () => {
     expect(payerText({ payer: 'Owner', payerName: 'Triton' })).toBe('Chủ sở hữu (Triton)');
     expect(payerText({ payer: 'LineOperator', payerName: null })).toBe('Hãng khai thác');
+  });
+});
+
+describe('containerFilterParams (catalog filters)', () => {
+  const none = { ownerId: '', operator: '', category: '', size: '', condition: '', location: '' } as const;
+
+  it('sends nothing when no filter is set', () => {
+    expect(containerFilterParams({ ...none })).toEqual({});
+  });
+
+  it('maps each filter to its API parameter', () => {
+    expect(
+      containerFilterParams({ ownerId: 'o-1', operator: 'op-1', category: 'Reefer', size: 'Ft40', condition: 'Damaged', location: 'in' }),
+    ).toEqual({ ownerId: 'o-1', operatorId: 'op-1', category: 'Reefer', size: 'Ft40', condition: 'Damaged', inYard: 'true' });
+  });
+
+  it('"no operator today" and "not in the yard" are false flags', () => {
+    expect(containerFilterParams({ ...none, operator: 'none', location: 'out' })).toEqual({ hasOperator: 'false', inYard: 'false' });
   });
 });

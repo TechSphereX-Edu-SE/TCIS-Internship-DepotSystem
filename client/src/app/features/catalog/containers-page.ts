@@ -13,12 +13,15 @@ import {
   CONDITION_LABEL,
   Container,
   ContainerCategory,
+  ContainerCondition,
+  ContainerListFilters,
   ContainerSize,
   LineOperator,
   OperatingAssignment,
   SIZE_LABEL,
   UpdateContainerRequest,
   assignmentCovers,
+  containerFilterParams,
   formatDate,
   vietnamToday,
 } from '../../core/depot/depot-models';
@@ -48,7 +51,8 @@ function ownerOf(container: Container): LineOperator | null {
   };
 }
 
-const PAGE_SIZE = 20;
+// 10 rows per page (feedback 23/10: 20 made the list too long next to the form)
+const PAGE_SIZE = 10;
 
 // Whole kilograms above 0
 const weightValidators = [Validators.required, Validators.min(1), Validators.pattern(/^\d+$/)];
@@ -102,7 +106,26 @@ export class ContainersPage {
     owner: new FormControl<LineOperator | null>(null, Validators.required),
   });
 
-  protected readonly search = new FormControl('', { nonNullable: true });
+  /*
+    List filters (feedback 23/10: the catalog had only the number search).
+    Applied with "Lọc" (or Enter), not on every change, so typing a number does not reload each key.
+  */
+  protected readonly conditions: ContainerCondition[] = ['Normal', 'Damaged'];
+  protected readonly filters = inject(FormBuilder).nonNullable.group({
+    search: [''],
+    ownerId: [''],
+    operator: [''],
+    category: ['' as ContainerListFilters['category']],
+    size: ['' as ContainerListFilters['size']],
+    condition: ['' as ContainerListFilters['condition']],
+    location: ['' as ContainerListFilters['location']],
+  });
+  protected readonly search = this.filters.controls.search;
+  // Partners for the owner / operator filters (a short list: every partner of the depot)
+  protected readonly owners = signal<LineOperator[]>([]);
+  protected readonly operators = signal<LineOperator[]>([]);
+  // True once a filter other than the number is set: the empty list then says "no match"
+  protected readonly filtered = signal(false);
 
   // Partner dropdowns: owners for the container form, line operators for an operating relation
   protected readonly loadOwners: SearchPageLoader<LineOperator> = (term, page) =>
@@ -190,10 +213,15 @@ export class ContainersPage {
 
   constructor() {
     this.load(1);
+    this.api.lineOperators('Owner').subscribe({ next: (list) => this.owners.set(list) });
+    this.api.lineOperators('Operator').subscribe({ next: (list) => this.operators.set(list) });
   }
 
   protected load(page: number): void {
-    this.api.containerPage(this.search.value, page, PAGE_SIZE).subscribe({
+    const { search, ...rest } = this.filters.getRawValue();
+    const params = containerFilterParams(rest);
+    this.filtered.set(Object.keys(params).length > 0);
+    this.api.containerPage(search, page, PAGE_SIZE, null, params).subscribe({
       next: (result) => {
         this.items.set(result.items);
         this.totalCount.set(result.totalCount);
@@ -203,6 +231,11 @@ export class ContainersPage {
       },
       error: (err: unknown) => this.listError.set(toApiError(err).message),
     });
+  }
+
+  protected clearFilters(): void {
+    this.filters.reset();
+    this.load(1);
   }
 
   protected useSuggestion(): void {
@@ -327,6 +360,8 @@ export class ContainersPage {
     this.assignmentSubmitted.set(false);
     this.assignmentApiError.set(null);
     this.loadAssignments(item);
+    // The card is below the list and the form: bring it into view, or the button seems to do nothing
+    setTimeout(() => document.getElementById('relations-title')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
   }
 
   protected closeRelations(): void {

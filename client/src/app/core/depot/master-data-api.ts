@@ -123,8 +123,15 @@ export class MasterDataApi {
   }
 
   // search: part of the container number; operatorId: only containers that line operator operates today
-  containerPage(search: string, page: number, pageSize: number, operatorId?: string | null): Observable<PagedResult<Container>> {
-    return this.page<Container>('/api/containers', page, pageSize, search, operatorId ? { operatorId } : {});
+  // filters: extra query parameters of the catalog screen (see containerFilterParams)
+  containerPage(
+    search: string,
+    page: number,
+    pageSize: number,
+    operatorId?: string | null,
+    filters: Record<string, string> = {},
+  ): Observable<PagedResult<Container>> {
+    return this.page<Container>('/api/containers', page, pageSize, search, operatorId ? { operatorId, ...filters } : filters);
   }
 
   // 201 with { id, containerNumber, isoCode }; 409 Container.Duplicate; 400 when the ISO code does not fit

@@ -8,7 +8,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
-    .WithPgAdmin()
+    // pgAdmin kept between runs too: otherwise it is recreated and slow to start on every AppHost run
+    .WithPgAdmin(pgAdmin => pgAdmin.WithLifetime(ContainerLifetime.Persistent))
     .WithDataVolume("depot-postgres-data")
     .WithLifetime(ContainerLifetime.Persistent);
 

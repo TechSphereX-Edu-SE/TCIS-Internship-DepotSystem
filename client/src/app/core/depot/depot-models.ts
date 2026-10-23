@@ -47,6 +47,33 @@ export interface Block {
   createdAt: string;
 }
 
+/*
+  Catalog filters of the container list (GET /api/containers). Empty = no filter.
+  operator: '' all, 'none' = no confirmed operating assignment today, otherwise the operator id.
+  location: '' all, 'in' = in the yard, 'out' = not in the yard.
+*/
+export interface ContainerListFilters {
+  ownerId: string;
+  operator: string;
+  category: ContainerCategory | '';
+  size: ContainerSize | '';
+  condition: ContainerCondition | '';
+  location: '' | 'in' | 'out';
+}
+
+// Query parameters of the filters: only the ones set, with the API names
+export function containerFilterParams(filters: ContainerListFilters): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (filters.ownerId) params['ownerId'] = filters.ownerId;
+  if (filters.operator === 'none') params['hasOperator'] = 'false';
+  else if (filters.operator) params['operatorId'] = filters.operator;
+  if (filters.category) params['category'] = filters.category;
+  if (filters.size) params['size'] = filters.size;
+  if (filters.condition) params['condition'] = filters.condition;
+  if (filters.location) params['inYard'] = filters.location === 'in' ? 'true' : 'false';
+  return params;
+}
+
 export interface Container {
   id: string;
   containerNumber: string;

@@ -10,20 +10,83 @@
   <div class="alert alert-red" role="alert">{{ message }}</div>
   }
 
+  <!-- ================= Filters ================= -->
+  <form class="card filters-card" [formGroup]="filters" (ngSubmit)="load(1)" role="search" aria-label="Lọc container">
+    <div class="filters">
+      <div class="field">
+        <label for="search">Số container</label>
+        <input id="search" class="mono upper" formControlName="search" placeholder="Một phần số container" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="ownerId">Chủ sở hữu</label>
+        <select id="ownerId" formControlName="ownerId">
+          <option value="">Tất cả</option>
+          @for (owner of owners(); track owner.id) {
+          <option [value]="owner.id">{{ owner.code }} · {{ owner.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="operator">Hãng khai thác hôm nay</label>
+        <select id="operator" formControlName="operator">
+          <option value="">Tất cả</option>
+          <option value="none">Chưa có (không gate-in được)</option>
+          @for (operator of operators(); track operator.id) {
+          <option [value]="operator.id">{{ operator.code }} · {{ operator.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="filterCategory">Loại</label>
+        <select id="filterCategory" formControlName="category">
+          <option value="">Tất cả</option>
+          @for (category of categories; track category) {
+          <option [value]="category">{{ categoryLabel[category] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field small-field">
+        <label for="filterSize">Cỡ</label>
+        <select id="filterSize" formControlName="size">
+          <option value="">Tất cả</option>
+          @for (size of sizes; track size) {
+          <option [value]="size">{{ sizeLabel[size] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field small-field">
+        <label for="filterCondition">Tình trạng</label>
+        <select id="filterCondition" formControlName="condition">
+          <option value="">Tất cả</option>
+          @for (condition of conditions; track condition) {
+          <option [value]="condition">{{ conditionLabel[condition] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field small-field">
+        <label for="filterLocation">Vị trí</label>
+        <select id="filterLocation" formControlName="location">
+          <option value="">Tất cả</option>
+          <option value="in">Đang trong bãi</option>
+          <option value="out">Ngoài bãi</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">Lọc</button>
+        <button class="btn btn-secondary" type="button" (click)="clearFilters()">Xoá lọc</button>
+      </div>
+    </div>
+  </form>
+
   <div class="catalog-layout">
     <!-- ================= List ================= -->
     <section class="card" aria-labelledby="list-title">
       <div class="list-head">
         <h2 id="list-title">Danh sách container <span class="muted">· {{ totalCount() }}</span></h2>
-        <form class="search-box" role="search" (submit)="$event.preventDefault(); load(1)">
-          <label for="search" class="visually-hidden">Tìm theo số container</label>
-          <input id="search" class="mono upper" [formControl]="search" placeholder="Số container (một phần)" autocomplete="off" />
-          <button class="btn btn-secondary btn-small" type="submit">Tìm</button>
-        </form>
       </div>
 
       @if (items().length === 0) {
-      <p class="muted">{{ search.value ? 'Không tìm thấy container phù hợp.' : 'Chưa có container nào. Thêm ở form bên cạnh.' }}</p>
+      <p class="muted">{{ search.value || filtered() ? 'Không có container phù hợp với bộ lọc.' : 'Chưa có container nào. Thêm ở form bên cạnh.' }}</p>
       } @else {
       <div class="table-wrap">
         <table class="table containers">

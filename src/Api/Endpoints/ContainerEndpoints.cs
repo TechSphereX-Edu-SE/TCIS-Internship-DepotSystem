@@ -21,7 +21,7 @@ public static class ContainerEndpoints
 
         group.MapGet("/", GetAll)
             .WithName("GetAllContainers")
-            .WithSummary("Get containers with pagination, optionally searching by container number");
+            .WithSummary("Get containers with pagination: search by number, filter by owner, operator, type, size, condition, in yard");
 
         group.MapGet("/{id:guid}", GetById)
             .WithName("GetContainerById")
@@ -50,12 +50,20 @@ public static class ContainerEndpoints
         int? pageSize,
         string? search,
         Guid? operatorId,
+        Guid? ownerId,
+        ContainerCategory? category,
+        ContainerSize? size,
+        ContainerCondition? condition,
+        bool? inYard,
+        bool? hasOperator,
         IQueryHandler<GetAllContainersQuery, Result<PagedResult<ContainerResponse>>> handler,
         CancellationToken cancellationToken)
     {
         // ?search= filters by part of the container number (gate-in lookup, container list search box)
         // ?operatorId= keeps containers whose confirmed operating assignment today names that operator
-        var query = new GetAllContainersQuery(page ?? 1, pageSize ?? 10, search, operatorId);
+        // The other filters belong to the catalog screen (see GetAllContainersQuery)
+        var query = new GetAllContainersQuery(page ?? 1, pageSize ?? 10, search, operatorId,
+            ownerId, category, size, condition, inYard, hasOperator);
         var result = await handler.HandleAsync(query, cancellationToken);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToProblemDetails();
     }

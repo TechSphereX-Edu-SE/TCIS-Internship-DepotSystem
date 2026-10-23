@@ -143,6 +143,52 @@ public sealed class ContainerQueryHandlerTests
         result.Value.Items[0].CurrentOperatorCode.Should().Be("CMA");
     }
 
+    /*
+        Catalog filters: MSCU1234566 (Dry 20ft, MSC owns and operates, in the yard),
+        HMMU2468109 (Reefer 40ft, HMM owns, no operator, damaged, not in the yard),
+        CMAU1234564 (Dry 40ft, HMM owns, CMA operates, not in the yard).
+    */
+    [Fact]
+    public async Task GetAll_Should_Filter_By_Owner_Type_Size_Condition_Yard_And_Operator()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var msc = DepotTestData.Partner("MSC");
+        var hmm = DepotTestData.Partner("HMM");
+        var cma = DepotTestData.Partner("CMA");
+        var inYard = new Container("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "MSC");
+        var damaged = new Container("HMMU2468109", "45R1", ContainerSize.Ft40, ContainerCategory.Reefer, 34000, 4800, null, "HMM");
+        var rented = new Container("CMAU1234564", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3750, null, "HMM");
+        inYard.SetOwner(msc);
+        damaged.SetOwner(hmm);
+        rented.SetOwner(hmm);
+        damaged.UpdateCondition(ContainerCondition.Damaged, "Móp vách");
+        var wait = Block.CreateVirtual("WAIT");
+        var visit = ContainerVisit.GateIn(inYard, msc.Id, wait, null, null, null, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
+        dbContext.AddRange(msc, hmm, cma, inYard, damaged, rented, wait, visit,
+            DepotTestData.Confirmed(inYard, msc), DepotTestData.Confirmed(rented, cma));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var handler = new GetAllContainersQueryHandler(dbContext, new FixedTimeProvider(Now));
+
+        async Task<string[]> NumbersAsync(GetAllContainersQuery query) =>
+            (await handler.HandleAsync(query, TestContext.Current.CancellationToken)).Value!.Items
+            .Select(c => c.ContainerNumber).Order().ToArray();
+
+        (await NumbersAsync(new GetAllContainersQuery(OwnerId: hmm.Id))).Should().Equal("CMAU1234564", "HMMU2468109");
+        (await NumbersAsync(new GetAllContainersQuery(Category: ContainerCategory.Reefer))).Should().Equal("HMMU2468109");
+        (await NumbersAsync(new GetAllContainersQuery(Size: ContainerSize.Ft40))).Should().Equal("CMAU1234564", "HMMU2468109");
+        (await NumbersAsync(new GetAllContainersQuery(Condition: ContainerCondition.Damaged))).Should().Equal("HMMU2468109");
+        (await NumbersAsync(new GetAllContainersQuery(InYard: true))).Should().Equal("MSCU1234566");
+        (await NumbersAsync(new GetAllContainersQuery(InYard: false))).Should().Equal("CMAU1234564", "HMMU2468109");
+        (await NumbersAsync(new GetAllContainersQuery(HasOperator: false))).Should().Equal("HMMU2468109");
+        (await NumbersAsync(new GetAllContainersQuery(HasOperator: true))).Should().Equal("CMAU1234564", "MSCU1234566");
+
+        // Filters combine with AND, and the total counts the filtered rows only
+        var combined = await handler.HandleAsync(
+            new GetAllContainersQuery(OwnerId: hmm.Id, HasOperator: true, Size: ContainerSize.Ft40), TestContext.Current.CancellationToken);
+        combined.Value!.TotalCount.Should().Be(1);
+        combined.Value.Items.Single().ContainerNumber.Should().Be("CMAU1234564");
+    }
+
     [Fact]
     public async Task Delete_Should_Keep_Container_With_Operating_History()
     {
