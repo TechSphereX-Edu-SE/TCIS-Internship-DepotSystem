@@ -45,10 +45,12 @@ public static class AppDbSeeder
 
         if (!await context.Blocks.AnyAsync())
         {
+            // Allowed types are explicit: block B takes reefers only, A every other type, WAIT any type
+            var notReefer = Block.AllCategories.Where(c => c != ContainerCategory.Reefer);
             context.Blocks.AddRange(
-                Block.CreatePhysical("A", maxBays: 20, maxRows: 6, maxTiers: 5, "Khu container khô"),
-                Block.CreatePhysical("B", maxBays: 10, maxRows: 4, maxTiers: 4, "Khu container lạnh"),
-                Block.CreateVirtual("WAIT", "Khu chờ sửa chữa / giám định"));
+                Block.CreatePhysical("A", maxBays: 20, maxRows: 6, maxTiers: 5, "Khu container khô", notReefer),
+                Block.CreatePhysical("B", maxBays: 10, maxRows: 4, maxTiers: 4, "Khu container lạnh", [ContainerCategory.Reefer]),
+                Block.CreateVirtual("WAIT", "Khu chờ sửa chữa / giám định", Block.AllCategories));
         }
 
         if (!await context.Containers.AnyAsync())

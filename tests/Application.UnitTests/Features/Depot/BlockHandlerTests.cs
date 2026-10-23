@@ -11,14 +11,15 @@ namespace TechSpherex.CleanArchitecture.Application.UnitTests.Features.Depot;
 
 public sealed class BlockHandlerTests
 {
+    private static readonly IReadOnlyList<ContainerCategory> AllTypes = Block.AllCategories;
+
     // Seeds a physical block with one 20ft container at bay 5, row 3, tier 2
     private static async Task<Block> SeedBlockWithContainerAsync(AppDbContext dbContext)
     {
         var lineOperator = new LineOperator("MSC", "MSC");
         var block = Block.CreatePhysical("A", maxBays: 10, maxRows: 4, maxTiers: 3);
         var container = new Container("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "MSC");
-        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, 5, 3, 2, ContainerGrade.A,
-            ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
+        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, 5, 3, 2, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
 
         dbContext.AddRange(lineOperator, block, container, visit);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -31,8 +32,8 @@ public sealed class BlockHandlerTests
         await using var dbContext = TestDbContextFactory.Create();
         var handler = new CreateBlockCommandHandler(dbContext);
 
-        var physical = await handler.HandleAsync(new CreateBlockCommand("c", null, false, 10, 4, 4), TestContext.Current.CancellationToken);
-        var virtualBlock = await handler.HandleAsync(new CreateBlockCommand("REPAIR", "Repair area", true, null, null, null), TestContext.Current.CancellationToken);
+        var physical = await handler.HandleAsync(new CreateBlockCommand("c", null, false, 10, 4, 4, AllTypes), TestContext.Current.CancellationToken);
+        var virtualBlock = await handler.HandleAsync(new CreateBlockCommand("REPAIR", "Repair area", true, null, null, null, AllTypes), TestContext.Current.CancellationToken);
 
         physical.Value!.Code.Should().Be("C");
         virtualBlock.Value!.IsVirtual.Should().BeTrue();
@@ -44,9 +45,9 @@ public sealed class BlockHandlerTests
     {
         await using var dbContext = TestDbContextFactory.Create();
         var handler = new CreateBlockCommandHandler(dbContext);
-        await handler.HandleAsync(new CreateBlockCommand("A", null, false, 10, 4, 4), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(new CreateBlockCommand("A", null, false, 10, 4, 4, AllTypes), TestContext.Current.CancellationToken);
 
-        var result = await handler.HandleAsync(new CreateBlockCommand("a", null, true, null, null, null), TestContext.Current.CancellationToken);
+        var result = await handler.HandleAsync(new CreateBlockCommand("a", null, true, null, null, null, AllTypes), TestContext.Current.CancellationToken);
 
         result.Error!.Type.Should().Be(ErrorType.Conflict);
     }
@@ -56,12 +57,28 @@ public sealed class BlockHandlerTests
     {
         var validator = new CreateBlockValidator();
 
-        validator.Validate(new CreateBlockCommand("A", null, false, 10, 4, 4)).IsValid.Should().BeTrue();
-        validator.Validate(new CreateBlockCommand("A", null, false, 10, null, 4)).IsValid.Should().BeFalse(); // physical, missing rows
-        validator.Validate(new CreateBlockCommand("A", null, false, 0, 4, 4)).IsValid.Should().BeFalse();     // physical, 0 bays
-        validator.Validate(new CreateBlockCommand("A", null, false, 10, 4, 1)).IsValid.Should().BeFalse();    // physical, 1 tier
-        validator.Validate(new CreateBlockCommand("V", null, true, null, null, null)).IsValid.Should().BeTrue();
-        validator.Validate(new CreateBlockCommand("V", null, true, 10, null, null)).IsValid.Should().BeFalse(); // virtual with bays
+        validator.Validate(new CreateBlockCommand("A", null, false, 10, 4, 4, AllTypes)).IsValid.Should().BeTrue();
+        validator.Validate(new CreateBlockCommand("A", null, false, 10, null, 4, AllTypes)).IsValid.Should().BeFalse(); // physical, missing rows
+        validator.Validate(new CreateBlockCommand("A", null, false, 0, 4, 4, AllTypes)).IsValid.Should().BeFalse();     // physical, 0 bays
+        validator.Validate(new CreateBlockCommand("A", null, false, 10, 4, 1, AllTypes)).IsValid.Should().BeFalse();    // physical, 1 tier
+        validator.Validate(new CreateBlockCommand("V", null, true, null, null, null, AllTypes)).IsValid.Should().BeTrue();
+        validator.Validate(new CreateBlockCommand("V", null, true, 10, null, null, AllTypes)).IsValid.Should().BeFalse(); // virtual with bays
+        validator.Validate(new CreateBlockCommand("V", null, true, null, null, null, [])).IsValid.Should().BeFalse();     // no container type
+        validator.Validate(new CreateBlockCommand("V", null, true, null, null, null, [(ContainerCategory)99])).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Create_Should_Store_Allowed_Types()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var handler = new CreateBlockCommandHandler(dbContext);
+
+        var created = await handler.HandleAsync(
+            new CreateBlockCommand("B", null, false, 10, 4, 4, [ContainerCategory.Reefer, ContainerCategory.Reefer]),
+            TestContext.Current.CancellationToken);
+
+        var block = await new GetBlockQueryHandler(dbContext).HandleAsync(new GetBlockQuery(created.Value!.Id), TestContext.Current.CancellationToken);
+        block.Value!.AllowedCategories.Should().Equal(ContainerCategory.Reefer);
     }
 
     [Fact]
@@ -125,8 +142,7 @@ public sealed class BlockHandlerTests
         var lineOperator = new LineOperator("CMA", "CMA");
         var block = Block.CreatePhysical("B", maxBays: 10, maxRows: 4, maxTiers: 3);
         var container = new Container("CMAU7654327", "42G1", ContainerSize.Ft40, ContainerCategory.Dry, 30480, 3750, null, "CMA");
-        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, 6, 1, 1, ContainerGrade.A,
-            ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
+        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, 6, 1, 1, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
         dbContext.AddRange(lineOperator, block, container, visit);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         var handler = new ResizeBlockCommandHandler(dbContext);

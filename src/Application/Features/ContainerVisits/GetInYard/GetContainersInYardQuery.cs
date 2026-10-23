@@ -25,5 +25,4 @@ public sealed record YardContainerResponse(
     int? Bay,
     int? Row,
     int? Tier,
-    ContainerGrade Grade,
     DateTimeOffset GateInAt);

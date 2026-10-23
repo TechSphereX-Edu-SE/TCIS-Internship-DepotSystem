@@ -22,5 +22,12 @@ public sealed class BlockConfiguration : IEntityTypeConfiguration<Block>
         builder.HasIndex(b => b.Code).IsUnique();
 
         builder.Property(b => b.Description).HasMaxLength(200);
+
+        // Allowed container types: a PostgreSQL text[] of enum names ('Dry', 'Reefer'...), same as the
+        // other enums stored as strings, so the column stays readable in pgAdmin and in SQL reports
+        builder.PrimitiveCollection(b => b.AllowedCategories)
+            .IsRequired()
+            .ElementType()
+            .HasConversion<string>();
     }
 }

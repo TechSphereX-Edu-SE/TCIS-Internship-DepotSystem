@@ -19,8 +19,9 @@ public sealed class CreateBlockCommandHandler(IAppDbContext dbContext)
                 Error.Conflict("Block.Duplicate", $"Block '{code}' already exists."));
 
         var block = command.IsVirtual
-            ? Block.CreateVirtual(code, command.Description)
-            : Block.CreatePhysical(code, command.MaxBays!.Value, command.MaxRows!.Value, command.MaxTiers!.Value, command.Description);
+            ? Block.CreateVirtual(code, command.Description, command.AllowedCategories)
+            : Block.CreatePhysical(code, command.MaxBays!.Value, command.MaxRows!.Value, command.MaxTiers!.Value,
+                command.Description, command.AllowedCategories);
 
         dbContext.Blocks.Add(block);
         await dbContext.SaveChangesAsync(cancellationToken);

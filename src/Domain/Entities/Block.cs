@@ -16,12 +16,24 @@ public sealed class Block : AuditableEntity
     public int? MaxRows { get; private set; }
     public int? MaxTiers { get; private set; }
 
+    /*
+        Container types this block may hold (feedback 3: a block can take several types).
+        This list - not the block's name or description ("khu khô/lạnh") - is what gate-in and move check.
+    */
+    public List<ContainerCategory> AllowedCategories { get; private set; } = [];
+
     // Spec section 1: a row can stack "from 2 to many tiers"
     public const int MinTiers = 2;
 
+    // Every container type of Appendix II, used when a caller does not restrict the block
+    public static IReadOnlyList<ContainerCategory> AllCategories { get; } = Enum.GetValues<ContainerCategory>();
+
     private Block() { }
 
-    public static Block CreatePhysical(string code, int maxBays, int maxRows, int maxTiers, string? description = null) =>
+    // allowedCategories: null = every type (the API always sends an explicit, non-empty list)
+    public static Block CreatePhysical(
+        string code, int maxBays, int maxRows, int maxTiers, string? description = null,
+        IEnumerable<ContainerCategory>? allowedCategories = null) =>
         new()
         {
             Code = code.Trim().ToUpperInvariant(),
@@ -29,16 +41,41 @@ public sealed class Block : AuditableEntity
             IsVirtual = false,
             MaxBays = maxBays,
             MaxRows = maxRows,
-            MaxTiers = maxTiers
+            MaxTiers = maxTiers,
+            AllowedCategories = Distinct(allowedCategories ?? AllCategories)
         };
 
-    public static Block CreateVirtual(string code, string? description = null) =>
+    public static Block CreateVirtual(
+        string code, string? description = null, IEnumerable<ContainerCategory>? allowedCategories = null) =>
         new()
         {
             Code = code.Trim().ToUpperInvariant(),
             Description = description?.Trim(),
-            IsVirtual = true
+            IsVirtual = true,
+            AllowedCategories = Distinct(allowedCategories ?? AllCategories)
         };
+
+    // Replaces the allowed types; a block must accept at least one type or nothing could ever enter it
+    public Result SetAllowedCategories(IEnumerable<ContainerCategory> categories)
+    {
+        var list = Distinct(categories);
+        if (list.Count == 0)
+            return Result.Failure(Error.Validation("Block.NoCategories", "A block must accept at least one container type."));
+
+        AllowedCategories = list;
+        return Result.Success();
+    }
+
+    // Gate-in and move refuse a container whose type this block does not take (409)
+    public Result CheckAccepts(ContainerCategory category) =>
+        AllowedCategories.Contains(category)
+            ? Result.Success()
+            : Result.Failure(Error.Conflict("Block.CategoryNotAllowed",
+                $"Block {Code} does not take {category} containers (allowed: {string.Join(", ", AllowedCategories)})."));
+
+    // Same order as the enum, no duplicates, so the stored list is stable and easy to compare
+    private static List<ContainerCategory> Distinct(IEnumerable<ContainerCategory> categories) =>
+        categories.Distinct().Order().ToList();
 
     /* 
         Expands or shrinks the block. Checking for containers outside the new size

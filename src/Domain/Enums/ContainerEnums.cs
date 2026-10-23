@@ -26,7 +26,11 @@ public enum ContainerCondition
     Damaged = 1
 }
 
-// Container grade assigned at gate-in
+/*
+    Legacy grade (A/B/C) recorded at gate-in before 23/10/2026.
+    Feedback: the mentor confirmed it was only a placeholder label, not a quality criterion,
+    so it is no longer recorded. The enum stays only to read the grades of older visits.
+*/
 public enum ContainerGrade
 {
     A = 0,

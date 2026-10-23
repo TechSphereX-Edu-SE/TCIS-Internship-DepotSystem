@@ -115,8 +115,7 @@ public sealed class ContainerQueryHandlerTests
         var container = await SeedContainerAsync(dbContext);
         var lineOperator = new LineOperator("MSC", "MSC");
         var wait = Block.CreateVirtual("WAIT");
-        var visit = ContainerVisit.GateIn(container, lineOperator.Id, wait, null, null, null, ContainerGrade.A,
-            ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
+        var visit = ContainerVisit.GateIn(container, lineOperator.Id, wait, null, null, null, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
         dbContext.AddRange(lineOperator, wait, visit);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

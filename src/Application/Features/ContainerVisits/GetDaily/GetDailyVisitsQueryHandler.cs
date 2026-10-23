@@ -29,7 +29,8 @@ public sealed class GetDailyVisitsQueryHandler(IAppDbContext dbContext, TimeProv
             .ThenBy(v => v.Container.ContainerNumber)
             .Select(v => new DailyGateInResponse(
                 v.Id, v.Container.ContainerNumber, v.Container.IsoCode, v.Container.Size, v.Container.Category,
-                v.LineOperator.Code, v.Block.Code, v.Bay, v.Row, v.Tier, v.Grade,
+                v.LineOperator.Code, v.Block.Code, v.Bay, v.Row, v.Tier,
+                v.GateInBlock != null ? v.GateInBlock.Code : null, v.GateInBay, v.GateInRow, v.GateInTier,
                 v.GateInVehicleNo, v.GateInAt))
             .ToListAsync(cancellationToken);
 

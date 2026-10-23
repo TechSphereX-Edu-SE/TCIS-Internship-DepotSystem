@@ -52,7 +52,7 @@ public sealed class GateOutCommandHandlerTests
     {
         var result = await new GateInCommandHandler(dbContext, new FixedTimeProvider(Now)).HandleAsync(
             new GateInCommand(container.Id, (lineOperator ?? seed.Msc).Id, seed.Yard.Id, bay, 1, tier,
-                ContainerGrade.A, condition, condition == ContainerCondition.Damaged ? "Dent on door" : null, "51C-11111"),
+                condition, condition == ContainerCondition.Damaged ? "Dent on door" : null, "51C-11111"),
             TestContext.Current.CancellationToken);
         result.IsSuccess.Should().BeTrue();
     }

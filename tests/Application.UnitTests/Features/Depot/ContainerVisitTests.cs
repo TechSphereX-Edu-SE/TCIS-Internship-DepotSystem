@@ -13,8 +13,7 @@ public sealed class ContainerVisitTests
         "MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "MSC");
 
     private ContainerVisit GateIn(DateTimeOffset at) =>
-        ContainerVisit.GateIn(_container, _msc.Id, _block, 1, 1, 1, ContainerGrade.A,
-            ContainerCondition.Normal, null, "51C-12345", at).Value!;
+        ContainerVisit.GateIn(_container, _msc.Id, _block, 1, 1, 1, ContainerCondition.Normal, null, "51C-12345", at).Value!;
 
     // Order with a single Dry line
     private DeliveryOrder Order(DateOnly expiry, int quantity = 1, Guid? lineOperatorId = null)
@@ -27,10 +26,44 @@ public sealed class ContainerVisitTests
     [Fact]
     public void GateIn_Should_Fail_When_Bay_Does_Not_Match_Size()
     {
-        var result = ContainerVisit.GateIn(_container, _msc.Id, _block, 2, 1, 1, ContainerGrade.A,
-            ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow);
+        var result = ContainerVisit.GateIn(_container, _msc.Id, _block, 2, 1, 1, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow);
 
         result.IsFailure.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GateIn_Should_Fail_When_Block_Does_Not_Take_The_Type()
+    {
+        var reeferOnly = Block.CreatePhysical("B", 20, 6, 5, allowedCategories: [ContainerCategory.Reefer]);
+
+        var result = ContainerVisit.GateIn(_container, _msc.Id, reeferOnly, 1, 1, 1, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow);
+
+        result.Error!.Code.Should().Be("Block.CategoryNotAllowed");
+    }
+
+    [Fact]
+    public void GateIn_Position_Should_Stay_After_A_Move()
+    {
+        var visit = GateIn(new DateTimeOffset(2026, 10, 1, 8, 0, 0, Vn));
+
+        visit.MoveTo(_block, 3, 2, 1, _container.Size).IsSuccess.Should().BeTrue();
+
+        // Current position follows the move, the gate-in position does not
+        visit.Bay.Should().Be(3);
+        visit.GateInBlockId.Should().Be(_block.Id);
+        new[] { visit.GateInBay, visit.GateInRow, visit.GateInTier }.Should().Equal(1, 1, 1);
+        visit.Grade.Should().BeNull();
+    }
+
+    [Fact]
+    public void Block_Should_Require_At_Least_One_Type_And_Merge_Duplicates()
+    {
+        var block = Block.CreateVirtual("WAIT");
+
+        block.AllowedCategories.Should().Equal(Block.AllCategories); // no list = every type
+        block.SetAllowedCategories([]).Error!.Code.Should().Be("Block.NoCategories");
+        block.SetAllowedCategories([ContainerCategory.Reefer, ContainerCategory.Dry, ContainerCategory.Reefer]).IsSuccess.Should().BeTrue();
+        block.AllowedCategories.Should().Equal(ContainerCategory.Dry, ContainerCategory.Reefer);
     }
 
     [Fact]

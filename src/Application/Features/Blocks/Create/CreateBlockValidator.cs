@@ -13,6 +13,12 @@ public sealed class CreateBlockValidator : AbstractValidator<CreateBlockCommand>
 
         RuleFor(x => x.Description).MaximumLength(200);
 
+        // At least one container type, each a known type (duplicates are simply merged by the domain)
+        RuleFor(x => x.AllowedCategories)
+            .NotEmpty()
+            .WithMessage("Choose at least one container type for the block.");
+        RuleForEach(x => x.AllowedCategories).IsInEnum();
+
         // Physical block: every dimension is required; tiers stack "from 2 to many" (spec section 1)
         When(x => !x.IsVirtual, () =>
         {

@@ -241,6 +241,10 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.PrimitiveCollection<string[]>("AllowedCategories")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -393,6 +397,18 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("GateInAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("GateInBay")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("GateInBlockId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("GateInRow")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("GateInTier")
+                        .HasColumnType("integer");
+
                     b.Property<string>("GateInVehicleNo")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -406,7 +422,6 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.Property<string>("Grade")
-                        .IsRequired()
                         .HasMaxLength(5)
                         .HasColumnType("character varying(5)");
 
@@ -432,6 +447,8 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasFilter("\"GateOutAt\" IS NULL");
 
                     b.HasIndex("DeliveryOrderId");
+
+                    b.HasIndex("GateInBlockId");
 
                     b.HasIndex("LineOperatorId", "GateInAt");
 
@@ -713,6 +730,11 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                         .HasForeignKey("DeliveryOrderId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.Block", "GateInBlock")
+                        .WithMany()
+                        .HasForeignKey("GateInBlockId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TechSpherex.CleanArchitecture.Domain.Entities.LineOperator", "LineOperator")
                         .WithMany()
                         .HasForeignKey("LineOperatorId")
@@ -724,6 +746,8 @@ namespace TechSpherex.CleanArchitecture.Infrastructure.Persistence.Migrations
                     b.Navigation("Container");
 
                     b.Navigation("DeliveryOrder");
+
+                    b.Navigation("GateInBlock");
 
                     b.Navigation("LineOperator");
                 });

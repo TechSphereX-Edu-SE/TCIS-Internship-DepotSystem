@@ -34,8 +34,7 @@ public sealed class GetContainersInYardQueryHandlerTests
         var gone = NewContainer("CSQU3054383");
 
         ContainerVisit GateIn(Container container, Block block, int? bay, int? row, int? tier) =>
-            ContainerVisit.GateIn(container, msc.Id, block, bay, row, tier, ContainerGrade.A,
-                ContainerCondition.Normal, null, "51C-11111", Now).Value!;
+            ContainerVisit.GateIn(container, msc.Id, block, bay, row, tier, ContainerCondition.Normal, null, "51C-11111", Now).Value!;
 
         var goneVisit = GateIn(gone, a, 5, 1, 1);
         var order = new DeliveryOrder("DO-001", msc.Id, customer.Id, new DateOnly(2026, 10, 31), "MSC VESSEL 01");

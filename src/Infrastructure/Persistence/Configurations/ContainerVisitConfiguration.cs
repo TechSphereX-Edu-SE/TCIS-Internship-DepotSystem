@@ -40,6 +40,11 @@ public sealed class ContainerVisitConfiguration : IEntityTypeConfiguration<Conta
         builder.HasOne(v => v.DeliveryOrder).WithMany()
             .HasForeignKey(v => v.DeliveryOrderId).OnDelete(DeleteBehavior.Restrict);
 
+        // Block at gate-in (history); null on visits recorded before it was stored
+        builder.HasOne(v => v.GateInBlock).WithMany()
+            .HasForeignKey(v => v.GateInBlockId).OnDelete(DeleteBehavior.Restrict);
+
+        // Legacy A/B/C grade: nullable, only older visits have one
         builder.Property(v => v.Grade).HasConversion<string>().HasMaxLength(5);
         builder.Property(v => v.ConditionIn).HasConversion<string>().HasMaxLength(20);
         builder.Property(v => v.ConditionNoteIn).HasMaxLength(500);

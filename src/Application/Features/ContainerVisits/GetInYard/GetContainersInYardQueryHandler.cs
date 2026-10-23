@@ -28,7 +28,7 @@ public sealed class GetContainersInYardQueryHandler(IAppDbContext dbContext)
                 v.Id, v.ContainerId, v.Container.ContainerNumber, v.Container.IsoCode,
                 v.Container.Size, v.Container.Category, v.Container.Condition,
                 v.LineOperator.Code, v.BlockId, v.Block.Code,
-                v.Bay, v.Row, v.Tier, v.Grade, v.GateInAt))
+                v.Bay, v.Row, v.Tier, v.GateInAt))
             .ToListAsync(cancellationToken);
 
         return Result.Success<IReadOnlyList<YardContainerResponse>>(containers);

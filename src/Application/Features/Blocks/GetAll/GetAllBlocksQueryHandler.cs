@@ -19,7 +19,7 @@ public sealed class GetAllBlocksQueryHandler(IAppDbContext dbContext)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(b => new BlockResponse(
-                b.Id, b.Code, b.Description, b.IsVirtual, b.MaxBays, b.MaxRows, b.MaxTiers,
+                b.Id, b.Code, b.Description, b.IsVirtual, b.MaxBays, b.MaxRows, b.MaxTiers, b.AllowedCategories,
                 dbContext.ContainerVisits.Count(v => v.BlockId == b.Id && v.GateOutAt == null),
                 b.CreatedAt))
             .ToListAsync(cancellationToken);

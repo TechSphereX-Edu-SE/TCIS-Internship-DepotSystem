@@ -7,9 +7,9 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Gat
 
 /*
     Gate-in: starts one container lifecycle at the depot (spec section 3).
-    The fields are exactly what section 3 lists for a lifecycle at gate-in:
-    line operator, position (Block/Bay/Row/Tier), grade (A, B, C...), condition,
-    and the vehicle bringing the container in.
+    The fields are what section 3 lists for a lifecycle at gate-in: line operator,
+    position (Block/Bay/Row/Tier), condition, and the vehicle bringing the container in.
+    The A/B/C grade is no longer asked (feedback 23/10: it was only a placeholder label).
     Physical block: Bay/Row/Tier are required. Virtual block: all three are omitted.
     The gate-in time is taken from the server clock, not from the client.
 */
@@ -20,7 +20,6 @@ public sealed record GateInCommand(
     int? Bay,
     int? Row,
     int? Tier,
-    ContainerGrade Grade,
     ContainerCondition Condition,
     string? ConditionNote,
     string VehicleNo)

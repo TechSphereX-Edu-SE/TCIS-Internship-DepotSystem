@@ -10,8 +10,9 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Mov
       1. The container exists and is in the yard (404), the target block exists (404).
       2. The target is not the current position (400).
       3. Nothing is stacked on the container (409) - otherwise the one above would float.
-      4. The target fits the block and the container size (400) - domain (Block.ValidateSlot).
-      5. The target is free and supported (409) - same rules as gate-in, ignoring the container
+      4. The target block takes this container type (409) - domain (Block.CheckAccepts), same as gate-in.
+      5. The target fits the block and the container size (400) - domain (Block.ValidateSlot).
+      6. The target is free and supported (409) - same rules as gate-in, ignoring the container
          itself so its current place neither blocks nor supports the new one.
     Only then the domain moves the visit (ContainerVisit.MoveTo) and it is saved.
 */
@@ -39,6 +40,10 @@ public sealed class MoveContainerCommandHandler(IAppDbContext dbContext)
         var leave = await dbContext.CheckNothingAboveAsync(visit, visit.Container.Size, cancellationToken);
         if (leave.IsFailure)
             return Result.Failure<ContainerPositionResponse>(leave.Error!);
+
+        var accepts = target.CheckAccepts(visit.Container.Category);
+        if (accepts.IsFailure)
+            return Result.Failure<ContainerPositionResponse>(accepts.Error!);
 
         // Domain slot check first (range, bay parity, 40ft footprint), so the visit is only
         // changed once every check has passed

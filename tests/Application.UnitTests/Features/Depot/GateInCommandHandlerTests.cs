@@ -32,7 +32,7 @@ public sealed class GateInCommandHandlerTests
 
     private static GateInCommand Command(Container container, Seed seed, Block block, int? bay, int? row, int? tier) =>
         new(container.Id, seed.LineOperator.Id, block.Id, bay, row, tier,
-            ContainerGrade.A, ContainerCondition.Normal, null, "51c-12345");
+            ContainerCondition.Normal, null, "51c-12345");
 
     [Fact]
     public async Task Should_Gate_In_To_Free_Physical_Slot()
@@ -49,6 +49,37 @@ public sealed class GateInCommandHandlerTests
         var visit = dbContext.ContainerVisits.Single();
         visit.GateInVehicleNo.Should().Be("51C-12345");
         visit.IsInYard.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Should_Record_The_Gate_In_Position()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+
+        await Handler(dbContext).HandleAsync(Command(seed.Ft20, seed, seed.Physical, 5, 3, 1), TestContext.Current.CancellationToken);
+
+        var visit = dbContext.ContainerVisits.Single();
+        visit.GateInBlockId.Should().Be(seed.Physical.Id);
+        new[] { visit.GateInBay, visit.GateInRow, visit.GateInTier }.Should().Equal(5, 3, 1);
+    }
+
+    [Fact]
+    public async Task Should_Return_Conflict_When_Block_Does_Not_Take_The_Type()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var reeferOnly = Block.CreatePhysical("B", maxBays: 10, maxRows: 4, maxTiers: 3, allowedCategories: [ContainerCategory.Reefer]);
+        dbContext.Blocks.Add(reeferOnly);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // A Dry container into a Reefer-only block
+        var result = await Handler(dbContext).HandleAsync(
+            Command(seed.Ft20, seed, reeferOnly, 5, 1, 1), TestContext.Current.CancellationToken);
+
+        result.Error!.Type.Should().Be(ErrorType.Conflict);
+        result.Error.Code.Should().Be("Block.CategoryNotAllowed");
+        dbContext.ContainerVisits.Should().BeEmpty();
     }
 
     [Fact]
@@ -197,7 +228,7 @@ public sealed class GateInCommandHandlerTests
     {
         var validator = new GateInValidator();
         var valid = new GateInCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 5, 3, 1,
-            ContainerGrade.A, ContainerCondition.Normal, null, "51C-12345");
+            ContainerCondition.Normal, null, "51C-12345");
 
         validator.Validate(valid).IsValid.Should().BeTrue();
         validator.Validate(valid with { Bay = null, Row = null, Tier = null }).IsValid.Should().BeTrue(); // virtual block

@@ -56,8 +56,7 @@ public sealed class UpdateContainerCommandHandlerTests
         var container = NewContainer();
         var lineOperator = new LineOperator("MSC", "MSC");
         var block = Block.CreatePhysical("A", 10, 4, 3);
-        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, 1, 1, 1, ContainerGrade.A,
-            ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
+        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, 1, 1, 1, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
         dbContext.AddRange(container, lineOperator, block, visit);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

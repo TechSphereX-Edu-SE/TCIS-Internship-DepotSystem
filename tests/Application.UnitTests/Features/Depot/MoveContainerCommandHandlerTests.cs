@@ -33,7 +33,7 @@ public sealed class MoveContainerCommandHandlerTests
     {
         var result = await new GateInCommandHandler(dbContext, TimeProvider.System).HandleAsync(
             new GateInCommand(container.Id, seed.LineOperator.Id, block.Id, bay, row, tier,
-                ContainerGrade.A, ContainerCondition.Normal, null, "51C-12345"),
+                ContainerCondition.Normal, null, "51C-12345"),
             TestContext.Current.CancellationToken);
         result.IsSuccess.Should().BeTrue();
     }
@@ -72,6 +72,22 @@ public sealed class MoveContainerCommandHandlerTests
         toRepair.Value!.IsVirtualBlock.Should().BeTrue();
         toRepair.Value.Bay.Should().BeNull();
         back.Value!.BlockCode.Should().Be("A");
+    }
+
+    [Fact]
+    public async Task Should_Return_Conflict_When_Target_Block_Does_Not_Take_The_Type()
+    {
+        await using var dbContext = TestDbContextFactory.Create();
+        var seed = await SeedAsync(dbContext);
+        var reeferOnly = Block.CreatePhysical("B", maxBays: 10, maxRows: 4, maxTiers: 3, allowedCategories: [ContainerCategory.Reefer]);
+        dbContext.Blocks.Add(reeferOnly);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await GateInAsync(dbContext, seed, seed.X20, seed.Physical, 1, 1, 1);
+
+        var result = await MoveAsync(dbContext, seed.X20, reeferOnly, 1, 1, 1);
+
+        result.Error!.Code.Should().Be("Block.CategoryNotAllowed");
+        dbContext.ContainerVisits.Single().BlockId.Should().Be(seed.Physical.Id);
     }
 
     [Fact]

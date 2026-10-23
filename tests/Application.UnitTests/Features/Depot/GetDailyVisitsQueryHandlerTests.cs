@@ -31,8 +31,7 @@ public sealed class GetDailyVisitsQueryHandlerTests
         var afterMidnight = NewContainer("CMAU1234564");
 
         ContainerVisit GateIn(Container container, DateTimeOffset at) =>
-            ContainerVisit.GateIn(container, msc.Id, wait, null, null, null, ContainerGrade.A,
-                ContainerCondition.Normal, null, "51C-11111", at).Value!;
+            ContainerVisit.GateIn(container, msc.Id, wait, null, null, null, ContainerCondition.Normal, null, "51C-11111", at).Value!;
 
         var leftVisit = GateIn(leftToday, new DateTimeOffset(2026, 10, 21, 23, 30, 0, Vn));
         var order = new DeliveryOrder("DO-001", msc.Id, customer.Id, new DateOnly(2026, 10, 31), "MSC VESSEL 01");
@@ -58,6 +57,7 @@ public sealed class GetDailyVisitsQueryHandlerTests
         var result = await GetAsync(dbContext);
 
         result.Value!.Date.Should().Be(new DateOnly(2026, 10, 22));
+        result.Value.GateIns.Should().OnlyContain(v => v.GateInBlockCode == "WAIT" && v.GateInBay == null);
         // Newest first: 08:00 VN before 00:30 VN
         result.Value.GateIns.Select(v => v.ContainerNumber).Should().Equal("MSCU1234566", "CMAU1234564");
 

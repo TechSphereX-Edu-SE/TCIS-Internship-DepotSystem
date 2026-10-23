@@ -16,7 +16,6 @@ public sealed class GateInValidator : AbstractValidator<GateInCommand>
         // Block and Bay/Row/Tier rules are shared with move
         Include(new YardPositionValidator());
 
-        RuleFor(x => x.Grade).IsInEnum();
         RuleFor(x => x.Condition).IsInEnum();
 
         // Column lengths follow ContainerVisitConfiguration

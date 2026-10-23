@@ -11,8 +11,9 @@ namespace TechSpherex.CleanArchitecture.Application.Features.ContainerVisits.Gat
     Order of checks:
       1. Container, line operator and block exist (404).
       2. The container is not already in the yard (409) - one open visit per container.
-      3. The position fits the block and the container size (400) - done by the domain
-         (ContainerVisit.GateIn -> Block.ValidateSlot), so the rule lives in one place.
+      3. The block takes this container type (409) and the position fits the block and the
+         container size (400) - done by the domain (ContainerVisit.GateIn -> Block.CheckAccepts,
+         Block.ValidateSlot), so the rules live in one place.
       4. The position is free and supported (409) - YardPlacement / YardSlotRules: no overlap with
          20ft/40ft footprints in the same row and tier, and something underneath above tier 1.
 */
@@ -47,7 +48,7 @@ public sealed class GateInCommandHandler(IAppDbContext dbContext, TimeProvider t
         var gateIn = ContainerVisit.GateIn(
             container, command.LineOperatorId, block,
             command.Bay, command.Row, command.Tier,
-            command.Grade, command.Condition, command.ConditionNote,
+            command.Condition, command.ConditionNote,
             command.VehicleNo, timeProvider.GetUtcNow());
         if (gateIn.IsFailure)
             return Result.Failure<GateInResponse>(gateIn.Error!);

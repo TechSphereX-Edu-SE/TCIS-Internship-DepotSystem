@@ -22,7 +22,20 @@ public sealed class ContainerVisit : AuditableEntity
     public int? Row { get; private set; }
     public int? Tier { get; private set; }
 
-    public ContainerGrade Grade { get; private set; }
+    /*
+        Position at gate-in (feedback 3: the gate-in table shows the block the container entered).
+        Kept apart from the current position, which changes with every move.
+        Null for visits recorded before this was stored: their gate-in position is unknown and is not
+        rebuilt from the current position.
+    */
+    public Guid? GateInBlockId { get; private set; }
+    public Block? GateInBlock { get; private set; }
+    public int? GateInBay { get; private set; }
+    public int? GateInRow { get; private set; }
+    public int? GateInTier { get; private set; }
+
+    // Legacy A/B/C grade of visits recorded before 23/10/2026; null for every newer visit
+    public ContainerGrade? Grade { get; private set; }
     public ContainerCondition ConditionIn { get; private set; }
     public string? ConditionNoteIn { get; private set; }
 
@@ -48,12 +61,16 @@ public sealed class ContainerVisit : AuditableEntity
         int? bay,
         int? row,
         int? tier,
-        ContainerGrade grade,
         ContainerCondition condition,
         string? conditionNote,
         string vehicleNo,
         DateTimeOffset gateInAt)
     {
+        // The block must take this container type before its position is even looked at
+        var accepts = block.CheckAccepts(container.Category);
+        if (accepts.IsFailure)
+            return Result.Failure<ContainerVisit>(accepts.Error!);
+
         var slot = block.ValidateSlot(bay, row, tier, container.Size);
         if (slot.IsFailure)
             return Result.Failure<ContainerVisit>(slot.Error!);
@@ -68,7 +85,10 @@ public sealed class ContainerVisit : AuditableEntity
             Bay = bay,
             Row = row,
             Tier = tier,
-            Grade = grade,
+            GateInBlockId = block.Id,
+            GateInBay = bay,
+            GateInRow = row,
+            GateInTier = tier,
             ConditionIn = condition,
             ConditionNoteIn = condition == ContainerCondition.Normal ? null : conditionNote?.Trim(),
             GateInAt = gateInAt,

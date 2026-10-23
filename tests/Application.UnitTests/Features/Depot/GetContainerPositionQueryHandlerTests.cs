@@ -13,8 +13,7 @@ public sealed class GetContainerPositionQueryHandlerTests
     {
         var lineOperator = new LineOperator("MSC", "Mediterranean Shipping Company");
         var container = new Container("MSCU1234566", "22G1", ContainerSize.Ft20, ContainerCategory.Dry, 30480, 2200, null, "MSC");
-        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, bay, row, tier, ContainerGrade.A,
-            ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
+        var visit = ContainerVisit.GateIn(container, lineOperator.Id, block, bay, row, tier, ContainerCondition.Normal, null, "51C-12345", DateTimeOffset.UtcNow).Value!;
 
         dbContext.AddRange(lineOperator, block, container, visit);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

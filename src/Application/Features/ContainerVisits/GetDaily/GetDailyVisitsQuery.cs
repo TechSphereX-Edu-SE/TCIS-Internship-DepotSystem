@@ -14,7 +14,11 @@ public sealed record DailyVisitsResponse(
     IReadOnlyList<DailyGateInResponse> GateIns,
     IReadOnlyList<DailyGateOutResponse> GateOuts);
 
-// Block/Bay/Row/Tier = current position of the visit (it follows the container if it was moved later)
+/*
+    Block/Bay/Row/Tier = current position of the visit (it follows the container if it was moved later).
+    GateInBlockCode/Bay/Row/Tier = where it was put at gate-in (feedback 3: the table shows the block at gate-in);
+    null for visits recorded before the gate-in position was stored.
+*/
 public sealed record DailyGateInResponse(
     Guid VisitId,
     string ContainerNumber,
@@ -26,7 +30,10 @@ public sealed record DailyGateInResponse(
     int? Bay,
     int? Row,
     int? Tier,
-    ContainerGrade Grade,
+    string? GateInBlockCode,
+    int? GateInBay,
+    int? GateInRow,
+    int? GateInTier,
     string VehicleNo,
     DateTimeOffset GateInAt);
 

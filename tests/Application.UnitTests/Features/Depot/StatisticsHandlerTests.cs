@@ -44,7 +44,7 @@ public sealed class StatisticsHandlerTests
 
         ContainerVisit GateIn(int index, LineOperator lineOperator, DateTimeOffset at) =>
             ContainerVisit.GateIn(containers[index], lineOperator.Id, wait, null, null, null,
-                ContainerGrade.A, ContainerCondition.Normal, null, "51C-11111", at).Value!;
+                ContainerCondition.Normal, null, "51C-11111", at).Value!;
 
         var cmaOut = GateIn(5, seed.Cma, new DateTimeOffset(2026, 10, 5, 8, 0, 0, Vn));
         var order = new DeliveryOrder("DO-001", seed.Cma.Id, customer.Id, new DateOnly(2026, 10, 31), "CMA VESSEL 01");
